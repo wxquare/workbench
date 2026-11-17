@@ -354,6 +354,13 @@ if sys.argv[1] == "serve":
                 process.kill()
             process.communicate(timeout=5)
 
+    def test_docs_show_default_and_custom_data_dir_workflow(self):
+        for path in (REPO_ROOT / "README.md", REPO_ROOT / "docs/runbooks/source-layout.md"):
+            with self.subTest(path=path):
+                content = path.read_text()
+                for expected in ("install.sh", "init-db.sh", "start.sh", "--data-dir", "$HOME/.workbench"):
+                    self.assertIn(expected, content)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,9 +5,9 @@ date: 2026-11-14
 
 ## 安装与构建
 
-在项目根目录执行，`WORKBENCH_ROOT` 是绝对路径；在每个新终端重新设置这些变量。本文采用 Agent 领域新契约，实现与验证边界详见 [主规格 21.4](../specs/2026-11-12-workbench-python-spec.md#214-移除-workspace-的-agent-领域重构)。
+先克隆仓库，再从项目根目录运行下述脚本。手动执行组件命令时，`WORKBENCH_ROOT` 应为绝对路径，并在新终端重新设置。本文采用 Agent 领域新契约，实现与验证边界详见 [主规格 21.4](../specs/2026-11-12-workbench-python-spec.md#214-移除-workspace-的-agent-领域重构)。
 
-本机可先从项目根目录运行 `./scripts/install.sh`。脚本要求已安装 `uv` 和 `npm`，安装两个 Python 组件的开发依赖、安装 Web 依赖并构建页面；仅在本地 Agent/MCP 配置不存在时复制示例，不覆盖已有配置。下面是对应的手动命令。
+从项目根目录运行 `./scripts/install.sh`。脚本要求已安装 `uv` 和 `npm`，安装两个 Python 组件的开发依赖、安装 Web 依赖并构建页面；仅在本地 Agent/MCP 配置不存在时复制示例，不覆盖已有配置。默认持久目录为 `$HOME/.workbench`；可用 `./scripts/install.sh --data-dir /absolute/path` 改选目录。选择保存在被 Git 忽略的 `config/local/data-dir`，重复安装保留已有选择，显式改选也不会迁移旧数据。安装阶段不创建数据库。下面是对应的手动命令。
 
 ```bash
 export WORKBENCH_ROOT="$PWD"
@@ -34,17 +34,19 @@ uv run workbench-mcp-server --help
 
 当前 Agent Schema 使用 `schema_agent_v3.py`、独立 Alembic 目录 `persistence/agent_migrations/`、revision `0003_run_trace_contexts`、`schema_version=dod-storage-agent-v1` 和 `checkpoint_codec_version=dod-checkpoint-v1`。已有兼容 Agent 数据库升级前需停止服务并备份，再显式运行迁移；详见 [可观测性升级手册](observability.md)。旧 Workspace 库不能沿此链升级。源码更新不会自动修改实际运行数据库，也不会自动部署到现有进程。
 
-`./scripts/install.sh` 会在缺少本地配置时复制 `config/local/agent.example.yaml` 为被 Git 忽略的 `config/local/agent.yaml`；手动安装时可执行下列命令。按部署环境配置其中的数据库、模型、存储和认证引用，按需添加模型凭据授权绑定；实际密钥只由运行环境注入。设置 `WORKBENCH_PERSISTENT_ROOT` 与 `WORKBENCH_DATABASE_URL` 为绝对的本地持久路径，按需提供对应凭据。SQLite 最低版本 3.51.3；配置根路径不可依赖当前工作目录。
+`./scripts/install.sh` 会在缺少本地配置时复制 `config/local/agent.example.yaml` 为被 Git 忽略的 `config/local/agent.yaml`；手动安装时可执行下列命令。按部署环境配置其中的数据库、模型、存储和认证引用，按需添加模型凭据授权绑定；实际密钥只由运行环境注入。SQLite 最低版本 3.51.3；配置根路径不可依赖当前工作目录。
 
 ```bash
 cp -n "$WORKBENCH_ROOT/config/local/agent.example.yaml" "$WORKBENCH_ROOT/config/local/agent.yaml"
 ```
 
-首次启用 Agent 新 Schema 时，必须显式选择尚不存在的新数据库文件。下面路径仅为示例，须替换为本机持久磁盘上的绝对路径；若文件已存在，先确认它是同一版本的 Agent 数据库，不能覆盖或删除。API、Worker、Scheduler、迁移和 doctor 必须使用同一路径、持久根及配置。
+首次启用 Agent 新 Schema 时，必须显式运行 `./scripts/init-db.sh`，且目标数据库文件必须尚不存在。脚本从安装时记录的目录推导默认数据库路径 `$HOME/.workbench/agents.sqlite3`（自定义目录时位于该目录下）；无需为普通本机使用手动导出路径。若文件已存在，先确认它是同一版本的 Agent 数据库，不能覆盖或删除。API、Worker、Scheduler、迁移和 doctor 必须使用同一路径、持久根及配置。
+
+高级覆盖方式：`WORKBENCH_PERSISTENT_ROOT` 优先于本地目录选择；未设置 `WORKBENCH_DATABASE_URL` 时，脚本由有效持久目录推导 `agents.sqlite3`。已有自定义数据库文件可同时显式提供两个环境变量，目标必须位于持久目录内。下面是示例，须替换为本机持久磁盘上的绝对路径；环境变量只作用于当前终端，不修改安装时记录的目录：
 
 ```bash
 export WORKBENCH_PERSISTENT_ROOT=/absolute/local/persistent/workbench
-export WORKBENCH_DATABASE_URL=sqlite+aiosqlite:////absolute/local/persistent/workbench/agents-20261117.sqlite3
+export WORKBENCH_DATABASE_URL=sqlite+aiosqlite:////absolute/local/persistent/workbench/agents.sqlite3
 ```
 
 首次使用**尚不存在**的数据库文件时，从项目根目录运行 `./scripts/init-db.sh`。脚本拒绝已有文件，并依次执行迁移、bootstrap 和 doctor；已有数据库的升级仍按维护手册手动操作。对应的手动命令需从 `apps/agent` 执行：
