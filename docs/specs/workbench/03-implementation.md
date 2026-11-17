@@ -1,0 +1,880 @@
+# 03 实现细节文档
+
+> 本文基于源码仓库（`apps/agent`、`apps/mcp-server`、`apps/web`、`config`、`deploy`、`docs/runbooks`）重新核对后编写，面向需要读代码、改代码、排障的后端与全栈工程师。
+> 凡原技术文档与源码不一致之处，一律以源码为准，差异汇总在文末「核对记录」。
+> 附录（数据字典、接口参考、配置参考）单独成文：[附录 A 数据字典](03-implementation/A-data-dictionary.md)、[附录 B 接口参考](03-implementation/B-api-reference.md)、[附录 C 配置参考](03-implementation/C-config-reference.md)。运维操作类内容只链接仓库 `docs/runbooks/*`，不在此复制。
+
+**路径约定**
+
+| 记号 | 含义 |
+| --- | --- |
+| `PKG/` | `apps/agent/src/workbench_agent/`（Agent 服务的 Python 包） |
+| `MCP/` | `apps/mcp-server/src/workbench_mcp_server/` |
+| `WEB/` | `apps/web/src/` |
+| 仓库根 | 含 `apps/`、`config/`、`deploy/`、`docs/` 的目录 |
+
+**目录**
+
+1. 仓库与代码地图
+2. 进程与入口
+3. 一次请求的代码路径
+4. 工作流与运行时实现
+5. 持久化实现
+6. Skill 实现
+7. MCP Server 实现
+8. Web 实现
+9. 配置、构建与部署
+10. 测试与验证
+11. 开发指引
+12. 核对记录
+
+---
+
+## 1 仓库与代码地图
+
+> 读完本章，你能说出三个应用各自的目录职责、`PKG/` 下每个子包做什么，以及改动一处代码时应该沿着哪个方向找依赖。
+
+### 1.1 仓库顶层
+
+```text
+workbench/                          仓库根
+  README.md
+  apps/
+    agent/                          Python 3.12，发行包 workbench-agents，包名 workbench_agent
+      pyproject.toml  uv.lock  alembic.ini  .python-version
+      src/workbench_agent/          生产代码（本文 PKG/）
+      tests/                        unit / contract / integration / fault / e2e
+    mcp-server/                     Python 3.12，发行包 workbench-mcp-server，包名 workbench_mcp_server
+      src/workbench_mcp_server/     本文 MCP/
+      tests/                        unit / contract / integration / acceptance
+    web/                            Vue 3 + TypeScript + Vite + Element Plus
+      src/                          本文 WEB/
+      tests/                        vitest
+  config/
+    local/agent.example.yaml        Agent 配置模板
+    local/mcp-server.example.yaml   MCP 本机配置模板
+    local/mcp-server.compose.example.yaml  MCP 容器配置模板
+    workflows/payment-check.yaml    工作流种子
+  deploy/
+    Dockerfile.agent  Dockerfile.mcp-server  compose.local.yml
+  docs/
+    runbooks/   acceptance/   specs/   mcp-server/   assets/
+```
+
+三个应用保持各自的依赖、构建与测试边界：Agent 与 MCP Server 不共享进程，也不共享 Python 包；Web 只通过 HTTP 访问 Agent API，由 Agent 的 `/app/` 路由托管构建产物。
+
+![整体架构](../../assets/workbench-python/01-architecture.png)
+
+```mermaid
+flowchart LR
+    subgraph Browser["浏览器"]
+        WEB["Web 工作台<br/>apps/web"]
+    end
+    subgraph AgentApp["apps/agent  workbench_agent"]
+        API["api 进程<br/>FastAPI + Uvicorn"]
+        WRK["worker 进程"]
+        SCH["scheduler 进程"]
+    end
+    DB[("SQLite WAL<br/>业务表 + 检查点表")]
+    OBJ[("Skill 对象目录<br/>WORKBENCH_SKILL_OBJECT_ROOT")]
+    S3[("S3 兼容对象存储<br/>可选 Artifact")]
+    REDIS[("Redis<br/>可选事件提示")]
+    MCP["apps/mcp-server<br/>workbench-mcp-server"]
+    UP["上游网关<br/>知识 指标 日志 Trace"]
+    LLM["模型服务<br/>DeepSeek 兼容"]
+
+    WEB -- "HTTPS /v1 + SSE" --> API
+    API --> DB
+    API -. "事件提示" .-> REDIS
+    WRK --> DB
+    SCH --> DB
+    WRK --> OBJ
+    WRK --> S3
+    WRK -- "Streamable HTTP MCP" --> MCP
+    WRK --> LLM
+    MCP --> UP
+    API -- "/app/ 静态文件" --> WEB
+```
+
+### 1.2 `PKG/` 子包职责表
+
+下表以实际目录为准（`apps/agent/src/workbench_agent/`，另有 `settings.py` 与 `observability.py` 两个顶层模块）。
+
+| 子包 / 模块 | 一句话职责 | 典型入口文件 |
+| --- | --- | --- |
+| `settings.py` | Pydantic 配置模型与 `load_settings`；所有进程唯一配置解析入口 | `Settings`、`load_settings` |
+| `observability.py` | JSON 日志、OpenTelemetry/Langfuse 遥测、请求中间件 | `configure_logging`、`Telemetry`、`RequestObservabilityMiddleware` |
+| `cli/` | `workbench` 命令行：API、Worker、Scheduler 与维护命令 | `main.py` |
+| `api/` | FastAPI 路由、Bearer 认证、错误映射、SSE、前端静态托管 | `app.py`、`runs.py`、`auth.py` |
+| `application/` | 用例与应用服务：受理 Run、恢复、取消、版本发布、幂等、授权、结果落库 | `runs.py`、`resume.py`、`results.py`、`profiles.py` |
+| `domain/` | 领域对象与规则（Pydantic/dataclass）：Run、Context、Outcome、Workflow、Guard | `runs.py`、`context.py`、`guards.py`、`workflows.py` |
+| `jobs/` | Job 领取、租约、公平性、期限、对账、调度扫描、Worker | `worker.py`、`claim.py`、`reconciler.py`、`scheduler.py` |
+| `runtime/` | LangGraph 图、专家 Agent、模型调用、预算、检查点适配、状态与流式事件 | `graphs/registry.py`、`models/invoker.py`、`budgets/service.py` |
+| `persistence/` | StorageBackend 端口、SQLite 适配器、Schema 快照、迁移、检查点存储、对象存储 | `ports/backend.py`、`backends/sqlite.py`、`schema.py` |
+| `skill_management/` | Skill 包校验、对象清单、导入 Worker、版本发布、运行时加载、共享技能库 | `validator.py`、`importer.py`、`loader.py`、`library.py` |
+| `tools/` | 工具绑定注册、MCP 客户端适配、工具策略与执行器、权限交集、仓库快照读取 | `mcp.py`、`policy.py`、`registry.py`、`permissions.py` |
+| `connectors/` | 只读连接器门面、密钥引用解析、托管模型密钥 | `read.py`、`secrets.py`、`managed_model_secrets.py` |
+| `execution/` | 仓库同步、快照归档、上传暂存与受控管理任务 | `repositories.py`、`snapshots.py`、`uploads.py` |
+| `runner/` | 容器 Runner：就绪检查、进程生命周期、资源清理 | `service.py`、`readiness.py`、`cleanup.py` |
+| `delivery/` | 外发动作的 Dispatcher、对账与本地模拟器（默认不配置真实发送器） | `dispatcher.py`、`reconcile.py`、`local_simulator.py` |
+| `incidents/` | 事件投影与访问边界（仅绑定的合成告警） | `service.py`、`synthetic.py` |
+| `ingress/` | 合成聊天/告警接入协议（本地测试用，非真实 SeaTalk 协议） | `alerts.py`、`seatalk.py` |
+| `evaluation/` | 用户反馈记录与人工评测数据集聚合 | `feedback.py`、`report.py` |
+
+> 其余 `docs/specs`、`docs/acceptance` 为设计与验收资料，不属于运行时代码。
+
+### 1.3 依赖方向
+
+原文设想的分层是 `api → application → domain`、`runtime/jobs/tools` 经端口访问 `persistence`。实际源码在 Agent 侧**没有**机器强制的分层测试（MCP Server 有，见 §7.2）。我用 `ast` 统计了 `PKG/` 各子包之间的 `workbench_agent.*` 导入次数（含函数体内的延迟导入），得到下图。边上的数字是导入语句条数，只列主要边。
+
+```mermaid
+flowchart TD
+    CLI["cli"] --> API["api"]
+    CLI --> APP["application"]
+    CLI --> JOBS["jobs"]
+    CLI --> RT["runtime"]
+    CLI --> PERS["persistence"]
+    CLI --> TOOLS["tools"]
+    CLI --> RUNNER["runner"]
+    API -- "26" --> APP
+    API --> DOM["domain"]
+    API --> SK["skill_management"]
+    API --> ING["ingress"]
+    APP -- "40" --> DOM
+    APP -- "15" --> PERS
+    APP -- "5" --> JOBS
+    APP -- "4" --> RT
+    JOBS -- "17" --> APP
+    JOBS -- "11" --> DOM
+    JOBS -- "7" --> PERS
+    JOBS -- "4" --> RT
+    RT -- "57" --> APP
+    RT -- "41" --> DOM
+    RT -- "38" --> TOOLS
+    RT -- "17" --> JOBS
+    TOOLS -- "12" --> APP
+    TOOLS -- "15" --> DOM
+    TOOLS -- "5" --> JOBS
+    TOOLS --> RUNNER
+    SK -- "12" --> APP
+    SK --> JOBS
+    PERS -- "19" --> DOM
+    PERS -- "6" --> APP
+    EXEC["execution"] --> APP
+    DEL["delivery"] --> APP
+    INC["incidents"] --> APP
+    ING --> APP
+    CONN["connectors"] --> APP
+    DOM -. "1: profiles 引用 settings.ModelProfile" .-> SET["settings"]
+```
+
+读图结论（均已用 `grep` 核对到具体文件）：
+
+| 规则 | 实际情况 | 例外与落点 |
+| --- | --- | --- |
+| `domain` 是最内层，只依赖标准库、Pydantic 与自身 | 基本成立，唯一例外是 `domain/profiles.py` 导入 `workbench_agent.settings.ModelProfile` | 新增领域对象时不要再引入 `settings` |
+| `api` 只做 HTTP 适配，业务放 `application` | 成立：`api/*.py` 绝大多数导入 `application` 与 `domain` | `api/skills.py`、`api/skill_library.py` 直接使用 `skill_management`；`api/app.py` 负责装配 |
+| `application` 通过 Store 端口访问存储 | 大体成立，但服务内直接拼 SQLAlchemy 查询（如 `application/runs.py` 的 `schema.runs`） | 当前仅有 SQLite 后端，端口与 SQLAlchemy 表对象并未完全隔离 |
+| `persistence` 不依赖上层 | **不成立**：`persistence/events.py`、`persistence/backends/controls.py` 导入 `application.*`（授权、`ResumeApplier`、`DomainError`） | `persistence/events.py` 为模块级导入，`controls.py` 的 `ResumeApplier`、`events.py` 的 `readable_evidence` 为函数内延迟导入；新代码不要再扩大 |
+| `application` 不依赖 `runtime` | **不成立**：`application/disclosure.py`、`results.py`、`resume.py`、`actions.py` 导入 `runtime.graphs.*`、`runtime.budgets.*` | 证据授权、中断响应校验、预算服务是被应用层复用的纯函数/服务 |
+| `runtime` 依赖 `jobs.worker` | 成立且不可避免：图节点收到的 `Execution` 对象定义在 `jobs/worker.py` | 这使 `runtime ↔ jobs` 互相依赖；`jobs/worker.py` 内用延迟导入避免循环 |
+| `tools` 依赖 `runtime.budgets` | `tools/policy.py`、`execution_executor.py`、`snapshot_reader.py` 导入 `BudgetService` | 工具调用与模型调用共享同一套预算预留 |
+| `cli` 是组合根 | 成立：`cli/worker.py`、`cli/scheduler.py` 负责把 backend、registry、modeler、MCP 适配器装配起来 | 新能力的装配点在此，而不是在模块 import 时 |
+
+经验规则：**新增代码放对层，依赖只向 `domain` 与 `persistence.ports` 方向增加**；需要跨层复用时优先下沉到 `domain` 或在调用点做延迟导入，不要引入新的包级循环。
+
+### 1.4 关键运行时对象
+
+| 对象 | 定义位置 | 作用 |
+| --- | --- | --- |
+| `Settings` | `PKG/settings.py` | 进程配置，`load_settings(path)` 返回 |
+| `SQLiteBackend` | `PKG/persistence/backends/sqlite.py` | 实现 `StorageBackend`，聚合所有 Store 与 `create_uow()` |
+| `RunContext` | `PKG/domain/context.py` | 受理时冻结的版本引用集合（Profile、图、模型、Skill、工具、仓库、工作流） |
+| `ExecutionGuard` | `PKG/domain/guards.py` | 所有权凭据：`team_id/thread_id/run_id/job_id/worker_id/run_epoch` |
+| `ClaimedJob` | `PKG/domain/guards.py` | 领取结果：Guard + RunContext + attempt + `projection_only` |
+| `Execution` | `PKG/jobs/worker.py` | 一次执行的上下文，图节点通过 `runtime.context` 取得；提供 `check_operation()` |
+| `GraphRegistry` / `ExecutorRegistry` | `PKG/runtime/graphs/registry.py`、`PKG/jobs/worker.py` | 图版本到编译图、执行器、投影器的映射 |
+| `PortableCheckpointSaver` | `PKG/runtime/checkpoints/portable.py` | LangGraph `BaseCheckpointSaver` 的存储无关实现 |
+
+---
+
+## 2 进程与入口
+
+> 读完本章，你能用正确的子命令初始化、启动、检查、备份一个本地实例，并知道每个进程启动、就绪、关闭时代码做了什么。
+
+### 2.1 `workbench` CLI
+
+入口声明在 `apps/agent/pyproject.toml`：
+
+```toml
+[project.scripts]
+workbench = "workbench_agent.cli.main:main"
+workbench-synthetic-policy = "workbench_agent.cli.synthetic_source_policy:main"
+workbench-synthetic-proposal-policy = "workbench_agent.cli.synthetic_proposal_policy:main"
+workbench-synthetic-batch-policy = "workbench_agent.cli.synthetic_batch_policy:main"
+workbench-local-dispatch = "workbench_agent.cli.local_dispatcher:main"
+```
+
+> 原文把命令写作 `dod`，实际可执行名是 `workbench`。`docs/runbooks/sop-workflows.md` 等运维文档中个别地方仍写 `dod bootstrap`，应读作 `workbench bootstrap`。
+
+`PKG/cli/main.py` 用 `argparse` 声明全部子命令；除 `evaluate` 外都先 `load_settings(--config)`，失败时只打印 `{"ready": false, "errors": ["invalid or unreadable configuration"]}`，不回显配置内容（可能含凭据引用）。
+
+```mermaid
+flowchart TD
+    M["workbench"] --> API["api<br/>--config --host --port"]
+    M --> WK["worker<br/>--config --once"]
+    M --> SC["scheduler<br/>--config --once"]
+    M --> DR["doctor<br/>--config"]
+    M --> BS["bootstrap<br/>--config --identity-token-env"]
+    M --> DBG["db"]
+    DBG --> MIG["migrate"]
+    DBG --> BK["backup<br/>--destination"]
+    DBG --> RS["restore<br/>--source --target"]
+    DBG --> ACK["acknowledge-restore<br/>--target --acknowledge-no-external-effects"]
+    M --> RN["runner check<br/>--config"]
+    M --> AP["action-policy"]
+    AP --> APS["sync<br/>--expected-revision"]
+    AP --> APT["status"]
+    M --> EV["evaluate<br/>--dataset --output"]
+```
+
+| 子命令 | 实现 | 常驻 | 行为要点 |
+| --- | --- | --- | --- |
+| `api` | `cli/api.py::run_api` | 是 | `uvicorn.run(create_app(settings), timeout_graceful_shutdown=15, access_log=False)` |
+| `worker [--once]` | `cli/worker.py::run_worker` | 是 | 装配注册表与能力，`Worker.run()`；`--once` 只执行一轮后退出并打印 JSON |
+| `scheduler [--once]` | `cli/scheduler.py::run_scheduler` | 是 | `Scheduler.run()`；`--once` 执行一次 `tick()` 并打印 `TickReport` |
+| `doctor` | `cli/doctor.py::check_sqlite_runtime` | 否 | 只读检查 SQLite 版本、路径策略、PRAGMA、元数据行与必需表结构；不探测外部服务；失败退出码 1 |
+| `db migrate` | `cli/db.py::migrate` | 否 | 显式维护窗口执行 Agent 迁移链，见 §5.4 |
+| `bootstrap` | `application/bootstrap.py::BootstrapService.apply` | 否 | 幂等创建团队、模型、Agent、Profile 与工作流种子；production 需 `--identity-token-env` 指向已验证的 OIDC admin Token |
+| `db backup` / `restore` / `acknowledge-restore` | `cli/backup.py`、`persistence/backends/sqlite_backup.py` | 否 | 在线一致备份；恢复到新的隔离路径；只放行干净副本，见 `docs/runbooks/sqlite-recovery.md` |
+| `runner check` | `runner/readiness.py::runner_readiness` | 否 | 检查容器守护进程、容量和固定镜像 |
+| `action-policy sync/status` | `cli/action_policy.py` | 否 | 将 `service.action_grants` 等作为整体同步到数据库，见 `docs/runbooks/action-policy.md` |
+| `evaluate` | `cli/evaluate.py::run_evaluate` | 否 | 评测数据集聚合报告，不读取配置 |
+
+另有四个独立脚本：`workbench-local-dispatch`（本地模拟投递，要求 development/test 环境和独立的模拟库）与三个 `workbench-synthetic-*-policy`（合成告警策略维护）。
+
+对 `api`、`worker`、`scheduler` 三个常驻进程，`main.py` 在运行前调用 `observability.configure_logging(settings.observability, command, settings.environment)`。
+
+**首次启动顺序**（命令均在 `apps/agent` 下执行，细节见 `docs/runbooks/source-layout.md`）：
+
+```bash
+export WORKBENCH_ROOT="$PWD"
+export WORKBENCH_ASSET_ROOT="$WORKBENCH_ROOT"
+export WORKBENCH_FRONTEND_DIST_ROOT="$WORKBENCH_ROOT/apps/web/dist"
+export WORKBENCH_PERSISTENT_ROOT="$WORKBENCH_ROOT/var"
+export WORKBENCH_DATABASE_URL="sqlite+aiosqlite:///$WORKBENCH_PERSISTENT_ROOT/dod.sqlite3"
+export WORKBENCH_SKILL_OBJECT_ROOT="$WORKBENCH_PERSISTENT_ROOT/skill-objects"
+mkdir -p "$WORKBENCH_PERSISTENT_ROOT" "$WORKBENCH_SKILL_OBJECT_ROOT"
+
+cd "$WORKBENCH_ROOT/apps/agent"
+uv sync --frozen --group dev
+uv run workbench db migrate --config "$WORKBENCH_ROOT/config/local/agent.yaml"
+uv run workbench bootstrap  --config "$WORKBENCH_ROOT/config/local/agent.yaml"
+uv run workbench doctor     --config "$WORKBENCH_ROOT/config/local/agent.yaml"   # 期望输出 "ready": true
+
+# 三个终端分别启动（每个终端都要设置同样的环境变量）
+uv run workbench api       --config "$WORKBENCH_ROOT/config/local/agent.yaml" --host 127.0.0.1 --port 8000
+uv run workbench worker    --config "$WORKBENCH_ROOT/config/local/agent.yaml"
+uv run workbench scheduler --config "$WORKBENCH_ROOT/config/local/agent.yaml"
+```
+
+> `config/local/agent.yaml` 需先从 `agent.example.yaml` 复制得到（该文件被 Git 忽略）。`db migrate` 与 `bootstrap` 不会被正常进程自动执行。
+
+### 2.2 启动流程
+
+![启动时序](../../assets/workbench-python/02-startup.png)
+
+![当前本地部署进程](../../assets/workbench-python/18-deployment-processes.png)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Op as 运维
+    participant CLI as workbench CLI
+    participant S as load_settings
+    participant DB as SQLite 文件
+    participant P as 常驻进程
+    Op->>CLI: db migrate
+    CLI->>S: 解析 agent.yaml
+    CLI->>DB: 只读预检，再 BEGIN EXCLUSIVE + Alembic upgrade head
+    Op->>CLI: bootstrap
+    CLI->>DB: 单写事务 create-if-missing 种子
+    Op->>CLI: doctor
+    CLI->>DB: 只读 PRAGMA 与结构检查
+    Op->>CLI: api / worker / scheduler
+    CLI->>S: load_settings
+    CLI->>P: 装配 backend + 注册表
+    P->>DB: storage_ready 检查通过才开始工作
+```
+
+三个常驻进程的启动代码对照：
+
+| 进程 | 装配点 | 就绪判定 | 就绪失败行为 |
+| --- | --- | --- | --- |
+| API | `api/app.py::create_app` 构造 `FastAPI(lifespan=...)`；`lifespan` 里 `app.state.storage_ready = await storage_ready(settings, backend)` | `persistence/readiness.py::storage_ready`：后端指向的库路径与配置一致、持久目录策略通过、`SQLiteBackend.health()`（只读检查 PRAGMA、`dod_storage_metadata`、表/列/索引/外键） | `/v1/*` 请求由 `StorageAdmissionMiddleware` 返回 `503 {"code":"STORAGE_UNAVAILABLE"}`；`/health/ready` 返回 503 |
+| Worker | `cli/worker.py::run_worker`：构造 `SQLiteBackend`，`foundation_worker_registry(backend)` 注册所有图版本，再按配置追加管理任务与模型/MCP 工厂 | `storage_ready(...)` | 返回 `{"ready": false, "status": "storage_unavailable"}`，退出码 1 |
+| Scheduler | `cli/scheduler.py::run_scheduler`：`Scheduler(backend, foundation_worker_registry(backend), ...)` | `storage_ready(...)` | 同上 |
+
+`create_app` 在构造阶段还做了几项启动期硬校验，任一违反即抛 `ValueError` 使进程启动失败：
+
+- `environment == "production"` 且配置了 `service.synthetic_ingress`；
+- `production` 且 `auth_mode != "oidc"`，或 verifier 不是 `OIDCVerifier`；
+- OIDC 的 issuer/audience 与配置不一致；
+- 合成入口绑定的 subject 没有匹配的 `connector_identities`。
+
+`Worker` 的 ID 在 `cli/worker.py` 中写死为 `'worker-1'`（SQLite 部署以单 Worker 实例为基线）。Worker 装配的可选能力：
+
+| 配置条件 | 注册的能力 |
+| --- | --- |
+| `storage.skill_object_root` 非空 | 管理任务 `skill_import`、`repo_sync`；快照对象目录；可选的 Runner 绑定 |
+| `storage.runner_daemon_id` 非空 | `ContainerRunner` 与 `RunnerCleanup`（周期恢复） |
+| `storage.s3` 与 `storage.upload_staging_root` 同时非空 | 管理任务 `artifact_upload` 与暂存清理 |
+| 始终 | 管理任务 `model_probe`、`tool_probe` |
+| 存在 `service.model_credential_bindings` 或托管密钥 | `backend._code_factory`（直接问答模型调用） |
+| 存在 `service.mcp_connections` | `backend._baseline_factory`（工具策略执行器）；与模型同时存在时再装配 `backend._diagnosis_factory` |
+
+### 2.3 健康与就绪
+
+```bash
+curl -s http://127.0.0.1:8000/health/live    # {"live": true}
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/health/ready   # 200 或 503
+```
+
+| 检查 | 实现 | 说明 |
+| --- | --- | --- |
+| live | `api/app.py` 的 `/health/live` | 仅表示进程内事件循环可响应 |
+| ready | `/health/ready` → `storage_ready()` | 每次请求重新检查存储，不缓存；不调用模型或外部系统 |
+| API 准入 | `api/admission.py::StorageAdmissionMiddleware` | 纯 ASGI 中间件，对路径以 `/v1/` 开头的 HTTP 请求先判存储就绪 |
+| Worker/Scheduler | 无 HTTP 探针 | 以进程存活和 `storage_ready` 启动判定为准；Worker 每轮 `run_once` 的 `StorageError` 被吞掉并在下一轮重试 |
+| SQLite 路径策略 | `persistence/readiness.py::persistent_path_errors` | 必须位于声明的 `persistent_root` 内、本地文件系统（拒绝 nfs/cifs/tmpfs 等）、production 禁止放临时目录、库文件存在且可读写、不在 quarantine 状态 |
+
+> 原文 §6.2 列出了 Worker ready 的"Graph/Codec 可加载、存在可用执行槽位"、Redis 降级、Runner 心跳等条件。源码中这些并没有统一的就绪端点；Redis 仅是 SSE 的可选"事件提示"（`runtime/streaming.py::RedisHints.configured`），缺失时回退为数据库轮询，没有 degraded 状态上报。
+
+### 2.4 优雅关闭
+
+| 进程 | 机制 | 超时 |
+| --- | --- | --- |
+| API | Uvicorn 收到信号后停止受理；`create_app` 的 `lifespan` 在 `yield` 之后关闭 Redis 提示、后端连接与遥测 | `timeout_graceful_shutdown=15`（秒） |
+| Worker | `loop.add_signal_handler(SIGTERM/SIGINT, worker.stop)` 置位 `stopping`；`Worker.run()` 等待各 slot 最多 30 秒，超时则取消 slot 任务；`finally` 中停止清理协程、关闭后端与遥测 | 30 秒 |
+| Scheduler | 同样的信号处理器调用 `scheduler.stop`；当前 `tick()` 完成后退出循环 | 取决于一次 tick |
+
+`deploy/compose.local.yml` 的 `stop_grace_period` 与此对齐：api 20s、worker 35s、scheduler 15s。
+
+取消执行协程时 `Worker._run_claim` 的 `except asyncio.CancelledError` 分支会在仍持有所有权的前提下释放租约并写入 `retry_wait`，留下可恢复的 Job（见 §3.4）；关闭不会把未完成的 Run 标为 `succeeded`。
+
+---
+
+## 3 一次请求的代码路径
+
+> 读完本章，你能从 `POST /v1/runs` 出发，逐个文件、逐个函数追踪到 Job 被 Worker 领取、图执行、结果投影、等待输入与恢复，并能定位每个状态变化发生在哪个事务里。
+
+整体视图（现有图）：
+
+![运行时](../../assets/workbench-python/04-runtime.png)
+
+### 3.1 API 受理：`POST /v1/runs`
+
+阅读顺序：
+
+1. `PKG/cli/api.py::run_api` → `uvicorn.run(create_app(settings), ...)`
+2. `PKG/api/app.py::create_app`：装配 `IdentityResolver`、`ProfileService`、`ContextResolver`、`RunService`，`include_router` 注册各路由，添加 `StorageAdmissionMiddleware` 与 `RequestObservabilityMiddleware`
+3. `PKG/api/runs.py::create_run`：FastAPI 以 `CreateRun`（`domain/runs.py`）校验请求体，`Depends(authenticate)`（`api/auth.py`）验证 Bearer，读取必填头 `Idempotency-Key`
+4. `PKG/application/runs.py::RunService.create`
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 客户端
+    participant R as api/runs.py create_run
+    participant A as api/auth.py authenticate
+    participant S as RunService.create
+    participant I as Idempotency.execute
+    participant DB as SQLite 写事务
+    C->>R: POST /v1/runs + Bearer + Idempotency-Key
+    R->>A: 验证 Token 并解析 Team 成员
+    A-->>R: AuthContext
+    R->>S: create(auth, body, key)
+    S->>S: 输入大小检查 65536 字节
+    S->>DB: begin_write BEGIN IMMEDIATE
+    S->>DB: authorization.current 至少 operator
+    S->>I: execute(run.create, key, payload, operation)
+    I->>DB: 查幂等回执 命中则直接返回
+    I->>S: operation()
+    S->>DB: 校验 Thread、Profile、mode、预算、模型密钥可用
+    S->>DB: ContextResolver.resolve 固定版本
+    S->>DB: INSERT runs(queued) messages run_jobs(ready) usage_budget_policies
+    S->>DB: append_control run.accepted
+    I->>DB: 写幂等回执
+    DB-->>S: 提交
+    S-->>R: AcceptedRun
+    R-->>C: 202 + run_id thread_id links
+```
+
+`RunService.create` 在**同一个写事务**内依次完成下列步骤（按代码顺序）：
+
+| 顺序 | 检查/写入 | 失败错误码（HTTP） |
+| --- | --- | --- |
+| 1 | `source_connector` 仅允许 connector 身份；`source_thread` 与 `thread_id` 互斥 | `OPERATION_DENIED`（403）、`INVALID_REQUEST`（422） |
+| 2 | 文本 UTF-8 字节 ≤ 65536；除 `input` 外的元数据规范化 JSON ≤ 65536 | `INPUT_TOO_LARGE`（413） |
+| 3 | `Authorization.current(uow, auth, agent_id, 'operator')` | 403/404 |
+| 4 | 指定 `thread_id` 时校验 Thread 归属于该 Agent | 404 |
+| 5 | `client_message_id`：命中且未过期的 `source_events` 回放原结果，不同请求体则冲突 | `SOURCE_CONFLICT`（409） |
+| 6 | `expected_revision` 与 Thread 当前 revision 比较 | `REVISION_CONFLICT`（409） |
+| 7 | 读取已发布 Profile；`business_context.conversation=true` 要求图为 `dod.v18` | `CONVERSATION_WORKFLOW_REQUIRED`（409） |
+| 8 | v18 要求 `mode=qa` 且无 `query_scope`；会话中不得有未结束 Run；历史成功 Run 必须来自 v17/v18 | `WORKFLOW_UNAVAILABLE`、`THREAD_BUSY`、`CONVERSATION_HISTORY_INCOMPATIBLE`（409） |
+| 9 | v13–v15 仅允许合成告警受信通道调用 | `WORKFLOW_UNAVAILABLE`（409） |
+| 10 | v16：仅 `qa`，`validate_qa_scope` 校验 `query_scope`；v17：仅 `qa` 且不得带 `query_scope` | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`（409） |
+| 11 | `request.mode` 必须在 Profile 的 `allowed_modes` 中 | `MODE_NOT_ALLOWED`（422） |
+| 12 | `sop`/`inspection` 必须使用 v11/v12 且提供 `workflow_version_id`；其他模式不得提供 | `WORKFLOW_UNAVAILABLE`（409） |
+| 13 | 不接受非空 `input.artifact_ids` | `ARTIFACT_UNAVAILABLE`（409） |
+| 14 | 预算：`DEFAULT_BUDGETS[mode]` → 与 Profile 限制取 min → 请求值只能更小 | `BUDGET_EXCEEDED`（422） |
+| 15 | `ContextResolver.resolve` 固定 Profile/模型/Skill/工具/仓库引用；工作流校验哈希，v11 拒绝含 `condition` 或 `output_schema` 的定义 | `WORKFLOW_UNAVAILABLE`（409） |
+| 16 | 各模型引用的 `secret_ref` 必须可解析；`summary_token_reserve` ≤ 汇总模型上下文 | `MODEL_PROFILE_UNAVAILABLE`（409）、`SUMMARY_RESERVE_INVALID`（422） |
+| 17 | 写入 `runs`（`status='queued'`，`revision=1`，`wall_deadline_at = now + 48h`）、可选 `run_trace_contexts`、`query_scope`、`usage_budget_policies`、`messages`（user）、`run_jobs`（`generation=1, kind='run', status='ready'`）、事件 `run.accepted` | — |
+
+默认预算（`application/runs.py::DEFAULT_BUDGETS`，字段顺序 `wall_seconds, model_calls, tool_calls, tokens`）：
+
+| mode | wall_seconds | model_calls | tool_calls | tokens |
+| --- | --- | --- | --- | --- |
+| `auto`、`qa` | 180 | 8 | 20 | 80000 |
+| `rca` | 300 | 12 | 30 | 120000 |
+| `code` | 600 | 12 | 30 | 120000 |
+| `sop`、`inspection` | 600 | 12 | 40 | 120000 |
+
+`wall_seconds` 限制**活跃执行**时间；总生命周期由 `runs.wall_deadline_at`（48 小时）另行限制。
+
+幂等由 `application/idempotency.py::Idempotency.execute` 统一提供（回执保存、72 小时窗口、不同请求体返回 `IDEMPOTENCY_CONFLICT`）；`client_message_id` 是另一层来源消息去重，作用域保存在 `source_events` 表（90 天）。两者不可混淆。
+
+其他任务来源：
+
+| 来源 | 代码路径 | 说明 |
+| --- | --- | --- |
+| 合成聊天/告警 | `api/ingress.py::accept` → `ingress/seatalk.py`、`ingress/alerts.py` | 需 HMAC 头 `x-dod-timestamp`、`x-dod-signature`，最大 64 KiB；production 直接返回 404 |
+| 定时巡检 | `jobs/schedules.py::ScheduleScanner._fire_one` | 到期后用 `RunService.create(..., _uow=uow)` 在同一事务内创建 `inspection` Run，幂等键 `schedule:<id>:<due_at>` |
+| 恢复回复 | `application/resume.py::ResumeService.resume` | 见 §3.5 |
+
+### 3.2 Worker 领取与租约
+
+阅读顺序：`cli/worker.py::run_worker` → `jobs/worker.py::Worker.run/run_once` → `jobs/claim.py::JobService.claim` → `persistence/backends/jobs.py::SQLiteJobStore.candidates/claim/_candidate` → `jobs/fairness.py::Fairness`。
+
+`Worker.run()` 启动 **3 个 slot**：2 个业务 slot（`run_once`）与 1 个管理 slot（`run_admin_once`）。每个 slot 执行一轮后 `wait_for(stopping, scan_interval=5)`，即默认每 5 秒扫描一次。管理 slot 在领取管理任务前会调用 `jobs.has_priority_work(...)`，有可执行的业务任务时返回 `run_priority`，让位于业务 Run。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant W as Worker slot run_once
+    participant J as JobService.claim
+    participant F as Fairness
+    participant ST as SQLiteJobStore
+    participant DB as SQLite 写事务
+    participant X as 图执行协程
+    participant L as 续租协程
+    W->>J: claim(capabilities, worker_id)
+    J->>DB: begin_write
+    J->>ST: candidates(limit=64, after=cursor)
+    ST-->>J: 到期 Job 候选 按级别与团队排名
+    J->>F: ordered(candidates)
+    F-->>J: 优先级 resume/recover → run → alert → schedule 团队轮转
+    J->>ST: claim(capabilities, worker_id, ordered)
+    ST->>DB: 复读 Job revision 状态 Run 状态
+    ST->>DB: 检查能力 Team active 配额 Thread 占用 Lease
+    ST->>DB: 更新 teams threads execution_leases runs run_jobs
+    ST-->>J: ClaimedJob(guard, context, attempt)
+    J-->>W: ClaimedJob
+    W->>X: create_task(_execute)
+    W->>L: create_task(_renew)
+    L->>DB: 每 10 秒 expire_owned + 租约续期 45 秒
+    X->>DB: 图执行 检查点写入均通过 LeaseGuard
+    X-->>W: 返回 / 异常
+```
+
+领取规则逐项对照代码：
+
+| 规则 | 代码 | 细节 |
+| --- | --- | --- |
+| 候选 | `SQLiteJobStore.candidates` | `available_at <= now` 且 Job 状态为 `ready/retry_wait/capability_blocked`，或为 `leased` 且 `lease_until <= now`；每页最多 64 条，用 `row_number()` 按（团队、级别）分区，游标 `(_level, _team_rank, created_at, job_id)` |
+| 优先级 | `Fairness.level` | `resume/recover`=0，`run`（其余默认）=1，`alert`=2，`schedule`=3；同级别团队轮转，记录上次领取的团队 |
+| 能力匹配 | `_supports` | 普通执行需 `graph_versions` 含该图（已注册执行器**且**有投影器）；纯投影需 `can_reconcile` 且在 `projection_graph_versions` 内；Job 的 `capabilities` 必须是 Worker `features` 的子集。不满足且 Job 未被租出时标记 `capability_blocked` |
+| 等待态 | `_candidate` | Run 处于 `waiting_input/waiting_approval` 时只能被 `kind='resume'` 的 Job 领取 |
+| Thread 占用 | `_candidate` | `threads.active_run_id` 非空且不是当前 Run 时，把候选 `available_at` 推迟 1 秒 |
+| 配额 | `_candidate` | Team 须 `active`，Team 有效租约数 `< execution_limit`；**全局**有效租约数 `< 2`（硬编码） |
+| 写顺序 | `_candidate` | quota（teams）→ Thread → Lease → Run → Job |
+| 租约 | `_candidate` | 租约与 Job 租约均为 `now + 45000` ms；`run_epoch + 1`；Job 变 `leased`；普通执行 `attempt + 1` 并写 `run.started` 事件；纯投影不递增 attempt |
+| 纯投影判定 | `SQLiteJobStore._projection_only` | Job 本身为 `leased`（即接管过期租约）、Run 为 `cancel_requested/finalizing`、`recovery_phase` 为 `projection/finalizing`、或本片段累计 attempt ≥ 3 |
+
+> 原文称"Scheduler 可以领取恢复工作"。准确说法：Scheduler 调用 `Reconciler.recover(run_id)`，后者以 `projection=True` 调用同一个 `jobs.claim`，Worker 在 `_execute` 中遇到 `claim.projection_only` 则只运行 `reconciler.reconcile`，**不运行图**。
+
+**LeaseGuard 与 fencing**（`persistence/lease_guard.py::LeaseGuard.require`）：所有受保护写入在同一事务内执行一条 `UPDATE execution_leases SET guard_revision = guard_revision + 1 WHERE ...`，条件同时包含：租约行的 `team/thread/owner_run/owner_job/worker/run_epoch` 完全匹配且未过期；`runs` 行 `run_epoch` 与状态在允许集合内；`run_jobs` 行为 `leased`、`lease_owner` 一致且 `lease_until > now`；`threads.active_run_id` 等于该 Run。受影响行数不为 1 则 `rollback` 并抛 `StaleExecution`。`ExecutionGuard` 本身只是不可变的数据，只有在事务内通过 `require` 才构成"所有权证据"。
+
+```mermaid
+stateDiagram-v2
+    [*] --> ready: 创建 run / resume / recover Job
+    ready --> leased: 领取 租约 45 秒
+    retry_wait --> leased: 到期后领取
+    capability_blocked --> leased: 能力满足后领取
+    leased --> leased: 租约过期 新 epoch 接管 projection_only
+    leased --> retry_wait: 执行异常 投影失败 或取消
+    leased --> capability_blocked: 能力丢失
+    leased --> done: 结果 等待态 取消已投影
+    leased --> dead: failed 或 timed_out
+```
+
+### 3.3 Worker 执行与投影
+
+`Worker._run_claim` 并发运行两个任务并等待首个完成：
+
+- `attempt = create_task(self._execute(execution))`：真正的执行；
+- `renewal = create_task(self._renew(execution))`：每 `renew_interval=10` 秒调用 `_renew_cycle`——`DeadlineService.expire_owned(guard)`、读取 `controls.status`，若不是 `cancel_requested` 且 `LeaseService.renew(guard)` 成功则继续，否则置 `execution.cancelled` 并结束。
+
+`_execute` 分两条分支：
+
+```mermaid
+flowchart TD
+    E["_execute(execution)"] --> C0{"_finish_cancel<br/>状态 cancel_requested?"}
+    C0 -- 是 --> END0["完成取消 返回"]
+    C0 -- 否 --> CK["check_projection 或 check_operation"]
+    CK --> PO{"claim.projection_only?"}
+    PO -- 是 --> REC["reconciler.prepare 读检查点<br/>写事务内 reconciler.reconcile"]
+    PO -- 否 --> GV{"图版本已注册<br/>执行器 + 投影器?"}
+    GV -- 否 --> CB["CapabilityBlocked"]
+    GV -- 是 --> EX["registry._executors[graph_version].execute(execution)"]
+    EX --> PR["check_projection"]
+    PR --> PJ["写事务: lock_scope + LeaseGuard.require<br/>projector.project(uow, claim, result)"]
+    PJ --> DONE["projected"]
+```
+
+执行器与投影器由 `runtime/graphs/registry.py::foundation_worker_registry` 注册，按 `RunContext.graph_version` 选择：
+
+- `FoundationExecutor.execute`：以 `run_id` 为 LangGraph `thread_id`，`recursion_limit=128`；首次执行从 `messages` 表读取受理时的输入构造初始状态，已有检查点则以 `ainvoke(None, ...)` 继续；检查点上有未消费中断时不自行编造回复，直接返回。v10–v15、v17、v18 使用 `durability='sync'`。
+- `InterruptExecutor(FoundationExecutor)`：用于 v2、v3、v9、v10、v13–v15。先 `apply_resume`（见 §3.5），再继续执行。
+- 投影器：`runtime/results.py::ResultProjector` 包装一个"等待态投影器"（`FoundationProgressProjector` 或 `InterruptProgressProjector`）。`ResultProjector.project` 先读检查点，`saved_outcome` 有 Outcome 则经 `application/results.py::ResultService.finalize_in` 在同一事务保存 `succeeded/partial`；否则交给等待态投影器（把中断写成 `interrupts` 行、事件 `input.required/approval.required`，并 `jobs.release(..., status='waiting_input'|'waiting_approval')`）。
+
+异常归类与释放（`Worker._run_claim`）：
+
+| 异常 | 释放方式 | 返回状态 |
+| --- | --- | --- |
+| 续租协程先结束 | 置 `cancelled`、取消执行；若处于取消则完成取消 | `lease_lost` / `cancelled` |
+| `StaleExecution` | 不释放（已失去所有权）；若取消则完成取消 | `stale_execution` / `cancelled` |
+| `CapabilityBlocked` | 执行器已启动或投影：`queued` + `retry_wait` + `recovery_phase=projection`；否则 `capability_blocked` | `recovery_scheduled` / `capability_blocked` |
+| `ProjectionFailure` | `retry_wait` + `projection` + `PROJECTION_FAILED` | `recovery_scheduled` |
+| `InfrastructureFailure` | `segment_attempt ≥ 3`：`RETRY_EXHAUSTED`；否则延迟 `2s`（第 1 次）或 `10s`，另加 0–0.5s 抖动 | `retry_wait` |
+| `CancelledError` | 取消执行协程，写 `retry_wait`（执行已启动则标记 `PROJECTION_CANCELLED`），再抛出 | — |
+| 其他异常 | 执行器启动后：`retry_wait` + `EXECUTOR_FAILED`；启动前：`capability_blocked` + `EXECUTION_UNAVAILABLE` | `recovery_scheduled` / `capability_blocked` |
+
+`Execution.check_operation()`（`jobs/worker.py`）是图节点在每个新外部操作前必须调用的"闸门"：`LeaseGuard.require(..., {'running'})`、`ContextResolver.revalidate`（当前成员与权限）、合成图的来源策略、connector 当前部署策略，并核对 Run 状态/epoch/取消标志/`wall_deadline_at`/`deadline_at`，不满足抛 `StaleExecution`。
+
+Run 状态机（实现取自 `persistence/backends/jobs.py`、`controls.py`、`application/resume.py`）：
+
+![Run 状态](../../assets/workbench-python/07-run-state.png)
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued: RunService.create
+    queued --> running: 领取普通 Job
+    running --> waiting_input: InterruptProgressProjector
+    running --> waiting_approval: InterruptProgressProjector
+    waiting_input --> queued: ResumeService 创建 resume Job
+    waiting_approval --> queued: ResumeService 创建 resume Job
+    running --> finalizing: finalize_in
+    finalizing --> succeeded: 完整 Outcome
+    finalizing --> partial: 不完整 Outcome
+    running --> queued: release retry_wait
+    running --> cancel_requested: 取消请求
+    cancel_requested --> cancelled: finish_cancel
+    queued --> cancelled: 直接取消
+    waiting_input --> cancelled: 直接取消
+    running --> failed: 不可恢复
+    running --> timed_out: 活跃预算耗尽
+    queued --> expired: 总期限到达
+    waiting_input --> expired: 等待期限到达
+```
+
+> 注意：运行中取消的内部状态是 `cancel_requested`（`SQLiteControlStore.request_cancel`），而 `GET /v1/runs` 的 `status` 过滤枚举写的是 `cancelling`，Web 的 `isRunActive` 也用 `cancelling`。两者并不一致，见「核对记录」。
+
+### 3.4 失败恢复
+
+![恢复时序](../../assets/workbench-python/06-recovery.png)
+
+入口有两个：Worker 领取到 `projection_only` 的 Job，或 Scheduler 每 5 秒的 `tick()` 触发 `Reconciler.recover(run_id)`。
+
+`Scheduler._tick()`（`jobs/scheduler.py`）依次：`DeadlineService.scan()` 处理期限 → 读取候选 Job → 仅对"租约已过期、`recovery_phase` 为 `projection/finalizing`、或 `attempt ≥ 3`"的 Job 调 `Reconciler.recover` → `ScheduleScanner.tick()` 触发到期巡检，最后汇总成 `TickReport`。普通新 `ready` Job 留给 Worker。
+
+```mermaid
+flowchart TD
+    S["Reconciler.recover(run_id)"] --> T{"Run 已终态?"}
+    T -- 是 --> OUT0["terminal"]
+    T -- 否 --> CL["jobs.claim(projection=True)"]
+    CL --> NC{"领取成功?"}
+    NC -- 否 --> UNA["unavailable: LIVE_OWNER_OR_CAPABILITY_BLOCKED"]
+    NC -- 是 --> CAN{"取消已请求?"}
+    CAN -- 是 --> CNL["finish_cancel"]
+    CAN -- 否 --> CP["Execution.check_projection<br/>重新校验权限"]
+    CP -- 失败 --> BLK["release capability_blocked<br/>EXECUTION_CAPABILITY_LOST"]
+    CP -- 通过 --> OBS["prepare: graph.aget_state 取检查点与 next 节点"]
+    OBS --> REC["reconcile(uow, claim, observation)"]
+    REC --> D0{"wall_deadline 已过?"}
+    D0 -- 是 --> EXP["expired"]
+    D0 -- 否 --> D1{"检查点可解码且与观察一致?"}
+    D1 -- 否 --> FAIL["failed: STATE_RECONCILIATION_REQUIRED"]
+    D1 -- 是 --> D2{"检查点已有 Outcome?"}
+    D2 -- 是 --> FIN["ResultService.finalize_in"]
+    D2 -- 否 --> D3{"有中断?"}
+    D3 -- 是 --> WAIT["补写 waiting 投影"]
+    D3 -- 否 --> D4["continue_recovery: 结束旧 Job 创建 recover Job"]
+```
+
+`reconcile`（`jobs/reconciler.py`）要点：检查点解码失败或观察到的 `checkpoint_id` 不一致，记 `STATE_RECONCILIATION_REQUIRED`；已有 `RecordedFoundation`/`RunOutcome` 时走 `finalize_in`；若 `last_applied_resume_id` 已出现在检查点中，补记 `resume_requests.status='applied'` 与 `interrupts.status='consumed'`，防止回复被重复应用；可继续的节点由 `SQLiteJobStore.continue_recovery` 在同一事务里结束旧 Job 并插入新的 `kind='recover'`、`status='ready'` 的 Job（本片段 attempt ≥ 3 则拒绝）。
+
+### 3.5 等待输入与恢复
+
+![中断与恢复](../../assets/workbench-python/05-interrupt-resume.png)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as 用户
+    participant API as api/runs.py resume_run
+    participant RS as ResumeService.resume
+    participant DB as SQLite 写事务
+    participant W as Worker
+    participant IE as InterruptExecutor
+    participant G as LangGraph
+    U->>API: POST /v1/runs/{id}/resume + Idempotency-Key
+    API->>RS: resume(auth, run_id, ResumeRun, key)
+    RS->>DB: 校验 revision 状态 interrupt 过期 actor
+    RS->>DB: 校验响应 Schema 与检查点中的真实中断一致
+    RS->>DB: INSERT resume_requests(submitted) UPDATE interrupts
+    RS->>DB: INSERT messages INSERT run_jobs(kind=resume)
+    RS->>DB: UPDATE runs 为 queued append run.resumed
+    RS-->>U: 202
+    W->>DB: 领取 resume Job
+    W->>IE: execute
+    IE->>DB: resume_requests submitted → applying
+    IE->>G: ainvoke(Command(resume=...), interrupt_after=['input'], durability=sync)
+    IE->>DB: 核对 last_applied_resume_id 后标记 applied interrupt consumed
+    IE->>G: ainvoke(None) 继续执行
+```
+
+关键代码点：`application/resume.py::ResumeApplier.apply` 复核"检查点中的真实中断值与持久化的描述符一致""审批类的 `args_hash` 未变化"；`InterruptExecutor.apply_resume` 先停在 `input` 节点（`interrupt_after=['input']`），读回持久化检查点确认 `last_applied_resume_id` 已写入，再把请求置 `applied`——这样即使进程在两步之间崩溃，重放也不会重复应用回复（`Reconciler.reconcile` 对此兜底）。
+
+### 3.6 取消与期限
+
+| 动作 | 代码 | 行为 |
+| --- | --- | --- |
+| 取消 | `application/cancel.py::CancelService.cancel` → `persistence/backends/controls.py::request_cancel` | `finalizing` 或 `recovery_phase=finalizing` 时 `FINALIZATION_STARTED`（409）；已终态直接返回；`running` 置 `cancel_requested` 并写事件；其他状态直接 `finish(..., 'cancelled')` |
+| 完成取消 | `Worker._finish_cancel` / `controls.finish_cancel` | 在 `cancel_requested` 允许集合内通过 LeaseGuard 后终结 |
+| 期限 | `jobs/deadlines.py::DeadlineService.scan/expire_owned` | Scheduler 终结无活动租约的排队/等待 Run；运行中的 Run 需要先持有有效租约（Worker 续租协程调用 `expire_owned`） |
+
+SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4。
+
+---
+
+
+## 4 工作流与运行时实现
+
+> 本章把“图版本、图状态、执行器、投影器”四件事分开。阅读顺序是 `runtime/graphs/registry.py` → 选定版本的 `build_*` → `jobs/worker.py` → `runtime/results.py`。
+
+### 4.1 图版本注册与选择
+
+`runtime/graphs/registry.py::foundation_worker_registry` 是当前版本清单：为 `dod.v1` 到 `dod.v18` 的每个已支持版本登记编译后的图、状态 Schema、执行器和结果投影器。`GraphRegistry.register` 拒绝同名版本再次登记；`resolve(graph_version, state_schema_version)` 同时核对版本与状态 Schema。这样恢复时仍使用受理时固定的图，而不会误用新发布的图代码。新增版本须保持旧版本可解析，直到历史 Run 已归档或有显式兼容迁移。
+
+| 入口 | 责任 | 不能省略的检查 |
+| --- | --- | --- |
+| `GraphRegistry.resolve` | 从固定版本找到编译图 | 不支持的版本直接拒绝，不能回退最新版 |
+| `FoundationExecutor.execute` | 装配 `configurable.thread_id=run_id`，从已受理消息建立首个状态或读取检查点 | 已有 interrupt 的图不可自动构造回复 |
+| `InterruptExecutor.apply_resume` | 以 `Command(resume=...)` 恢复等待点 | 先持久化 `last_applied_resume_id`，再标记请求已应用 |
+| `PortableCheckpointSaver` | 把 LangGraph 检查点映射到统一存储 | 每次受保护写入绑定当前 `InvocationGuard` |
+| `ResultProjector` | 将检查点进度变成业务状态 | 只能投影已持久化的图事实 |
+
+源码：`runtime/graphs/registry.py`、`runtime/checkpoints/portable.py`、`runtime/results.py`。图定义分别位于 `runtime/graphs/{foundation,qa,qa_v16,code,multi,rca,rca_baseline,rca_synthetic,rca_proposal,rca_batch,sop_graph,direct_qa,conversation_qa}.py`。图的输入/输出结构和 reducer 位于 `runtime/state/`。
+
+### 4.2 图状态与业务状态的两次落盘
+
+图执行产生检查点；检查点描述“节点执行到哪”。`runs`、`run_events`、`interrupts`、`run_outcomes` 描述“用户和系统能看到什么”。两者可能在进程崩溃时短暂错开，`jobs/reconciler.py` 依据检查点补齐投影。定位异常时按此顺序查看：
+
+1. 读 `runs.status`、`recovery_phase` 与 `run_jobs` 的当前 generation，确认任务是否仍有领取资格。
+2. 读 `execution_leases` 的 owner、epoch 与过期时间，确认当前 Worker 是否有写权限。
+3. 读 `graph_checkpoints` 和 `graph_pending_writes`，找最后可解码的 checkpoint、`__interrupt__` 与 outcome。
+4. 对照 `interrupts`、`resume_requests`、`run_outcomes`、`run_events`。若检查点含最终结果但业务投影没有，交由协调器补齐；不要直接手工改 Run 状态。
+
+图检查点使用 `run_id` 作为 LangGraph 的 `thread_id`；业务 Thread 的 `thread_id` 是另一层标识。`runtime/checkpoints/namespaced.py` 处理子图命名空间，`persistence/checkpoints/store.py` 负责检查点表读写。
+
+### 4.3 模型与预算执行链
+
+`runtime/models/factory.py::ModelFactory` 从固定的 ModelProfile 版本构建模型，核对地址与凭据授权。`runtime/models/deepseek.py` 是适配层；`runtime/models/invoker.py::ModelInvoker` 负责模型调用的预算预留、尝试、结果和用量结算。`runtime/models/json_output.py` 处理结构化输出约束。调用发生在数据库事务之外；先保存必要的预留与追踪信息，收到回执后再结算。
+
+预算入口在 `runtime/budgets/service.py` 与 `runtime/budgets/limits.py`。专家、汇总、修复尝试都消耗父 Run 的预算。遇到超时或未知回执时，不把尚未确认的消耗当作零；迟到回执归入隔离记录，避免覆盖已终结的 Run。实现判断以 `usage_reservations`、`usage_records`、`usage_quarantine` 为准，字段见[附录 A](03-implementation/A-data-dictionary.md)。
+
+### 4.4 工作流文件与版本的关系
+
+`config/workflows/payment-check.yaml` 是 SOP/巡检定义样例，不是所有 Agent 图的配置文件。图版本由 Python 注册表固定；SOP 的 WorkflowDefinition 另有独立发布版本。修改 YAML 不能改变已受理 Run 的图实现，也不能让未发布的流程定义生效。新增或调整步骤时，先验证依赖 DAG、工具的只读属性与输入/输出 Schema，再发布新 WorkflowVersion。
+
+## 5 持久化实现
+
+### 5.1 后端、事务与 Store
+
+`persistence/ports/backend.py::StorageBackend` 声明统一入口，`persistence/backends/sqlite.py::SQLiteBackend` 是当前实现。业务调用经 `create_uow().begin_read()` 或 `begin_write()` 进入短事务。`persistence/backends/{runs,jobs,controls,results,configuration,actions,schedules,model_profiles}.py` 实现各领域 Store；`persistence/lease_guard.py` 在受保护写入时核对执行所有权。
+
+当前代码仍有应用服务直接引用 SQLAlchemy `schema` 表对象，以及 `persistence` 反向导入 `application` 的局部例外；所以“更换数据库只改驱动”不是现状承诺。新增持久化能力时先明确 Store 接口，再验证 SQLite 方言之外的语义，不在业务用例里增加新的 SQLite 专用 SQL。
+
+### 5.2 Schema 与显式迁移
+
+当前业务 Schema 在 `persistence/schema_agent_v3.py`，Agent 独立迁移链在 `persistence/agent_migrations/versions/`。历史 Workspace 迁移在 `persistence/migrations/versions/`，供旧规格和历史理解使用，不能对旧 Workspace 数据库运行 Agent 初始化。`cli/db.py::_preflight` 在写入之前检查版本元数据、revision、WAL 和必需结构；未知旧库安全拒绝。`workbench db migrate` 是维护命令，API/Worker/Scheduler 启动不自动迁移。
+
+| 情形 | 预期行为 | 核对点 |
+| --- | --- | --- |
+| 新的空路径 | 显式 `db migrate` 建立 Agent Schema | `cli/db.py::migrate`、`agent_migrations/versions/0001_agent_domain.py` |
+| 已在当前 revision 的 Agent 库 | 迁移命令可重复运行，不重建业务数据 | `cli/db.py::_preflight` |
+| 受支持的早期 Agent revision | 在维护窗口升级到 head，并做外键检查 | `0002_shared_skills.py`、`0003_run_trace_contexts.py` |
+| 旧 Workspace 或结构不兼容的库 | 拒绝并保留原库 | `FreshAgentDatabaseRequired` |
+
+版本与表字段的快照见[附录 A](03-implementation/A-data-dictionary.md)。安装与迁移步骤见[源码结构手册](../../runbooks/source-layout.md)；备份恢复见[SQLite 恢复手册](../../runbooks/sqlite-recovery.md)。
+
+### 5.3 检查点与对象存储
+
+`runtime/checkpoints/portable.py` 实现 LangGraph 的检查点适配，`persistence/checkpoints/store.py` 映射快照和 pending writes。检查点写入与 LeaseGuard 在同一事务中验证；大证据和文件通过 Artifact 引用，避免无限增长的图状态。Skill 对象采用内容寻址清单与资源校验；运行产物由 Artifact 元数据和对象实际可用性共同决定。对象已上传但元数据未提交时不能报告 available；元数据存在但对象校验失败时也不能交付。
+
+### 5.4 数据定位与恢复原则
+
+按 `team_id`、`agent_id`、`thread_id`、`run_id` 逐层缩小范围。排查“重复任务”先看幂等记录和 Job generation；排查“旧 Worker 晚写”先看 `run_epoch` 和租约；排查“回复重复应用”先看 `last_applied_resume_id`。备份必须通过 SQLite 在线一致备份入口，恢复到隔离路径并显式确认外部影响，不能只复制正在运行的 `.sqlite3` 主文件。具体命令由 runbook 维护。
+
+## 6 Skill 实现
+
+### 6.1 导入、校验、发布和加载
+
+| 步骤 | 代码入口 | 持久结果 |
+| --- | --- | --- |
+| 从种子、Git 或 Artifact 发起导入 | `api/skills.py`、`skill_management/importer.py::SkillImporter` | 管理 Job 与导入回执 |
+| 校验包名、路径、内容和 `SKILL.md` | `skill_management/validator.py::validate_bundle` | 可发布的受校验包 |
+| 发布团队共享草稿 | `skill_management/library.py::SharedSkillLibrary` | `skills`、`skill_drafts`、不可变 `skill_versions` |
+| 保存不可变资源 | `skill_management/manifest.py`、`objects.py` | 内容寻址的清单和资源 |
+| 运行时读取指定版本资源 | `skill_management/loader.py::SkillLoader.load` | `VerifiedResource`，附 SHA-256 与 VersionRef |
+
+导入来源和团队共享编辑是两条不同路径；对外接口分别见[附录 B](03-implementation/B-api-reference.md)。导入失败不应生成可运行的发布版本。发布 Agent 后，新 Run 固定 Skill VersionRef；仅保存 Skill 草稿或仅发布 Skill 版本不会改动现有 Agent 的已发布绑定。
+
+### 6.2 运行时再验证
+
+`SkillLoader` 要求真实的当前 Worker `Execution`，核对其 owner、RunContext、有效租约以及当前权限。加载版本必须在 RunContext 固定集合中，数据库中的版本仍为 published，资源哈希与清单一致。其前后各检查一次执行有效性，防止读取期间授权撤销或租约失效。错误归为资源不可用，不把损坏内容交给模型。
+
+### 6.3 维护与故障定位
+
+创建失败查 bundle 路径和元数据校验；发布失败查草稿 revision 冲突；运行时找不到资源查 Agent 是否已重新发布、Run 固定的版本、Skill 对象目录和文件摘要。不要通过修改已发布目录修复内容；修复应创建新版本并重新发布 Agent。导入操作详见[Skill 导入手册](../../runbooks/skill-import.md)。
+
+## 7 MCP Server 实现
+
+### 7.1 进程与依赖方向
+
+`apps/mcp-server` 是独立 Python 包。`interfaces/cli.py` 提供 `check` 与 `serve`；`serve` 支持 stdio 和 Streamable HTTP。装配根在 `bootstrap.py::Runtime`；MCP 协议映射在 `interfaces/mcp/`；查询与用例在 `application/`；范围、主体和证据契约在 `domain/`；HTTP 源、Bearer 鉴权、密钥引用与审计在 `infrastructure/`。Agent 侧的 MCP 客户端位于 `apps/agent/src/workbench_agent/tools/mcp.py`，二者通过协议交互。
+
+### 7.2 一次只读查询
+
+MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用例核对 Principal、QueryScope、时间窗和授权源，再调用相应 Gateway。Gateway 把上游结果规范化成 `application/results.py::QueryOutcome`，最终返回有限正文及证据元数据。源认证信息在 MCP 进程的环境引用中解析；模型和 Agent 的公共输出不能获得原始 Token。接口清单与示例见[附录 B](03-implementation/B-api-reference.md)第 5 节。
+
+`check` 只验证配置、密钥引用和基础启动条件，输出中的 `discovery` 与 `business_query` 仍为 `not_checked`；它不能证明上游业务查询已经通过。真实接入须再运行合同、集成和验收测试，并核对实际数据源权限。
+
+### 7.3 修改指引
+
+新增只读源时，先扩展 `application/ports.py` 的 Gateway 契约及 `domain` 规则，再实现 `infrastructure/connectors/` 适配，最后在 `bootstrap.py` 装配并增加 MCP 映射。避免将上游返回的任意字段直接透传给模型。改变工具 Schema 需同步 Agent 的绑定和端到端合同测试，检查权限、范围和结果截断。
+
+## 8 Web 实现
+
+### 8.1 页面与路由
+
+`apps/web/src/router.ts` 使用 `/app/` 作为 history base。实际路由：工作台 `/`、任务 `/runs`、任务详情 `/runs/:id`、Agent `/agents`、模型 `/models`、会话 `/threads`、Skill `/skills`。`tools`、`schedules`、`incidents`、`statistics` 映射 `views/Placeholder.vue`，页面路由存在不代表业务功能已交付。`/demo/runs/:id` 是演示页，不能作为真实任务详情验收依据。
+
+### 8.2 API、会话与事件
+
+`api.ts::ApiClient` 统一附加 Bearer Token，并显式处理 HTTP 错误；`session.ts` 管理前端会话输入。资源 API 分布在 `agents-api.ts`、`models-api.ts`、`skills-api.ts`、`threads-api.ts`、`runs-api.ts`。提问入口 `api.ts::createQaSubmission` 对同一未完成提交复用幂等键，成功后清空。SSE 解析和重连见 `sse.ts`，Run 事件投影见 `run-stream.ts::applyEvent`。客户端以递增 `seq` 去重；模型文字的 `attempt` 和 `message_id` 用于标记旧草稿被新尝试覆盖。
+
+### 8.3 页面调试路径
+
+页面报 401 先检查 Token 是否在请求中注入；页面报 503 先检查构建产物与 `WORKBENCH_FRONTEND_DIST_ROOT`。列表为空先核对 Agent 选择和团队权限，再查看网络响应。任务详情状态滞后时比较 `GET /v1/runs/{id}` 与 SSE `seq`，确认是服务端投影还是浏览器事件处理问题。前端不会直接读数据库或 LangGraph 检查点。
+
+## 9 配置、构建与部署
+
+### 9.1 配置来源
+
+`settings.py::load_settings` 是 Agent 进程的配置入口；样例位于 `config/local/agent.example.yaml`。MCP Server 独立使用 `infrastructure/config/settings.py::load_settings`，样例位于 `config/local/mcp-server.example.yaml`。完整字段、默认值、环境变量和最小配置见[附录 C](03-implementation/C-config-reference.md)。配置文件中的 `secret_ref` 是引用，不是明文密钥；凭据由当前进程环境或受控存储解析。
+
+### 9.2 本地与容器入口
+
+从仓库根目录运行 `./scripts/install.sh` 安装开发依赖、构建 Web，并只在缺失时复制示例配置。新库初始化通过 `./scripts/init-db.sh`；已有兼容库日常运行通过 `./scripts/start.sh`，它先做 doctor 检查，再启动三进程。容器构建文件是 `deploy/Dockerfile.agent`、`deploy/Dockerfile.mcp-server`，本地组合示例是 `deploy/compose.local.yml`。这些脚本、镜像及容器配置的详细操作以[源码结构手册](../../runbooks/source-layout.md)为准。
+
+### 9.3 生产就绪边界
+
+部署前需逐项确认数据库与持久根是绝对路径、API/Worker/Scheduler 使用同一配置和库、Agent Schema head 匹配、SQLite 运行库满足最低版本、Web 静态产物已构建、模型凭据对目标 Agent 与 URL 授权、MCP Server 实际业务查询已验收。`/health/live` 只说明进程存活；`/health/ready` 才包含依赖与 Schema 就绪判断。真实业务连接器和生产 TLS/监控验收状态见[产品文档](01-product.md)与[验收记录](../../acceptance/)。
+
+## 10 测试与验证
+
+### 10.1 测试层次与命令
+
+| 层 | 目录和用途 | 常用命令 |
+| --- | --- | --- |
+| Agent unit | 纯规则、配置、模型适配和局部状态 | `cd apps/agent && uv run python -m pytest tests/unit` |
+| Agent contract | Store、HTTP、MCP、租约等边界契约 | `cd apps/agent && uv run python -m pytest tests/contract` |
+| Agent integration | 真实用例串联和本地依赖 | `cd apps/agent && uv run python -m pytest tests/integration` |
+| Agent fault | 重启、竞态、超时、备份、恢复 | `cd apps/agent && uv run python -m pytest tests/fault` |
+| Agent e2e | 合成业务旅程；真实外部服务需单独配置 | `cd apps/agent && uv run python -m pytest tests/e2e` |
+| MCP Server | 只读范围、协议与源适配 | `cd apps/mcp-server && uv run python -m pytest` |
+| Web | API/视图/SSE/路由组件 | `cd apps/web && npm test && npm run typecheck && npm run build` |
+| 安装脚本 | 安装、初始化、启动的本地合同 | `python3 -m unittest discover -s scripts/tests -v` |
+
+### 10.2 变更到测试的对应关系
+
+| 改动 | 至少核对 |
+| --- | --- |
+| Run 接受或幂等 | `test_run_admission.py`、`test_team_receipt_scope.py`、对应 HTTP 合同 |
+| 租约或恢复 | `test_guard_takeover_race.py`、`test_resume_replay.py`、`test_interrupt_projection.py` |
+| 存储 Schema | `contract/storage/test_agent_boundary.py`、迁移与备份故障测试 |
+| 模型或预算 | `test_model_binding.py`、`test_usage.py`、专家预算集成测试 |
+| Skill 版本 | `test_shared_skills.py`、`test_skill_versions.py`、包校验测试 |
+| MCP Schema/映射 | `contract/test_dod_mcp_mapping.py` 与 MCP Server acceptance 测试 |
+| Web 事件 | `tests/run-stream.test.ts`、`tests/sse.test.ts`、页面测试 |
+
+测试通过只能证明相应范围内的合同；合成数据源与本地模拟投递不等同于真实监控、SeaTalk、Jira 或 DoD 的业务验收。
+
+## 11 开发指引
+
+### 11.1 新增图版本
+
+1. 在 `runtime/graphs/` 新建或扩展图构造函数，明确输入、状态 Schema、节点副作用和输出。
+2. 在 `foundation_worker_registry` 注册新的图版本及对应 executor/projector，保留旧版本映射。
+3. 定义新版本的受理条件和 RunContext 固定项；更新配置发布入口，不让旧 Run 隐式切换。
+4. 加入图状态恢复、重复投影、取消/期限、预算耗尽的验证。涉及 interrupt 时覆盖重复 `Command(resume=...)` 与崩溃后恢复。
+5. 更新[技术设计](02-technical-design.md)的拓扑和[产品文档](01-product.md)的能力状态。
+
+### 11.2 新增工具或 MCP 源
+
+1. 明确工具是只读查询还是外部写动作；写动作必须走 Action/Approval/Outbox。
+2. 为参数、结果、范围、角色、速率和预算定义合同，在 ToolBinding 草稿中配置并发布。
+3. MCP 查询先在 MCP Server 的 domain/application 实现范围与格式约束，再接入基础设施 Gateway。
+4. 在 Agent `tools/` 中接入调用适配，并验证绑定、权限交集、幂等台账及拒绝路径。
+5. 用合同测试覆盖不允许的团队、过期凭据、越界 Scope 和超大响应；真实源另做验收。
+
+### 11.3 新增 Skill、数据库字段或 API
+
+| 变更 | 操作顺序 |
+| --- | --- |
+| Skill | 校验包格式 → 发布不可变版本 → 绑定 Agent 草稿 → 发布 Agent → 以新 Run 验证加载与撤权 |
+| 数据库字段 | 修改 Agent Schema 与 Store → 新增 Agent migration → 验证旧 Agent 库升级及新库初始化 → 更新附录 A |
+| API | 添加 Pydantic 请求/响应及授权用例 → 路由映射 → HTTP 合同和错误路径测试 → 更新附录 B |
+| 配置项 | 更新 `settings.py` / MCP Settings → 样例与校验 → 敏感值脱敏 → 更新附录 C |
+| Web 页面 | 确认后端接口与权限 → API 模块 → 路由/页面 → 视图与事件测试 → 产品状态表 |
+
+### 11.4 提交前文档核对
+
+核对三个层次：产品能力状态是否与真实入口一致；设计不变量是否仍成立；实现路径、接口、Schema 和配置是否在源码中存在。若修改当前实现而设计未改变，只更新实现文档和附录。若打破设计契约，先明确版本和迁移策略，再同步技术设计。不要通过在旧规格上继续堆字段字典来维护新文档。
+
+## 12 核对记录与已知偏差
+
+| 原规格或拆分草稿中的表述 | 当前源码证据 | 文档处理 |
+| --- | --- | --- |
+| 命令写作 `dod` | `apps/agent/pyproject.toml` 中入口是 `workbench` | 所有可执行命令统一为 `workbench`；旧 runbook 残留单独标注 |
+| Workspace 是产品容器 | Agent Schema、路由、Web 以 Agent 为主 | Workspace 仅作为历史迁移名或 Runner 内技术目录出现 |
+| 管理端所有页面已可用 | `apps/web/src/router.ts` 的四类路由指向 `Placeholder.vue` | 产品文档标记为占位，不能算已交付 |
+| MySQL/PostgreSQL 可直接切换 | 只有 `SQLiteBackend` 实现 | 技术设计保留目标契约，实施状态标为待实现 |
+| 外部业务通知已交付 | `delivery/local_simulator.py` 为本地模拟，真实发送器默认未配置 | 合成验收与真实接入分开 |
+| MCP `check` 证明业务数据源可用 | `interfaces/cli.py` 输出 `business_query: not_checked` | 真实业务源需要独立验收 |
+| 实现文档已覆盖 4–12 章 | 拆分草稿只写到 3.6 | 本次补全工作流、存储、Skill、MCP、Web、配置、测试、开发指引 |
+
+本次核对以仓库当前工作树为准；存在未提交的 `scripts/tests/test_local_workflow.py` 改动，与本次文档内容无关。字段、接口和配置的逐项核对仍应以三个附录和源文件为准。
