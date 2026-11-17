@@ -31,7 +31,7 @@
 - Produces `workbench_export_storage ROOT` to export `WORKBENCH_PERSISTENT_ROOT` and default `WORKBENCH_DATABASE_URL` for Task 2.
 - `install.sh [--data-dir ABSOLUTE_PATH]` writes `config/local/data-dir` only when absent or explicitly overridden.
 
-- [ ] **Step 1: Write failing installer and helper tests.** Set `HOME` to a temporary directory in the test environment. Make `_script()` also copy `scripts/lib/local-paths.sh` into the temporary fixture. Test default path, a path containing a space, repeat installation retaining the previous path, explicit change to another absolute path, and rejection of relative/empty paths and a symlinked path file. Check the existing config and `uv`/`npm` call sequence remain unchanged.
+- [x] **Step 1: Write failing installer and helper tests.** Set `HOME` to a temporary directory in the test environment. Make `_script()` also copy `scripts/lib/local-paths.sh` into the temporary fixture. Test default path, a path containing a space, repeat installation retaining the previous path, explicit change to another absolute path, and rejection of relative/empty paths and a symlinked path file. Check the existing config and `uv`/`npm` call sequence remain unchanged.
 
 ```python
 def test_install_uses_default_and_preserves_choice(self):
@@ -43,8 +43,8 @@ def test_install_uses_default_and_preserves_choice(self):
     self.assertEqual(chosen.read_text().strip(), str(self.root / "chosen dir"))
 ```
 
-- [ ] **Step 2: Run red tests.** `python3 -m unittest scripts.tests.test_local_workflow -v`; expect installer argument/default-path assertions to fail.
-- [ ] **Step 3: Implement the helper and installer.** Use `[[ $path == /* ]]` for absolute validation, reject newlines, and read the path file with `IFS= read -r`. Never `source` the data file. Have `install.sh` parse only `--data-dir PATH` and `--help`; when no explicit option, keep an existing valid choice or write `$HOME/.workbench`. Refuse a symlinked choice file; write a changed choice through a temporary file plus `mv`, and warn that data is not moved. Add `config/local/data-dir` to `.gitignore`.
+- [x] **Step 2: Run red tests.** `python3 -m unittest scripts.tests.test_local_workflow -v`; expect installer argument/default-path assertions to fail.
+- [x] **Step 3: Implement the helper and installer.** Use `[[ $path == /* ]]` for absolute validation, reject newlines, and read the path file with `IFS= read -r`. Never `source` the data file. Have `install.sh` parse only `--data-dir PATH` and `--help`; when no explicit option, keep an existing valid choice or write `$HOME/.workbench`. Refuse a symlinked choice file; write a changed choice through a temporary file plus `mv`, and warn that data is not moved. Add `config/local/data-dir` to `.gitignore`.
 
 ```bash
 workbench_export_storage() {
@@ -55,8 +55,8 @@ workbench_export_storage() {
 }
 ```
 
-- [ ] **Step 4: Run green tests and syntax checks.** `python3 -m unittest scripts.tests.test_local_workflow -v` and `bash -n scripts/install.sh scripts/lib/local-paths.sh`.
-- [ ] **Step 5: Commit.** Stage only Task 1 files and commit `feat: remember local workbench data directory`.
+- [x] **Step 4: Run green tests and syntax checks.** `python3 -m unittest scripts.tests.test_local_workflow -v` and `bash -n scripts/install.sh scripts/lib/local-paths.sh`.
+- [x] **Step 5: Commit.** Stage only Task 1 files and commit `feat: remember local workbench data directory`.
 
 ### Task 2: Resolve storage paths for explicit init and ordinary startup
 
@@ -68,7 +68,7 @@ workbench_export_storage() {
 - Consumes `workbench_export_storage ROOT` from Task 1 before loading settings or running doctor.
 - Existing `WORKBENCH_DATABASE_URL` is preserved; unset URL derives `sqlite+aiosqlite:///$WORKBENCH_PERSISTENT_ROOT/agents.sqlite3`.
 
-- [ ] **Step 1: Write failing path-precedence and safety tests.** With both storage env vars removed, verify init invokes migrate/bootstrap/doctor with the saved directory and derived URL; verify start reaches doctor with the same values. Log those two env vars from the fake Agent executable. Test custom `WORKBENCH_PERSISTENT_ROOT` with no URL, both vars explicitly set, invalid local path, pre-existing default database, symlinked database, and a configured effective database outside the persistent root.
+- [x] **Step 1: Write failing path-precedence and safety tests.** With both storage env vars removed, verify init invokes migrate/bootstrap/doctor with the saved directory and derived URL; verify start reaches doctor with the same values. Log those two env vars from the fake Agent executable. Test custom `WORKBENCH_PERSISTENT_ROOT` with no URL, both vars explicitly set, invalid local path, pre-existing default database, symlinked database, and a configured effective database outside the persistent root.
 
 ```python
 env = {key: value for key, value in self.env.items()
@@ -78,10 +78,10 @@ self.assertEqual(result.returncode, 0, result.stderr)
 self.assertIn("agents.sqlite3", (self.root / "storage-env.log").read_text())
 ```
 
-- [ ] **Step 2: Run red tests.** `python3 -m unittest scripts.tests.test_local_workflow -v`; expect missing-env and safety tests to fail.
-- [ ] **Step 3: Integrate the helper.** Source `scripts/lib/local-paths.sh` and call `workbench_export_storage "$root"` in both scripts before Python settings loading and doctor. Preserve current effective-config path validation in `init-db.sh`; explicitly reject a symlink at the URL's original database path before `Path.resolve()` can follow it. Keep existing refusal of an existing target. Do not add migrate/bootstrap to `start.sh`.
-- [ ] **Step 4: Run green tests and syntax checks.** `python3 -m unittest discover -s scripts/tests -v` and `bash -n scripts/install.sh scripts/init-db.sh scripts/start.sh scripts/lib/local-paths.sh`.
-- [ ] **Step 5: Commit.** Stage only Task 2 files and commit `feat: use local storage defaults for init and start`.
+- [x] **Step 2: Run red tests.** `python3 -m unittest scripts.tests.test_local_workflow -v`; expect missing-env and safety tests to fail.
+- [x] **Step 3: Integrate the helper.** Source `scripts/lib/local-paths.sh` and call `workbench_export_storage "$root"` in both scripts before Python settings loading and doctor. Preserve current effective-config path validation in `init-db.sh`; explicitly reject a symlink at the URL's original database path before `Path.resolve()` can follow it. Keep existing refusal of an existing target. Do not add migrate/bootstrap to `start.sh`.
+- [x] **Step 4: Run green tests and syntax checks.** `python3 -m unittest discover -s scripts/tests -v` and `bash -n scripts/install.sh scripts/init-db.sh scripts/start.sh scripts/lib/local-paths.sh`.
+- [x] **Step 5: Commit.** Stage only Task 2 files and commit `feat: use local storage defaults for init and start`.
 
 ### Task 3: Document and verify the clone-then-install workflow
 
@@ -92,7 +92,7 @@ self.assertIn("agents.sqlite3", (self.root / "storage-env.log").read_text())
 **Interfaces:**
 - Documents the three commands and the `--data-dir`/environment override precedence without changing runtime interfaces.
 
-- [ ] **Step 1: Write documentation assertions.** Add a focused test reading README and the runbook and checking that each shows `install.sh`, `init-db.sh`, `start.sh`, the default `$HOME/.workbench`, and `--data-dir`.
+- [x] **Step 1: Write documentation assertions.** Add a focused test reading README and the runbook and checking that each shows `install.sh`, `init-db.sh`, `start.sh`, the default `$HOME/.workbench`, and `--data-dir`.
 
 ```python
 for path in (REPO_ROOT / "README.md", REPO_ROOT / "docs/runbooks/source-layout.md"):
@@ -101,7 +101,7 @@ for path in (REPO_ROOT / "README.md", REPO_ROOT / "docs/runbooks/source-layout.m
         self.assertIn(expected, content)
 ```
 
-- [ ] **Step 2: Run red documentation test.** `python3 -m unittest scripts.tests.test_local_workflow -v`; expect missing default-path/flag text.
-- [ ] **Step 3: Update both documents.** Show `./scripts/install.sh`, optional `./scripts/install.sh --data-dir /absolute/path`, explicit `./scripts/init-db.sh` for new databases, and `./scripts/start.sh` for daily use. Explain that an existing database is never overwritten, paths are stored locally, both env vars remain overrides, and secrets must still be injected through the environment. Remove the old requirement to export both paths for ordinary local use; keep manual advanced examples labelled as overrides.
-- [ ] **Step 4: Run complete relevant verification.** `python3 -m unittest discover -s scripts/tests -v`, `bash -n scripts/install.sh scripts/init-db.sh scripts/start.sh scripts/lib/local-paths.sh`, and `git diff --check`. Do not run real installation, initialization or network-dependent builds against user data.
-- [ ] **Step 5: Commit.** Stage only documentation and Task 3 test changes and commit `docs: explain default local storage workflow`.
+- [x] **Step 2: Run red documentation test.** `python3 -m unittest scripts.tests.test_local_workflow -v`; expect missing default-path/flag text.
+- [x] **Step 3: Update both documents.** Show `./scripts/install.sh`, optional `./scripts/install.sh --data-dir /absolute/path`, explicit `./scripts/init-db.sh` for new databases, and `./scripts/start.sh` for daily use. Explain that an existing database is never overwritten, paths are stored locally, both env vars remain overrides, and secrets must still be injected through the environment. Remove the old requirement to export both paths for ordinary local use; keep manual advanced examples labelled as overrides.
+- [x] **Step 4: Run complete relevant verification.** `python3 -m unittest discover -s scripts/tests -v`, `bash -n scripts/install.sh scripts/init-db.sh scripts/start.sh scripts/lib/local-paths.sh`, and `git diff --check`. Do not run real installation, initialization or network-dependent builds against user data.
+- [x] **Step 5: Commit.** Stage only documentation and Task 3 test changes and commit `docs: explain default local storage workflow`.
