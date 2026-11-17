@@ -1,0 +1,13 @@
+flowchart TD
+  P[prepare_context] --> R[route / select_skills]
+  P -->|范围未决| U[await_input]
+  R --> B[collect_baseline]
+  B --> I[investigate: 三类专家]
+  I --> V{validate_evidence}
+  V -->|有限补查| I
+  V -->|缺参或冲突| U[await_input]
+  U -->|resume 后校验范围| P
+  V -->|动作确认| A[await_approval]
+  A -->|approve / reject| O[compose_outcome]
+  V -->|证据充分或预算限制| O
+  O --> F[finalize / Event / Outbox]

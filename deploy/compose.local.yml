@@ -1,0 +1,55 @@
+# Explicit migrate/bootstrap first; every runtime shares one local SQLite volume.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    command: ["api", "--config", "/config/agent.yaml", "--host", "0.0.0.0"]
+    stop_grace_period: 20s
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["workbench-data:/var/lib/workbench", "../config/local/agent.yaml:/config/agent.yaml:ro"]
+    environment:
+      - DEEPSEEK_API_KEY
+      - WORKBENCH_OIDC_ISSUER
+      - WORKBENCH_REDIS_URL
+      - WORKBENCH_S3_ENDPOINT
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    command: ["worker", "--config", "/config/agent.yaml"]
+    stop_grace_period: 35s
+    volumes: ["workbench-data:/var/lib/workbench", "../config/local/agent.yaml:/config/agent.yaml:ro"]
+    environment:
+      - DEEPSEEK_API_KEY
+      - WORKBENCH_OIDC_ISSUER
+      - WORKBENCH_REDIS_URL
+      - WORKBENCH_S3_ENDPOINT
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    command: ["scheduler", "--config", "/config/agent.yaml"]
+    stop_grace_period: 15s
+    volumes: ["workbench-data:/var/lib/workbench", "../config/local/agent.yaml:/config/agent.yaml:ro"]
+    environment:
+      - DEEPSEEK_API_KEY
+      - WORKBENCH_OIDC_ISSUER
+      - WORKBENCH_REDIS_URL
+      - WORKBENCH_S3_ENDPOINT
+  mcp-server:
+    profiles: ["mcp"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.mcp-server
+    command: ["serve", "--config", "/config/mcp-server.yaml", "--transport", "streamable-http"]
+    volumes: ["../config/local/mcp-server.yaml:/config/mcp-server.yaml:ro"]
+    environment:
+      - WORKBENCH_MCP_AGENT_TOKEN
+      - WORKBENCH_MCP_CURSOR_KEY
+      - WORKBENCH_KNOWLEDGE_TOKEN
+      - WORKBENCH_METRICS_TOKEN
+      - WORKBENCH_LOGS_TOKEN
+      - WORKBENCH_TRACE_TOKEN
+volumes:
+  workbench-data:

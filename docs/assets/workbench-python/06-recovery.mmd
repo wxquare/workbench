@@ -1,0 +1,22 @@
+sequenceDiagram
+  participant O as 旧 Worker
+  participant D as StorageBackend SQLite v1
+  participant C as 协调器
+  participant N as 新 Worker
+  participant P as Dispatcher 与对账
+  participant X as 外部下游
+  O->>D: 检查点与执行状态
+  C->>D: 扫描租约 / 安排恢复候选
+  D-->>C: 检查点位置
+  C->>D: 恢复 Job
+  N->>D: CAS 接管 / 新 epoch / 固定版本
+  N->>D: 检查 pending interrupt 或 Outcome
+  D-->>N: 恢复位置
+  P->>D: 动作 ID 和领取台账已提交
+  P->>X: 已授权动作
+  X--xP: 响应丢失
+  P->>D: unknown
+  P->>X: 查询同一 action_id
+  X-->>P: 回执或 unknown
+  P->>D: 更新动作记录
+  O->>D: 旧 epoch 更新被拒绝

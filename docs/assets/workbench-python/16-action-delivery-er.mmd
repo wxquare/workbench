@@ -1,0 +1,16 @@
+flowchart LR
+  %% 由同一关系清单生成；实线 FK、虚线逻辑，基数见边标签。
+  r["runs<br/>run_id<br/>status"]
+  a["actions<br/>action_id<br/>run_id<br/>payload_hash"]
+  p["approvals<br/>approval_id<br/>action_id<br/>decision"]
+  o["outbox<br/>outbox_id<br/>action_id<br/>status"]
+  i["incidents<br/>incident_id<br/>run_id<br/>conclusion"]
+  l["incident_links<br/>link_id<br/>incident_id<br/>external_id"]
+  b["incident_action_links<br/>link_id<br/>action_id"]
+  r -- "1 : 0..N" --> a
+  a -- "1 : 0..N" --> p
+  a -- "1 : 0..N" --> o
+  r -- "1 : 0..N" --> i
+  i -- "1 : 0..N" --> l
+  l -- "1 : 0..1" --> b
+  a -- "1 : 0..1" --> b

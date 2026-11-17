@@ -1,0 +1,20 @@
+flowchart LR
+  %% 由同一关系清单生成；实线 FK、虚线逻辑，基数见边标签。
+  t["threads<br/>thread_id<br/>active_run_id<br/>revision"]
+  r["runs<br/>run_id<br/>thread_id<br/>run_epoch"]
+  j["run_jobs<br/>job_id<br/>run_id<br/>generation"]
+  l["execution_leases<br/>thread_id<br/>owner_run_id<br/>owner_job_id"]
+  i["interrupts<br/>interrupt_id<br/>run_id<br/>accepted_resume_request_id"]
+  q["resume_requests<br/>request_id<br/>interrupt_id<br/>status"]
+  c["graph_checkpoints<br/>run_id<br/>namespace_hash<br/>checkpoint_id"]
+  p["graph_pending_writes<br/>checkpoint_id<br/>task_id<br/>write_index"]
+  e["run_events<br/>run_id<br/>seq<br/>type"]
+  t -- "1 : 0..N" --> r
+  r -- "1 : 0..N" --> j
+  t -- "1 : 0..1" --> l
+  r -- "1 : 0..N" --> i
+  i -- "1 : 0..N" --> q
+  i -- "accepted 0..1" --> q
+  r -- "1 : 0..N" --> c
+  c -- "1 : 0..N" --> p
+  r -- "1 : 0..N" --> e

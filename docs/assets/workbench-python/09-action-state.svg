@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2401" height="799" viewBox="0 0 2401 799">
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .secondary{fill:#6b7280}</style>
+<defs>
+<marker id="a-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+<marker id="a-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#059669"/></marker>
+<marker id="a-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#7c3aed"/></marker>
+<marker id="a-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#ea580c"/></marker>
+<marker id="a-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+<marker id="a-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+</defs>
+<rect x="0.00" y="0.00" width="2401.40" height="799.39" rx="0" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="40.00" y="40.00" text-anchor="start" font-size="27" font-weight="600" style="fill:#111827">外部动作状态机</text>
+<text x="40.00" y="70.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#6b7280">unknown 先查询或对账，不作为“未执行”自动重试；状态与 Run 分开</text>
+<path d="M 316.51,476.21 C 352.19,483.38 391.01,491.18 426.80,498.37" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 316.51,476.21 C 352.19,483.38 391.01,491.18 426.80,498.37" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<rect x="347.33" y="462.56" width="61.04" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="377.85" y="479.56" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">policy</text>
+<path d="M 316.40,438.94 C 461.09,425.59 696.30,403.87 842.07,390.41" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 316.40,438.94 C 461.09,425.59 696.30,403.87 842.07,390.41" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="522.71" y="383.39" width="68.88" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="557.15" y="400.39" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">allowed</text>
+<path d="M 675.27,483.07 C 727.51,464.63 789.27,442.83 842.86,423.91" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 675.27,483.07 C 727.51,464.63 789.27,442.83 842.86,423.91" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="730.66" y="416.72" width="68.88" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="765.10" y="433.72" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">approve</text>
+<path d="M 675.27,523.49 C 727.29,523.14 788.75,522.73 842.18,522.37" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 675.27,523.49 C 727.29,523.14 788.75,522.73 842.18,522.37" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<rect x="734.58" y="500.06" width="61.04" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="765.10" y="517.06" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">reject</text>
+<path d="M 675.27,562.74 C 727.51,579.95 789.27,600.30 842.86,617.95" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 675.27,562.74 C 727.51,579.95 789.27,600.30 842.86,617.95" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<rect x="699.30" y="558.39" width="131.60" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="765.10" y="575.39" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">expiry / cancel</text>
+<path d="M 1090.90,378.45 C 1125.20,378.45 1163.00,378.45 1198.00,378.45" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1090.90,378.45 C 1125.20,378.45 1163.00,378.45 1198.00,378.45" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="1124.20" y="355.61" width="53.20" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1150.80" y="372.61" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">claim</text>
+<path d="M 1394.30,333.97 C 1422.70,315.26 1456.90,293.95 1489.10,277.06 C 1570.70,234.26 1590.70,218.79 1680.10,196.50 C 1800.50,166.47 1834.30,179.99 1958.10,171.50 C 2002.00,168.50 2049.90,165.99 2092.80,164.03" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1394.30,333.97 C 1422.70,315.26 1456.90,293.95 1489.10,277.06 C 1570.70,234.26 1590.70,218.79 1680.10,196.50 C 1800.50,166.47 1834.30,179.99 1958.10,171.50 C 2002.00,168.50 2049.90,165.99 2092.80,164.03" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<rect x="1763.16" y="151.45" width="68.88" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1797.60" y="168.45" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">receipt</text>
+<path d="M 1446.60,419.87 C 1460.90,424.73 1475.30,429.54 1489.10,434.00 C 1547.30,452.83 1612.10,472.39 1667.20,488.59" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1446.60,419.87 C 1460.90,424.73 1475.30,429.54 1489.10,434.00 C 1547.30,452.83 1612.10,472.39 1667.20,488.59" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="1516.90" y="411.17" width="92.40" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1563.10" y="428.17" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">safe retry</text>
+<path d="M 1446.40,349.93 C 1460.80,346.42 1475.30,342.90 1489.10,339.56 C 1547.60,325.41 1612.30,309.87 1667.20,296.73" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1446.40,349.93 C 1460.80,346.42 1475.30,342.90 1489.10,339.56 C 1547.60,325.41 1612.30,309.87 1667.20,296.73" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<rect x="1477.70" y="283.39" width="170.80" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1563.10" y="300.39" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">lost acknowledgement</text>
+<path d="M 1446.20,376.57 C 1564.40,373.88 1752.80,367.40 1915.10,352.06 C 1973.70,346.51 2038.30,337.60 2093.10,329.21" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1446.20,376.57 C 1564.40,373.88 1752.80,367.40 1915.10,352.06 C 1973.70,346.51 2038.30,337.60 2093.10,329.21" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<rect x="1723.96" y="329.22" width="147.28" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1797.60" y="346.22" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">permanent failure</text>
+<path d="M 1679.60,535.42 C 1620.60,536.26 1549.10,530.90 1489.10,507.61 C 1447.20,491.35 1407.90,459.68 1378.80,431.77" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1679.60,535.42 C 1620.60,536.26 1549.10,530.90 1489.10,507.61 C 1447.20,491.35 1407.90,459.68 1378.80,431.77" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="1536.50" y="484.78" width="53.20" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1563.10" y="501.78" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">retry</text>
+<path d="M 1915.30,236.58 C 1970.40,222.67 2036.40,206.00 2093.00,191.69" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1915.30,236.58 C 1970.40,222.67 2036.40,206.00 2093.00,191.69" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<rect x="1940.98" y="177.83" width="139.44" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="2010.70" y="194.83" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">verified success</text>
+<path d="M 1915.30,277.39 C 1970.20,282.80 2036.10,289.27 2092.70,294.84" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1915.30,277.39 C 1970.20,282.80 2036.10,289.27 2092.70,294.84" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<rect x="1940.98" y="259.78" width="139.44" height="25.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="2010.70" y="276.78" text-anchor="middle" font-size="14" font-weight="400" style="fill:#111827">verified failure</text>
+<rect x="60.00" y="406.67" width="256.04" height="88.00" rx="12" fill="#eff6ff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="188.02" y="444.67" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">planned</text>
+<text x="188.02" y="468.67" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">参数与 action_id 已持久化</text>
+<rect x="439.65" y="480.28" width="235.00" height="88.00" rx="12" fill="#fff7ed" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="557.15" y="518.28" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">waiting_approval</text>
+<text x="557.15" y="542.28" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">绑定主体 / 参数摘要</text>
+<rect x="855.56" y="334.45" width="235.00" height="88.00" rx="12" fill="#eff6ff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="973.06" y="372.45" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">authorized</text>
+<text x="973.06" y="396.45" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">执行前重查权限</text>
+<rect x="1211.00" y="334.45" width="235.00" height="88.00" rx="12" fill="#eff6ff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1328.50" y="372.45" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">dispatching</text>
+<text x="1328.50" y="396.45" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">已领取并发送</text>
+<rect x="2106.40" y="115.00" width="235.00" height="88.00" rx="12" fill="#f0fdf4" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="2223.90" y="153.00" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">succeeded</text>
+<text x="2223.90" y="177.00" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">有真实成功回执</text>
+<rect x="1680.10" y="481.67" width="235.00" height="88.00" rx="12" fill="#fff7ed" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1797.60" y="519.67" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">retry_wait</text>
+<text x="1797.60" y="543.67" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">已确认可安全重试</text>
+<rect x="1680.10" y="221.95" width="235.00" height="88.00" rx="12" fill="#fff7ed" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="1797.60" y="259.95" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">unknown</text>
+<text x="1797.60" y="283.95" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">已发送但结果不确定</text>
+<rect x="2106.40" y="263.61" width="235.00" height="88.00" rx="12" fill="#fef2f2" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="2223.90" y="301.61" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">failed</text>
+<text x="2223.90" y="325.61" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">明确永久失败</text>
+<rect x="855.56" y="477.50" width="235.00" height="88.00" rx="12" fill="#fef2f2" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="973.06" y="515.50" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">rejected</text>
+<text x="973.06" y="539.50" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">用户明确拒绝</text>
+<rect x="855.56" y="616.39" width="235.00" height="88.00" rx="12" fill="#fef2f2" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="973.06" y="654.39" text-anchor="middle" font-size="18" font-weight="600" style="fill:#111827">expired / cancelled</text>
+<text x="973.06" y="678.39" text-anchor="middle" font-size="14" font-weight="400" style="fill:#64748b">确认过期或取消</text>
+<path d="M 42,759.39 H 75" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 42,759.39 H 75" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<text x="85.00" y="764.39" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">请求 / 主流程</text>
+<path d="M 505.48,759.39 H 538.48" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 505.48,759.39 H 538.48" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<text x="548.48" y="764.39" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">返回 / 持久化</text>
+<path d="M 968.96,759.39 H 1001.96" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 968.96,759.39 H 1001.96" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<text x="1011.96" y="764.39" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">异步 / 恢复</text>
+<path d="M 1432.44,759.39 H 1465.44" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1432.44,759.39 H 1465.44" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<text x="1475.44" y="764.39" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">等待 / 决策</text>
+<path d="M 1895.92,759.39 H 1928.92" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1895.92,759.39 H 1928.92" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<text x="1938.92" y="764.39" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">失败 / 终止</text>
+</svg>

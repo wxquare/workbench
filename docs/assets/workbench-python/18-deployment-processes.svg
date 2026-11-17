@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 650" width="1100" height="650" role="img" aria-labelledby="title desc">
+  <title id="title">DoD Agent 本地部署进程</title>
+  <desc id="desc">Web 前端构建为静态文件，由 API 托管并供浏览器访问；API、Worker、Scheduler 是独立常驻进程，共享同一主机上的 SQLite 本地持久存储。启动前执行必要的初始化和检查。</desc>
+  <style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827}.muted{fill:#536274}.label{font-size:15px}.small{font-size:14px}.name{font-size:20px;font-weight:600}</style>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker><marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#059669"/></marker></defs>
+  <rect width="1100" height="650" fill="#fff"/>
+  <text x="56" y="50" font-size="26" font-weight="700">DoD Agent 本地部署进程</text>
+  <text x="56" y="78" class="label muted">三个常驻进程 · 同一主机 · 共享持久化数据库</text>
+  <line x1="720" y1="48" x2="750" y2="48" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/><text x="760" y="53" class="small muted">访问</text>
+  <line x1="840" y1="48" x2="870" y2="48" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/><text x="880" y="53" class="small muted">存储操作</text>
+  <rect x="115" y="104" width="230" height="65" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text x="230" y="132" class="name" text-anchor="middle">浏览器 / 客户端</text>
+  <text x="230" y="153" class="small muted" text-anchor="middle">/app/ · HTTP / SSE</text>
+  <rect x="450" y="104" width="300" height="65" rx="8" fill="#fefce8" stroke="#fde68a" stroke-width="1.5"/>
+  <text x="600" y="132" class="name" text-anchor="middle">Web 前端</text>
+  <text x="600" y="153" class="small muted" text-anchor="middle">apps/web → 构建产物 dist</text>
+  <rect x="55" y="198" width="990" height="346" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="600" y="228" class="label muted">同一主机 / 相同配置与环境变量</text>
+  <line x1="230" y1="169" x2="230" y2="265" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M 450 150 L 395 150 L 395 310 L 355 310" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="361" y="202" width="68" height="22" rx="3" fill="#fafafa"/><text x="395" y="218" class="small muted" text-anchor="middle">API 托管</text>
+  <rect x="185" y="180" width="90" height="22" rx="3" fill="#fff"/><text x="230" y="196" class="small muted" text-anchor="middle">请求 / 响应</text>
+  <rect x="105" y="265" width="250" height="95" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text x="230" y="302" class="name" text-anchor="middle">API</text><text x="230" y="328" class="label muted" text-anchor="middle">HTTP · SSE · 前端</text>
+  <rect x="425" y="265" width="250" height="95" rx="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+  <text x="550" y="302" class="name" text-anchor="middle">Worker</text><text x="550" y="328" class="label muted" text-anchor="middle">领取并执行 Job</text>
+  <rect x="745" y="265" width="250" height="95" rx="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+  <text x="870" y="302" class="name" text-anchor="middle">Scheduler</text><text x="870" y="328" class="label muted" text-anchor="middle">定时 · 超时 · 恢复</text>
+  <line x1="230" y1="360" x2="230" y2="453" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <line x1="550" y1="360" x2="550" y2="453" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <line x1="870" y1="360" x2="870" y2="453" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <rect x="193" y="394" width="74" height="23" rx="3" fill="#fafafa"/><text x="230" y="410" class="small muted" text-anchor="middle">读写</text>
+  <rect x="501" y="394" width="98" height="23" rx="3" fill="#fafafa"/><text x="550" y="410" class="small muted" text-anchor="middle">领取 / 更新</text>
+  <rect x="821" y="394" width="98" height="23" rx="3" fill="#fafafa"/><text x="870" y="410" class="small muted" text-anchor="middle">扫描 / 调度</text>
+  <rect x="105" y="453" width="890" height="62" rx="8" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+  <text x="550" y="480" class="name" text-anchor="middle">SQLite 本地持久存储</text><text x="550" y="503" class="small muted" text-anchor="middle">Job · Run · 检查点</text>
+  <rect x="55" y="570" width="990" height="52" rx="8" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="80" y="602" class="label"><tspan font-weight="600">启动前：</tspan>首次初始化 migrate → bootstrap；每次启动前 doctor 检查</text>
+</svg>

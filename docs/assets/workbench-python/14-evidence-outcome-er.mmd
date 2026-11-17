@@ -1,0 +1,17 @@
+flowchart LR
+  %% 由同一关系清单生成；实线 FK、虚线逻辑，基数见边标签。
+  r["runs<br/>run_id<br/>versions<br/>outcome_ref"]
+  s["query_scope_revisions<br/>scope_id<br/>run_id<br/>scope_json"]
+  e["evidence<br/>evidence_id<br/>scope_id<br/>artifact_ref"]
+  i["tool_invocations<br/>invocation_id<br/>run_id<br/>receipt_ref"]
+  a["artifacts<br/>artifact_id<br/>object_key<br/>status"]
+  p["evidence_payloads<br/>evidence_id<br/>payload<br/>truncated"]
+  o["run_outcomes<br/>run_id<br/>digest<br/>payload"]
+  r -- "1 : 0..N" --> s
+  s -- "1 : 0..N" --> e
+  r -- "1 : 0..N" --> i
+  e -- "1 : 0..1" --> p
+  a -- "0..1 : 0..N" --> e
+  i -. "receipt 关联" .-> e
+  r -- "1 : 0..1" --> o
+  o -. "evidence_refs" .-> e

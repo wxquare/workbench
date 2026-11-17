@@ -1,0 +1,40 @@
+from .common import *
+
+teams = Table("teams",metadata,col("team_id",ID,primary=True),col("name",KEY,nullable=False),
+    col("status",String(32),nullable=False),col("active_executions",BigInteger,nullable=False,default="0"),
+    col("execution_limit",BigInteger,nullable=False,default="2"),revision(),*timestamps(),
+    CheckConstraint("active_executions >= 0",name="active_executions_nonnegative"))
+team_members = tenant("team_members","member_id",col("subject",KEY,nullable=False),
+    col("role",String(32),nullable=False),col("status",String(32),nullable=False),
+    UniqueConstraint("team_id","subject"),*timestamps())
+workspaces = tenant("workspaces","workspace_id",col("name",KEY,nullable=False),
+    col("active_profile_id",ID),col("status",String(32),nullable=False,default="active"),revision(),
+    UniqueConstraint("team_id","name"),ref("active_profile_id","runtime_profiles","profile_id"),*timestamps())
+runtime_profiles = tenant("runtime_profiles","profile_id",col("workspace_id",ID,nullable=False),
+    col("version",BigInteger,nullable=False),col("graph_version",KEY,nullable=False),
+    col("model_versions"),col("skill_versions"),col("tool_versions"),col("repo_versions"),
+    col("profile_json",Text,nullable=False),col("hash",HASH,nullable=False),
+    col("status",String(32),nullable=False),UniqueConstraint("workspace_id","version"),
+    ref("workspace_id","workspaces"),*timestamps())
+model_profiles = tenant("model_profiles","profile_id",col("workspace_id",ID),col("name",KEY,nullable=False),
+    col("scope",String(32),nullable=False),col("draft",Text,nullable=False),col("active_version",BigInteger),
+    revision(),ref("workspace_id","workspaces"),*timestamps())
+model_profile_versions = tenant("model_profile_versions","model_version_id",col("profile_id",ID,nullable=False),
+    col("version",BigInteger,nullable=False),col("provider",KEY,nullable=False),col("adapter",KEY,nullable=False),
+    col("protocol",KEY,nullable=False),col("base_url",Text,nullable=False),col("model_id",KEY,nullable=False),
+    col("secret_ref",Text,nullable=False),col("limits",Text,nullable=False),col("capabilities",Text,nullable=False),
+    col("hash",HASH,nullable=False),UniqueConstraint("profile_id","version"),ref("profile_id","model_profiles"),*timestamps())
+skills = tenant("skills","skill_id",col("workspace_id",ID),col("name",KEY,nullable=False),
+    col("description"),col("status",String(32),nullable=False),revision(),ref("workspace_id","workspaces"),*timestamps())
+skill_versions = tenant("skill_versions","skill_version_id",col("skill_id",ID,nullable=False),
+    col("version",BigInteger,nullable=False),col("hash",HASH,nullable=False),col("bundle_ref",Text,nullable=False),
+    col("status",String(32),nullable=False),UniqueConstraint("skill_id","version"),ref("skill_id","skills"),*timestamps())
+tool_bindings = tenant("tool_bindings","binding_id",col("workspace_id",ID,nullable=False),
+    col("alias",KEY,nullable=False),col("provider",KEY,nullable=False),col("schema",Text,nullable=False),
+    col("scope",Text,nullable=False),col("auth_ref"),col("version",BigInteger,nullable=False),
+    col("hash",HASH,nullable=False),UniqueConstraint("workspace_id","alias","version"),
+    ref("workspace_id","workspaces"),*timestamps())
+repo_snapshots = tenant("repo_snapshots","snapshot_id",col("workspace_id",ID,nullable=False),
+    col("repo_id",ID,nullable=False),col("commit_sha",HASH,nullable=False),col("format_version",KEY,nullable=False),
+    col("storage_ref",Text,nullable=False),col("status",String(32),nullable=False),
+    UniqueConstraint("repo_id","commit_sha","format_version"),ref("workspace_id","workspaces"),*timestamps())

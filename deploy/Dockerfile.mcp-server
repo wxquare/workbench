@@ -1,0 +1,20 @@
+FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c AS build
+WORKDIR /build
+RUN pip install --no-cache-dir uv==0.11.8
+COPY apps/mcp-server/pyproject.toml apps/mcp-server/uv.lock apps/mcp-server/README.md apps/mcp-server/MANIFEST.in ./
+COPY apps/mcp-server/src ./src
+RUN uv build --wheel --out-dir /wheels
+
+FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c AS runtime
+WORKDIR /opt/workbench-mcp
+RUN pip install --no-cache-dir uv==0.11.8
+COPY apps/mcp-server/pyproject.toml apps/mcp-server/uv.lock apps/mcp-server/README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+COPY --from=build /wheels /wheels
+RUN uv pip install --python /opt/workbench-mcp/.venv/bin/python --no-deps /wheels/*.whl \
+    && rm -rf /wheels \
+    && useradd --uid 10001 --create-home workbench
+USER workbench
+ENV PATH="/opt/workbench-mcp/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1
+ENTRYPOINT ["workbench-mcp-server"]
+CMD ["--help"]

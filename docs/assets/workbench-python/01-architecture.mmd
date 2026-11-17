@@ -1,0 +1,13 @@
+flowchart TD
+  E[Web / API / SeaTalk / 告警] --> A[FastAPI 与控制模块]
+  A --> W[LangGraph Worker / LangChain 专家]
+  J[Scheduler / Database Jobs] -.派发.-> W
+  J -.唤醒.-> R[Redis 通知 / 缓存]
+  W --> L[DeepSeek API / ModelProfile]
+  W --> T[Policy Tool Executor]
+  T --> M[MCP / 业务服务]
+  T --> X[Workspace Runner]
+  W --> D[结果模块 / Dispatcher]
+  W -.检查点.-> P[(StorageBackend: SQLite v1)]
+  D --> P
+  X --> O[(对象存储)]

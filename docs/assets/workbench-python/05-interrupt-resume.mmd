@@ -1,0 +1,22 @@
+sequenceDiagram
+  actor U as 用户
+  participant A as API
+  participant D as StorageBackend SQLite v1
+  participant W as Worker
+  participant G as LangGraph
+  participant P as 动作策略
+  W->>G: 执行
+  G->>D: pending interrupt 检查点
+  G-->>W: 中断载荷
+  W->>D: waiting / Interrupt / Event
+  W->>D: 释放活动执行租约
+  A-->>U: 问题或动作摘要
+  U->>A: interrupt_id / revision / response
+  A->>P: 校验身份、权限和参数摘要
+  P-->>A: 决策
+  A->>D: ResumeRequest / queued / Job 事务
+  A-->>U: 202
+  W->>D: 重新领取并读取检查点
+  W->>G: Command(resume)
+  G->>D: 保存 last_applied_resume_id
+  W->>D: 标记 applied

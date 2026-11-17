@@ -1,0 +1,124 @@
+# Compose 内部监听示例；仅通过受信 TLS 代理访问，按代理 Host 配置 allowed_hosts。
+# Replace example.invalid endpoints and verify upstream isolation before enabling scope_enforced.
+version: v1
+server:
+  host: 0.0.0.0
+  port: 8001
+  local_development: false
+  stdio_principal: workbench-agent
+  allowed_hosts:
+  - mcp-server:8001
+principals:
+- id: workbench-agent
+  token_secret_ref: env://WORKBENCH_MCP_AGENT_TOKEN
+  tools:
+  - knowledge_search
+  - metrics_query
+  - logs_search
+  - trace_get
+  scopes:
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-knowledge
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-metrics
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-logs
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-trace
+sources:
+- id: dp-knowledge
+  kind: knowledge
+  adapter: normalized-http-v1
+  endpoint: https://knowledge-gateway.example.invalid/query
+  auth_secret_ref: env://WORKBENCH_KNOWLEDGE_TOKEN
+  binding_id: dp-knowledge@1
+  scopes:
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-knowledge
+  scope_enforced: false
+  isolation: upstream-enforced
+  timeout_seconds: 20
+  allowed_source_hosts: []
+- id: dp-metrics
+  kind: metrics
+  adapter: normalized-http-v1
+  endpoint: https://metrics-gateway.example.invalid/query
+  auth_secret_ref: env://WORKBENCH_METRICS_TOKEN
+  binding_id: dp-metrics@1
+  scopes:
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-metrics
+  scope_enforced: false
+  isolation: upstream-enforced
+  timeout_seconds: 20
+  allowed_source_hosts: []
+  templates:
+    error_rate:
+      parameters:
+        route:
+          type: string
+          allowed:
+          - purchase
+          - refund
+- id: dp-logs
+  kind: logs
+  adapter: normalized-http-v1
+  endpoint: https://logs-gateway.example.invalid/query
+  auth_secret_ref: env://WORKBENCH_LOGS_TOKEN
+  binding_id: dp-logs@1
+  scopes:
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-logs
+  scope_enforced: false
+  isolation: upstream-enforced
+  timeout_seconds: 20
+  allowed_source_hosts: []
+- id: dp-trace
+  kind: trace
+  adapter: normalized-http-v1
+  endpoint: https://trace-gateway.example.invalid/query
+  auth_secret_ref: env://WORKBENCH_TRACE_TOKEN
+  binding_id: dp-trace@1
+  scopes:
+  - team: DP
+    environment: test
+    region: id
+    service: checkout
+    source_id: dp-trace
+  scope_enforced: false
+  isolation: upstream-enforced
+  timeout_seconds: 20
+  allowed_source_hosts: []
+cursor_secret_ref: env://WORKBENCH_MCP_CURSOR_KEY
+limits:
+  deadline_seconds: 20
+  global_concurrency: 4
+  principal_concurrency: 2
+  response_bytes: 262144
+  upstream_bytes: 2097152
+  window_seconds: 3600
+audit:
+  redact_fields:
+  - customer_id
+  - email

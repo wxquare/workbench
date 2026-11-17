@@ -1,0 +1,29 @@
+stateDiagram-v2
+  [*] --> queued
+  queued --> running: claim
+  queued --> cancelled: cancel
+  queued --> expired: expiry
+  running --> waiting_input: need input
+  running --> waiting_approval: need approval
+  waiting_input --> queued: resume
+  waiting_approval --> queued: resume
+  waiting_input --> cancelled: cancel
+  waiting_approval --> cancelled: cancel
+  waiting_input --> expired: expiry
+  waiting_approval --> expired: expiry
+  running --> finalizing: valid outcome
+  finalizing --> succeeded: commit
+  finalizing --> partial: commit partial
+  running --> queued: safe recovery
+  finalizing --> queued: safe recovery
+  running --> cancel_requested: cancel
+  cancel_requested --> cancelled: stopped
+  running --> failed: fatal
+  running --> timed_out: hard deadline
+  finalizing --> failed: invalid outcome
+  succeeded --> [*]
+  partial --> [*]
+  failed --> [*]
+  cancelled --> [*]
+  timed_out --> [*]
+  expired --> [*]

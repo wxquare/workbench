@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1040" viewBox="0 0 1440 1040">
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .secondary{fill:#6b7280}</style>
+<defs>
+<marker id="a-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+<marker id="a-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#059669"/></marker>
+<marker id="a-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#7c3aed"/></marker>
+<marker id="a-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#ea580c"/></marker>
+<marker id="a-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+<marker id="a-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+</defs>
+<rect x="0.00" y="0.00" width="1440.00" height="1040.00" rx="0" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="40.00" y="40.00" text-anchor="start" font-size="27" font-weight="600" style="fill:#111827">数据库适配与统一持久化契约</text>
+<text x="40.00" y="70.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#6b7280">业务模块与 LangGraph 共用同一 StorageBackend，首版 SQLite，后续 MySQL / PostgreSQL</text>
+<rect x="500.00" y="110.00" width="440.00" height="90.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="720.00" y="150.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">领域与应用服务</text>
+<text x="720.00" y="175.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">Run / Job / Event / Budget / Action</text>
+<rect x="60.00" y="285.00" width="300.00" height="90.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="210.00" y="325.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">LangGraph</text>
+<text x="210.00" y="350.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">主图 / 专家 / 中断恢复</text>
+<rect x="69.00" y="294.00" width="30.00" height="22.00" rx="5" fill="#1c3c3c" stroke="none" stroke-width="1.5"/>
+<text x="84.00" y="310.00" text-anchor="middle" font-size="11" font-weight="600" style="fill:#ffffff">LG</text>
+<rect x="60.00" y="480.00" width="300.00" height="105.00" rx="8" fill="#f0fdfa" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="210.00" y="528.00" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">PortableCheckpointSaver</text>
+<text x="210.00" y="553.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">快照 / 父链 / pending writes</text>
+<rect x="500.00" y="285.00" width="440.00" height="125.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="720.00" y="332.00" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">Repository / Store 接口</text>
+<text x="720.00" y="357.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">LeaseGuard · CheckpointStore</text>
+<text x="720.00" y="379.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">JobStore · RunEventStore · ActionStore</text>
+<rect x="500.00" y="485.00" width="440.00" height="100.00" rx="8" fill="#f0fdfa" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="720.00" y="530.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">UnitOfWork / BackendFactory</text>
+<text x="720.00" y="555.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">同一事务：Guard 校验 + 数据写入</text>
+<rect x="50.00" y="755.00" width="400.00" height="120.00" rx="8" fill="#f0fdf4" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="250.00" y="799.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">SQLite · 首版</text>
+<text x="250.00" y="824.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">aiosqlite · WAL</text>
+<text x="250.00" y="846.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">BEGIN IMMEDIATE · 单机短写事务</text>
+<rect x="520.00" y="755.00" width="400.00" height="120.00" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="720.00" y="799.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">MySQL · 后续适配</text>
+<text x="720.00" y="824.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">asyncmy · InnoDB</text>
+<text x="720.00" y="846.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">相同的 CAS / 事务 / 检查点契约</text>
+<rect x="990.00" y="755.00" width="400.00" height="120.00" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="1190.00" y="799.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">PostgreSQL · 后续适配</text>
+<text x="1190.00" y="824.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">psycopg</text>
+<text x="1190.00" y="846.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">相同的 CAS / 事务 / 检查点契约</text>
+<path d="M 720,200 V 285" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 720,200 V 285" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="751.20" y="230.00" width="77.60" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="790.00" y="248.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">领域 DTO</text>
+<path d="M 210,375 V 480" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 210,375 V 480" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="223.20" y="417.00" width="89.60" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="268.00" y="435.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">Saver API</text>
+<path d="M 360,532 H 420 V 348 H 500" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 360,532 H 420 V 348 H 500" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="392.00" y="431.00" width="56.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="420.00" y="449.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">Store</text>
+<path d="M 720,410 V 485" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 720,410 V 485" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="770.00" y="436.00" width="74.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="807.00" y="454.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">统一事务</text>
+<path d="M 720,585 V 660 H 250 V 755" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 720,585 V 660 H 250 V 755" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<rect x="390.20" y="627.00" width="89.60" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="435.00" y="645.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">SQLite v1</text>
+<path d="M 720,585 V 755" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 720,585 V 755" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="751.00" y="671.00" width="74.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="788.00" y="689.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">后续可选</text>
+<path d="M 720,585 V 660 H 1190 V 755" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 720,585 V 660 H 1190 V 755" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="963.00" y="625.00" width="74.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1000.00" y="643.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">后续可选</text>
+<text x="720.00" y="930.00" text-anchor="middle" font-size="19" font-weight="600" style="fill:#475569">统一数据类型、幂等键、事件序号、序列化和逻辑迁移格式</text>
+<path d="M 70,990 H 105" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 70,990 H 105" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<text x="118.00" y="995.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#64748b">接口调用</text>
+<path d="M 500,990 H 535" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 500,990 H 535" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<text x="548.00" y="995.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#64748b">首版数据库</text>
+<path d="M 980,990 H 1015" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 980,990 H 1015" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<text x="1028.00" y="995.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#64748b">后续数据库适配</text>
+</svg>

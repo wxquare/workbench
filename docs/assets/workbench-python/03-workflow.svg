@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1530" viewBox="0 0 1320 1530">
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .secondary{fill:#6b7280}</style>
+<defs>
+<marker id="a-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+<marker id="a-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#059669"/></marker>
+<marker id="a-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#7c3aed"/></marker>
+<marker id="a-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#ea580c"/></marker>
+<marker id="a-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+<marker id="a-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+</defs>
+<rect x="0.00" y="0.00" width="1320.00" height="1530.00" rx="0" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="40.00" y="40.00" text-anchor="start" font-size="27" font-weight="600" style="fill:#111827">DoD 主图与专家协作</text>
+<text x="40.00" y="70.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#6b7280">所有专家共用权限和预算；条件分支由图控制，强制检查由代码执行</text>
+<rect x="500.00" y="120.00" width="320.00" height="90.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="660.00" y="160.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">prepare_context</text>
+<text x="660.00" y="185.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">团队 / 环境 / 时间 / 版本</text>
+<rect x="500.00" y="290.00" width="320.00" height="90.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="660.00" y="330.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">route / select_skills</text>
+<text x="660.00" y="355.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">模式路由与 Skill 选择</text>
+<rect x="500.00" y="460.00" width="320.00" height="90.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="660.00" y="500.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">collect_baseline</text>
+<text x="660.00" y="525.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">SOP 或告警必需证据</text>
+<rect x="500.00" y="630.00" width="320.00" height="90.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="660.00" y="670.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">investigate</text>
+<text x="660.00" y="695.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">Knowledge / Diagnosis / Code</text>
+<rect x="500.00" y="1120.00" width="320.00" height="90.00" rx="8" fill="#f0fdf4" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="660.00" y="1160.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">compose_outcome</text>
+<text x="660.00" y="1185.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">结论 / 证据 / 未完成项</text>
+<rect x="500.00" y="1300.00" width="320.00" height="90.00" rx="8" fill="#f0fdf4" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="660.00" y="1340.50" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">finalize</text>
+<text x="660.00" y="1365.50" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">业务结果 / Event / Outbox</text>
+<polygon points="660,820 830,890 660,960 490,890" fill="#eff6ff" stroke="#94a3b8" stroke-width="1.5"/>
+<text x="660.00" y="882.00" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">证据与预算检查</text>
+<text x="660.00" y="909.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">validate_evidence</text>
+<rect x="60.00" y="840.00" width="280.00" height="105.00" rx="8" fill="#fff7ed" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="200.00" y="888.00" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">await_input</text>
+<text x="200.00" y="913.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">缺参或证据冲突</text>
+<rect x="980.00" y="840.00" width="280.00" height="105.00" rx="8" fill="#fff7ed" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="1120.00" y="888.00" text-anchor="middle" font-size="19" font-weight="600" style="fill:#111827">await_approval</text>
+<text x="1120.00" y="913.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#475569">具体动作与参数摘要</text>
+<path d="M 660,210 V 290" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 660,210 V 290" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="683.60" y="237.00" width="72.80" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="720.00" y="255.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">context</text>
+<path d="M 660,380 V 460" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 660,380 V 460" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="679.40" y="407.00" width="81.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="720.00" y="425.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">workflow</text>
+<path d="M 660,550 V 630" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 660,550 V 630" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="679.40" y="577.00" width="81.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="720.00" y="595.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">evidence</text>
+<path d="M 660,720 V 820" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 660,720 V 820" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="679.40" y="757.00" width="81.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="720.00" y="775.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">findings</text>
+<path d="M 490,890 H 340" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 490,890 H 340" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<rect x="366.40" y="854.00" width="99.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="416.00" y="872.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">缺参 / 冲突</text>
+<path d="M 200,840 V 90 H 660 V 120" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 200,840 V 90 H 660 V 120" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="130.50" y="507.00" width="149.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="205.00" y="525.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">用户回复后重校范围</text>
+<path d="M 500,165 H 380 V 870 H 340" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 500,165 H 380 V 870 H 340" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<rect x="343.00" y="357.00" width="74.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="380.00" y="375.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">范围未决</text>
+<path d="M 830,890 H 980" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 830,890 H 980" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<rect x="867.00" y="901.00" width="74.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="904.00" y="919.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">动作确认</text>
+<path d="M 810,882 H 900 V 675 H 820" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 810,882 H 900 V 675 H 820" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="864.00" y="767.00" width="74.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="901.00" y="785.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">有限补查</text>
+<path d="M 660,960 V 1120" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 660,960 V 1120" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="670.40" y="1023.00" width="129.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="735.00" y="1041.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">完成 / 预算限制</text>
+<path d="M 1120,945 V 1165 H 820" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1120,945 V 1165 H 820" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<rect x="1045.80" y="1040.00" width="148.40" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1120.00" y="1058.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">approve / reject</text>
+<path d="M 660,1210 V 1300" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 660,1210 V 1300" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<rect x="664.60" y="1241.00" width="156.80" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="743.00" y="1259.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">validated outcome</text>
+<path d="M 42,1478 H 75" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 42,1478 H 75" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<text x="85.00" y="1483.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">请求 / 主流程</text>
+<path d="M 289.2,1478 H 322.2" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 289.2,1478 H 322.2" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<text x="332.20" y="1483.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">返回 / 持久化</text>
+<path d="M 536.4,1478 H 569.4" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 536.4,1478 H 569.4" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<text x="579.40" y="1483.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">异步 / 恢复</text>
+<path d="M 783.5999999999999,1478 H 816.5999999999999" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 783.5999999999999,1478 H 816.5999999999999" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<text x="826.60" y="1483.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">等待 / 决策</text>
+<path d="M 1030.8,1478 H 1063.8" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1030.8,1478 H 1063.8" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<text x="1073.80" y="1483.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">失败 / 终止</text>
+</svg>

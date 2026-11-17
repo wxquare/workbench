@@ -1,0 +1,13 @@
+flowchart TB
+    browser["浏览器<br/>/app/ · HTTP / SSE"] -->|"请求 / 响应"| api
+    web["Web 前端<br/>apps/web → 构建产物 dist"] -->|"API 托管"| api
+    subgraph host["同一主机 · Agent 常驻进程"]
+        api["API<br/>HTTP · SSE · 前端"]
+        worker["Worker<br/>领取并执行 Job"]
+        scheduler["Scheduler<br/>定时 · 超时 · 恢复"]
+        db[("SQLite 本地持久存储<br/>Job · Run · 检查点")]
+        api -->|"读写"| db
+        worker -->|"领取 / 更新"| db
+        scheduler -->|"扫描 / 调度"| db
+    end
+    init["单次维护：migrate → bootstrap → doctor"] -.->|"启动前"| db

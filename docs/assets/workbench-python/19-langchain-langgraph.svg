@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2460" viewBox="0 0 1800 2460">
+<title>DoD 源码中的 LangGraph 与 LangChain：v16 知识问答完整调用链</title>
+<desc>展示请求受理、LangGraph 八节点业务图、LangChain 知识专家的模型工具循环、平台模型和工具执行边界、证据合成、结果持久化和检查点。附 v17 直接问答对照。</desc>
+<style>text{font-family:"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;fill:#111827} .muted{fill:#6b7280} .code{font-family:Menlo,Consolas,"PingFang SC",monospace}</style>
+<defs>
+<marker id="a-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#2563eb"/></marker>
+<marker id="a-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#7c3aed"/></marker>
+<marker id="a-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#ea580c"/></marker>
+<marker id="a-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#059669"/></marker>
+<marker id="a-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,3.5 L0,7 Z" fill="#6b7280"/></marker>
+</defs>
+<rect width="1800" height="2460" fill="#ffffff"/>
+<text x="60" y="58" font-size="34" fill="#111827" font-weight="700" text-anchor="start">DoD 如何组合 LangGraph 与 LangChain</text>
+<text x="60" y="94" font-size="21" fill="#4b5563" font-weight="400" text-anchor="start">以当前 dod.v16 知识问答为主线 · 图中函数和边界对应项目源码</text>
+<rect x="65" y="121" width="19" height="19" rx="4" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="94" y="138" font-size="18" fill="#111827" font-weight="400" text-anchor="start">LangGraph 编排</text>
+<rect x="390" y="121" width="19" height="19" rx="4" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="419" y="138" font-size="18" fill="#111827" font-weight="400" text-anchor="start">LangChain Agent / 接口</text>
+<rect x="840" y="121" width="19" height="19" rx="4" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="869" y="138" font-size="18" fill="#111827" font-weight="400" text-anchor="start">DoD 平台代码</text>
+<rect x="1210" y="121" width="19" height="19" rx="4" fill="#f0fdf4" stroke="#059669" stroke-width="1.5"/>
+<text x="1239" y="138" font-size="18" fill="#111827" font-weight="400" text-anchor="start">外部服务 / 持久化</text>
+<rect x="40" y="170" width="1720" height="170" rx="16" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="65" y="205" font-size="23" fill="#111827" font-weight="650" text-anchor="start">A  请求受理与图选择</text>
+<text x="1735" y="204" font-size="16" fill="#6b7280" font-weight="400" text-anchor="end">图由已发布 Profile 决定；模型、工具、范围与预算固定进 Run</text>
+<rect x="80" y="230" width="360" height="85" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="260.0" y="261" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">用户 / Web 请求</text>
+<text x="260.0" y="289" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">mode=qa + query_scope</text>
+<rect x="500" y="230" width="360" height="85" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="680.0" y="261" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">RunService.create</text>
+<text x="680.0" y="289" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">application/runs.py</text>
+<rect x="920" y="230" width="360" height="85" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1100.0" y="261" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">Worker._execute</text>
+<text x="1100.0" y="289" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">领取 Job · 签发 Execution</text>
+<rect x="1340" y="230" width="360" height="85" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1520.0" y="261" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">FoundationExecutor</text>
+<text x="1520.0" y="289" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">registry.py · resolve → ainvoke</text>
+<path d="M440,272 H500" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<path d="M860,272 H920" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<path d="M1280,272 H1340" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="40" y="380" width="1720" height="240" rx="16" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="65" y="415" font-size="23" fill="#111827" font-weight="650" text-anchor="start">B  外层：LangGraph 业务工作流</text>
+<text x="1735" y="414" font-size="16" fill="#6b7280" font-weight="400" text-anchor="end">qa_v16.py → StateGraph(DoDState) → compile(checkpointer=saver)</text>
+<rect x="70" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="165.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">prepare_context</text>
+<text x="165.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">校验 Run / 初始化消息</text>
+<path d="M260,521 H280" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="280" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="375.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">route</text>
+<text x="375.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">复制请求 mode</text>
+<path d="M470,521 H490" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="490" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="585.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">select_skills</text>
+<text x="585.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">当前只标记阶段</text>
+<path d="M680,521 H700" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="700" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="795.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">collect_baseline</text>
+<text x="795.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">当前只标记阶段</text>
+<path d="M890,521 H910" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="910" y="470" width="190" height="102" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<rect x="914" y="474" width="182" height="94" rx="9" fill="none" stroke="#ddd6fe" stroke-width="1.5"/>
+<text x="1005.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">investigate</text>
+<text x="1005.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">调用知识专家</text>
+<path d="M1100,521 H1120" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="1120" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1215.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">validate_evidence</text>
+<text x="1215.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">检查证据与范围</text>
+<path d="M1310,521 H1330" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="1330" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1425.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">compose_outcome</text>
+<text x="1425.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">选择并校验原文</text>
+<path d="M1520,521 H1540" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="1540" y="470" width="190" height="102" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="1635.0" y="501" font-size="17" fill="#111827" font-weight="650" text-anchor="middle">finalize</text>
+<text x="1635.0" y="529" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">当前只标记阶段</text>
+<text x="70" y="600" font-size="18" fill="#4b5563" font-weight="400" text-anchor="start">节点返回状态增量；DoDState 保存 messages、evidence_refs、validation、outcome 等字段。</text>
+<path d="M1005,572 V655 H900 V760" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#a-orange)" stroke-dasharray="6,5"/>
+<rect x="1067.28" y="641.88" width="225.44000000000003" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1180" y="657" font-size="16" fill="#ea580c" font-weight="400" text-anchor="middle">展开 investigate 内部调用</text>
+<rect x="40" y="690" width="1720" height="870" rx="16" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="65" y="725" font-size="23" fill="#111827" font-weight="650" text-anchor="start">C  内层：KnowledgeExpert 与 LangChain Agent 工具循环</text>
+<text x="1735" y="724" font-size="16" fill="#6b7280" font-weight="400" text-anchor="end">knowledge.py · recursion_limit=12；工具、模型调用仍受 Run 总预算约束</text>
+<rect x="590" y="760" width="620" height="100" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<rect x="594" y="764" width="612" height="92" rx="9" fill="none" stroke="#ddd6fe" stroke-width="1.5"/>
+<text x="900.0" y="791" font-size="22" fill="#111827" font-weight="650" text-anchor="middle">KnowledgeExpert.invoke(ExpertTask)</text>
+<text x="900.0" y="819" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">Worker.expert_execution(parent, knowledge)</text>
+<text x="900.0" y="843" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">create_agent(KnowledgeChatModel, tools, checkpointer)</text>
+<path d="M900,860 V895 H450 V930" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#a-orange)"/>
+<rect x="350.8" y="881.88" width="218.4" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="460" y="897" font-size="16" fill="#ea580c" font-weight="400" text-anchor="middle">agent.ainvoke(messages)</text>
+<rect x="160" y="930" width="580" height="120" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<rect x="164" y="934" width="572" height="112" rx="9" fill="none" stroke="#ddd6fe" stroke-width="1.5"/>
+<text x="450.0" y="961" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">① 模型节点：KnowledgeChatModel</text>
+<text x="450.0" y="989" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">BaseChatModel._agenerate → invoker.invoke</text>
+<text x="450.0" y="1013" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">messages + 工具 Schema；角色 = knowledge</text>
+<rect x="1060" y="930" width="580" height="120" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<rect x="1064" y="934" width="572" height="112" rx="9" fill="none" stroke="#ddd6fe" stroke-width="1.5"/>
+<text x="1350.0" y="961" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">② 工具节点：StructuredTool</text>
+<text x="1350.0" y="989" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">接收模型生成的工具名与参数</text>
+<text x="1350.0" y="1013" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">受控参数 Schema + 框架注入 tool_call_id</text>
+<path d="M740,970 H1060" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#a-purple)"/>
+<rect x="804.0" y="956.88" width="192.0" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="900" y="972" font-size="16" fill="#7c3aed" font-weight="400" text-anchor="middle">AIMessage.tool_calls</text>
+<path d="M450,1050 V1130" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="350.32" y="1076.88" width="79.36000000000001" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="390" y="1092" font-size="16" fill="#2563eb" font-weight="400" text-anchor="middle">调用模型</text>
+<path d="M650,1130 V1050" fill="none" stroke="#059669" stroke-width="2.2" marker-end="url(#a-green)"/>
+<rect x="639.35" y="1078.52" width="85.30000000000001" height="23" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="682" y="1092" font-size="14" fill="#059669" font-weight="400" text-anchor="middle">AIMessage</text>
+<rect x="160" y="1130" width="580" height="130" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="450.0" y="1161" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">ModelInvoker → ModelFactory</text>
+<text x="450.0" y="1189" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">固定模型版本 / 凭据范围校验</text>
+<text x="450.0" y="1213" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">BudgetService：预留 → 发送 → 结算</text>
+<text x="450.0" y="1237" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">事务外 model.ainvoke；超时与重试</text>
+<path d="M450,1260 V1330" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="319.2" y="1281.88" width="121.60000000000001" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="380" y="1297" font-size="16" fill="#2563eb" font-weight="400" text-anchor="middle">ChatDeepSeek</text>
+<path d="M650,1330 V1260" fill="none" stroke="#059669" stroke-width="2.2" marker-end="url(#a-green)"/>
+<rect x="654.28" y="1283.52" width="71.44" height="23" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="690" y="1297" font-size="14" fill="#059669" font-weight="400" text-anchor="middle">模型响应</text>
+<rect x="160" y="1330" width="580" height="100" rx="12" fill="#f0fdf4" stroke="#059669" stroke-width="1.5"/>
+<text x="450.0" y="1361" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">DeepSeek / 已配置模型端点</text>
+<text x="450.0" y="1389" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">返回普通回答或 tool_calls</text>
+<path d="M1350,1050 V1130" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="1199.2" y="1076.88" width="121.60000000000001" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1260" y="1092" font-size="16" fill="#2563eb" font-weight="400" text-anchor="middle">execute(...)</text>
+<path d="M1560,1130 V1050" fill="none" stroke="#059669" stroke-width="2.2" marker-end="url(#a-green)"/>
+<rect x="1575.15" y="1077.7" width="45.7" height="24" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1598" y="1092" font-size="15" fill="#059669" font-weight="400" text-anchor="middle">结果</text>
+<rect x="1060" y="1130" width="580" height="130" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1350.0" y="1161" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">PolicyToolExecutor</text>
+<text x="1350.0" y="1189" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">权限交集 / 发布 Schema / QueryScope</text>
+<text x="1350.0" y="1213" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">预算、调用台账、稳定 invocation_id</text>
+<text x="1350.0" y="1237" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">knowledge 工具逻辑调用上限 = 4</text>
+<path d="M1350,1260 V1330" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="1190.4" y="1281.88" width="139.20000000000002" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1260" y="1297" font-size="16" fill="#2563eb" font-weight="400" text-anchor="middle">transport.call</text>
+<path d="M1560,1330 V1260" fill="none" stroke="#059669" stroke-width="2.2" marker-end="url(#a-green)"/>
+<rect x="1575.15" y="1282.7" width="45.7" height="24" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1598" y="1297" font-size="15" fill="#059669" font-weight="400" text-anchor="middle">证据</text>
+<rect x="1060" y="1330" width="580" height="100" rx="12" fill="#f0fdf4" stroke="#059669" stroke-width="1.5"/>
+<text x="1350.0" y="1361" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">MCPAdapter → 知识 MCP 服务</text>
+<text x="1350.0" y="1389" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">调用只读 knowledge_search；返回证据</text>
+<path d="M1640,990 H1705 V1510 H105 V990 H160" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#a-purple)"/>
+<rect x="304.59000000000003" y="1495.24" width="330.82" height="27" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="470" y="1512" font-size="18" fill="#7c3aed" font-weight="400" text-anchor="middle">ToolMessage 回到模型；按需继续查询</text>
+<text x="160" y="1468" font-size="17" fill="#6b7280" font-weight="400" text-anchor="start">供应商调用通过项目统一模型层完成</text>
+<text x="1060" y="1468" font-size="17" fill="#6b7280" font-weight="400" text-anchor="start">业务范围由受信配置与上下文约束</text>
+<rect x="795" y="1130" width="210" height="155" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="900.0" y="1161" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">ExpertResult</text>
+<text x="900.0" y="1189" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">subtask_id</text>
+<text x="900.0" y="1213" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">text</text>
+<text x="900.0" y="1237" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">evidence_refs</text>
+<path d="M740,1020 H900 V1130" fill="none" stroke="#ea580c" stroke-width="2.2" marker-end="url(#a-orange)"/>
+<rect x="840.025" y="1067.7" width="119.95" height="24" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="900" y="1082" font-size="15" fill="#ea580c" font-weight="400" text-anchor="middle">无后续工具调用</text>
+<text x="900" y="1325" font-size="16" fill="#6b7280" font-weight="400" text-anchor="middle">返回 investigate</text>
+<path d="M900,1285 V1502 Q916,1510 900,1518 V1590 H260 V1690" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="523.2" y="1576.88" width="253.60000000000002" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="650" y="1592" font-size="16" fill="#2563eb" font-weight="400" text-anchor="middle">以工具回执中的引用更新外层状态</text>
+<rect x="40" y="1630" width="1720" height="270" rx="16" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="65" y="1665" font-size="23" fill="#111827" font-weight="650" text-anchor="start">D  外层继续：校验证据、合成与结果投影</text>
+<text x="1735" y="1664" font-size="16" fill="#6b7280" font-weight="400" text-anchor="end">专家自由文本不会直接作为已验证业务结论</text>
+<rect x="80" y="1690" width="360" height="120" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="260.0" y="1721" font-size="19" fill="#111827" font-weight="650" text-anchor="middle">EvidenceValidator</text>
+<text x="260.0" y="1749" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">范围 / quality / 可访问性</text>
+<text x="260.0" y="1773" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">必需步骤和有效证据引用</text>
+<rect x="500" y="1690" width="360" height="120" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="680.0" y="1721" font-size="19" fill="#111827" font-weight="650" text-anchor="middle">compose_qa_outcome</text>
+<text x="680.0" y="1749" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">再次调用 ModelInvoker · summary</text>
+<text x="680.0" y="1773" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">原文子串与权限复核</text>
+<rect x="920" y="1690" width="360" height="120" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1100.0" y="1721" font-size="19" fill="#111827" font-weight="650" text-anchor="middle">ResultProjector</text>
+<text x="1100.0" y="1749" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">读取 checkpoint 中的 outcome</text>
+<text x="1100.0" y="1773" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">RunOutcome 校验 / 证据复核</text>
+<rect x="1340" y="1690" width="360" height="120" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="1520.0" y="1721" font-size="19" fill="#111827" font-weight="650" text-anchor="middle">ResultService.finalize_in</text>
+<text x="1520.0" y="1749" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">同一事务保存结果与最终事件</text>
+<text x="1520.0" y="1773" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">v16 completed=False → partial</text>
+<path d="M440,1750 H500" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<path d="M860,1750 H920" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<path d="M1280,1750 H1340" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<text x="80" y="1860" font-size="18" fill="#4b5563" font-weight="400" text-anchor="start">合成调用不运行专家工具循环：模型只选择授权来源中的精确摘录，程序校验后形成 findings。</text>
+<rect x="40" y="1940" width="1720" height="210" rx="16" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="65" y="1975" font-size="23" fill="#111827" font-weight="650" text-anchor="start">E  检查点持久化视图</text>
+<text x="1735" y="1974" font-size="16" fill="#6b7280" font-weight="400" text-anchor="end">不是额外业务步骤；外层和专家状态独立保存、按各自边界恢复</text>
+<rect x="80" y="2000" width="420" height="80" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="290.0" y="2031" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">外层 PortableCheckpointSaver</text>
+<text x="290.0" y="2059" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">thread_id = run_id</text>
+<rect x="610" y="2000" width="500" height="80" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<rect x="614" y="2004" width="492" height="72" rx="9" fill="none" stroke="#ddd6fe" stroke-width="1.5"/>
+<text x="860.0" y="2031" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">专家 NamespacedSaver</text>
+<text x="860.0" y="2059" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">expert:&lt;subtask_id&gt;；同步持久化</text>
+<rect x="1270" y="2000" width="430" height="80" rx="12" fill="#f0fdf4" stroke="#059669" stroke-width="1.5"/>
+<text x="1485.0" y="2031" font-size="20" fill="#111827" font-weight="650" text-anchor="middle">平台检查点存储</text>
+<text x="1485.0" y="2059" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">由 StorageBackend 管理</text>
+<path d="M1110,2040 H1270" fill="none" stroke="#059669" stroke-width="2.2" marker-end="url(#a-green)" stroke-dasharray="6,5"/>
+<rect x="1166.16" y="2026.88" width="47.68000000000001" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1190" y="2042" font-size="16" fill="#059669" font-weight="400" text-anchor="middle">写入</text>
+<path d="M290,2080 V2115 H1485 V2080" fill="none" stroke="#059669" stroke-width="2.2" marker-end="url(#a-green)" stroke-dasharray="6,5"/>
+<rect x="726.52" y="2101.88" width="316.96000000000004" height="25" rx="4" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="885" y="2117" font-size="16" fill="#059669" font-weight="400" text-anchor="middle">外层状态写入；恢复时读取同一检查点存储</text>
+<rect x="40" y="2190" width="1720" height="185" rx="16" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="65" y="2225" font-size="23" fill="#111827" font-weight="650" text-anchor="start">F  v17 对照：单节点直接问答</text>
+<text x="1735" y="2224" font-size="16" fill="#6b7280" font-weight="400" text-anchor="end">direct_qa.py · 不创建 KnowledgeExpert，不调用 knowledge_search</text>
+<rect x="80" y="2250" width="420" height="86" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+<text x="290.0" y="2281" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">LangGraph：answer 节点</text>
+<text x="290.0" y="2309" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">START → answer → END</text>
+<rect x="690" y="2250" width="420" height="86" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+<text x="900.0" y="2281" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">ModelInvoker · summary</text>
+<text x="900.0" y="2309" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">同一模型、预算与凭据边界</text>
+<rect x="1300" y="2250" width="400" height="86" rx="12" fill="#f0fdf4" stroke="#059669" stroke-width="1.5"/>
+<text x="1500.0" y="2281" font-size="21" fill="#111827" font-weight="650" text-anchor="middle">模型回答</text>
+<text x="1500.0" y="2309" font-size="17" fill="#4b5563" font-weight="400" text-anchor="middle">成功时 completed=True</text>
+<path d="M500,2293 H690" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<path d="M1110,2293 H1300" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<text x="65" y="2420" font-size="17" fill="#6b7280" font-weight="400" text-anchor="start">箭头：蓝色 = 调用 / 状态流转；紫色 = Agent 工具循环；橙色虚线 = 展开关系；绿色虚线 = 检查点写入。</text>
+<path d="M1520,315 V360 H55 V450 H165 V470" fill="none" stroke="#2563eb" stroke-width="2.2" marker-end="url(#a-blue)"/>
+<rect x="315" y="347" width="180" height="25" rx="4" fill="#ffffff"/>
+<text x="405" y="365" font-size="16" text-anchor="middle">graph.ainvoke</text>
+<text x="65" y="750" font-size="16" fill="#6b7280">create_agent 生成的专家 Agent 本身也基于 LangGraph 运行</text>
+</svg>
