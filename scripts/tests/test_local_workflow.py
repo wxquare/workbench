@@ -31,6 +31,7 @@ class LocalWorkflowScriptsTest(unittest.TestCase):
         self.db = self.root / "var/agents.sqlite3"
         self.env = {
             **os.environ,
+            "HOME": str(self.root / "home"),
             "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}",
             "CALL_LOG": str(self.calls),
             "PID_LOG": str(self.pids),
@@ -89,6 +90,10 @@ if sys.argv[1] == "serve":
         self.assertTrue(source.is_file(), f"missing {name}")
         target = self.root / "scripts" / name
         shutil.copy2(source, target)
+        helper = REPO_ROOT / "scripts/lib/local-paths.sh"
+        if helper.is_file():
+            (self.root / "scripts/lib").mkdir(exist_ok=True)
+            shutil.copy2(helper, self.root / "scripts/lib/local-paths.sh")
         return target
 
     def _run(self, name, *arguments, env=None):
@@ -107,6 +112,45 @@ if sys.argv[1] == "serve":
             "uv:agent:sync --frozen --group dev", "npm:web:ci",
             "npm:web:run build", "uv:mcp-server:sync --frozen --group dev",
         ])
+
+    def test_install_uses_default_and_preserves_custom_data_dir(self):
+        choice = self.root / "config/local/data-dir"
+
+        result = self._run("install.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(choice.is_file(), "install must record the data directory")
+        self.assertEqual(choice.read_text().strip(), str(self.root / "home/.workbench"))
+
+        custom = self.root / "chosen dir"
+        result = self._run("install.sh", "--data-dir", str(custom))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(choice.read_text().strip(), str(custom))
+
+        result = self._run("install.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(choice.read_text().strip(), str(custom))
+        self.assertFalse(custom.exists(), "install must not create persistent data")
+
+    def test_install_rejects_invalid_data_dir_without_running_tools(self):
+        for path in ("relative/path", ""):
+            with self.subTest(path=path):
+                result = self._run("install.sh", "--data-dir", path)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("absolute path", result.stderr)
+                self.assertFalse((self.root / "config/local/data-dir").exists())
+        self.assertFalse(self.calls.exists())
+
+    def test_install_rejects_symlinked_data_dir_file(self):
+        target = self.root / "var/choice"
+        target.write_text("original\n")
+        (self.root / "config/local/data-dir").symlink_to(target)
+
+        result = self._run("install.sh", "--data-dir", str(self.root / "new data"))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("symlink", result.stderr)
+        self.assertEqual(target.read_text(), "original\n")
+        self.assertFalse(self.calls.exists())
 
     def test_init_db_refuses_existing_file_without_migration(self):
         self.db.write_text("existing data")
