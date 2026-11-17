@@ -2,6 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+source "$root/scripts/lib/local-paths.sh"
 config="$root/config/local/agent.yaml"
 agent="$root/apps/agent/.venv/bin/workbench"
 mcp_config="$root/config/local/mcp-server.yaml"
@@ -23,10 +24,7 @@ if [[ ! -f "$config" || ! -x "$agent" ]]; then
   printf 'Run scripts/install.sh and configure config/local/agent.yaml first.\n' >&2
   exit 1
 fi
-if [[ -z ${WORKBENCH_DATABASE_URL:-} || -z ${WORKBENCH_PERSISTENT_ROOT:-} ]]; then
-  printf 'Set WORKBENCH_DATABASE_URL and WORKBENCH_PERSISTENT_ROOT explicitly.\n' >&2
-  exit 1
-fi
+workbench_export_storage "$root"
 if [[ $with_mcp -eq 1 && ( ! -f "$mcp_config" || ! -x "$mcp_agent" ) ]]; then
   printf 'Configure config/local/mcp-server.yaml and run scripts/install.sh before --mcp.\n' >&2
   exit 1

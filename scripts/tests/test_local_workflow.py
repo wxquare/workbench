@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 import shutil
@@ -28,6 +29,7 @@ class LocalWorkflowScriptsTest(unittest.TestCase):
         (self.root / "config/local/mcp-server.yaml").write_text("custom mcp\n")
         self.calls = self.root / "calls.log"
         self.pids = self.root / "pids.log"
+        self.storage_env_log = self.root / "storage-env.log"
         self.db = self.root / "var/agents.sqlite3"
         self.env = {
             **os.environ,
@@ -35,6 +37,7 @@ class LocalWorkflowScriptsTest(unittest.TestCase):
             "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}",
             "CALL_LOG": str(self.calls),
             "PID_LOG": str(self.pids),
+            "STORAGE_ENV_LOG": str(self.storage_env_log),
             "WORKBENCH_PERSISTENT_ROOT": str(self.root / "var"),
             "WORKBENCH_DATABASE_URL": f"sqlite+aiosqlite:///{self.db}",
         }
@@ -43,6 +46,7 @@ class LocalWorkflowScriptsTest(unittest.TestCase):
             f'#!/bin/sh\nexec {REPO_ROOT / "apps/agent/.venv/bin/python"} "$@"\n',
         )
         self._executable("apps/agent/.venv/bin/workbench", """#!/usr/bin/env python3
+import json
 import os
 import signal
 import sys
@@ -50,6 +54,12 @@ import time
 
 with open(os.environ["CALL_LOG"], "a") as log:
     log.write("workbench:" + " ".join(sys.argv[1:]) + "\\n")
+with open(os.environ["STORAGE_ENV_LOG"], "a") as log:
+    log.write(json.dumps({
+        "command": sys.argv[1],
+        "root": os.environ.get("WORKBENCH_PERSISTENT_ROOT"),
+        "url": os.environ.get("WORKBENCH_DATABASE_URL"),
+    }) + "\\n")
 if sys.argv[1] == "doctor" and os.environ.get("DOCTOR_FAIL") == "1":
     sys.exit(1)
 if sys.argv[1] in ("api", "worker", "scheduler"):
@@ -101,6 +111,13 @@ if sys.argv[1] == "serve":
             ["bash", str(self._script(name)), *arguments], cwd=self.root,
             env=env or self.env, capture_output=True, text=True, timeout=10,
         )
+
+    def _storage_env(self):
+        return [json.loads(line) for line in self.storage_env_log.read_text().splitlines()]
+
+    def _without_storage_env(self):
+        return {key: value for key, value in self.env.items()
+                if key not in {"WORKBENCH_PERSISTENT_ROOT", "WORKBENCH_DATABASE_URL"}}
 
     def test_install_preserves_local_config_and_builds_components(self):
         (self.root / "config/local/mcp-server.yaml").unlink()
@@ -188,11 +205,96 @@ if sys.argv[1] == "serve":
             "workbench:db migrate", "workbench:bootstrap", "workbench:doctor",
         ])
 
+    def test_init_db_uses_saved_data_dir_without_storage_env(self):
+        custom = self.root / "chosen dir"
+        self.assertEqual(self._run("install.sh", "--data-dir", str(custom)).returncode, 0)
+        self.calls.unlink()
+
+        result = self._run("init-db.sh", env=self._without_storage_env())
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([entry["command"] for entry in self._storage_env()], ["db", "bootstrap", "doctor"])
+        for entry in self._storage_env():
+            self.assertEqual(entry["root"], str(custom))
+            self.assertEqual(entry["url"], f"sqlite+aiosqlite:///{custom}/agents.sqlite3")
+
+    def test_init_db_derives_url_from_explicit_root(self):
+        custom = self.root / "env data"
+        env = {**self._without_storage_env(), "WORKBENCH_PERSISTENT_ROOT": str(custom)}
+
+        result = self._run("init-db.sh", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self._storage_env()[0]["url"], f"sqlite+aiosqlite:///{custom}/agents.sqlite3")
+
+    def test_init_db_rejects_invalid_saved_data_dir(self):
+        (self.root / "config/local/data-dir").write_text("relative/path\n")
+
+        result = self._run("init-db.sh", env=self._without_storage_env())
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("absolute path", result.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_init_db_refuses_existing_default_database(self):
+        data_dir = self.root / "home/.workbench"
+        data_dir.mkdir(parents=True)
+        database = data_dir / "agents.sqlite3"
+        database.write_text("existing")
+
+        result = self._run("init-db.sh", env=self._without_storage_env())
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("already exists", result.stderr)
+        self.assertEqual(database.read_text(), "existing")
+        self.assertFalse(self.calls.exists())
+
+    def test_init_db_rejects_dangling_database_symlink(self):
+        data_dir = self.root / "home/.workbench"
+        data_dir.mkdir(parents=True)
+        (data_dir / "agents.sqlite3").symlink_to(data_dir / "missing.sqlite3")
+
+        result = self._run("init-db.sh", env=self._without_storage_env())
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("symlink", result.stderr)
+        self.assertFalse((data_dir / "missing.sqlite3").exists())
+        self.assertFalse(self.calls.exists())
+
     def test_start_requires_passing_doctor(self):
         result = self._run("start.sh", env={**self.env, "DOCTOR_FAIL": "1"})
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len(self.calls.read_text().splitlines()), 1)
         self.assertFalse(self.pids.exists())
+
+    def test_start_uses_saved_data_dir_without_storage_env(self):
+        custom = self.root / "saved data"
+        (self.root / "config/local/data-dir").write_text(f"{custom}\n")
+        env = {**self._without_storage_env(), "DOCTOR_FAIL": "1"}
+
+        result = self._run("start.sh", env=env)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(self.storage_env_log.is_file(), result.stderr)
+        self.assertEqual(self._storage_env(), [{
+            "command": "doctor",
+            "root": str(custom),
+            "url": f"sqlite+aiosqlite:///{custom}/agents.sqlite3",
+        }])
+        self.assertFalse(self.pids.exists())
+
+    def test_start_explicit_storage_env_overrides_saved_choice(self):
+        (self.root / "config/local/data-dir").write_text(f"{self.root / 'saved'}\n")
+        env = {**self.env, "DOCTOR_FAIL": "1"}
+
+        result = self._run("start.sh", env=env)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self._storage_env(), [{
+            "command": "doctor",
+            "root": str(self.root / "var"),
+            "url": f"sqlite+aiosqlite:///{self.db}",
+        }])
 
     def test_start_manages_agent_and_optional_mcp_processes(self):
         process = subprocess.Popen(
