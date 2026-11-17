@@ -49,9 +49,15 @@ export WORKBENCH_PERSISTENT_ROOT=/absolute/local/persistent/workbench
 export WORKBENCH_DATABASE_URL=sqlite+aiosqlite:////absolute/local/persistent/workbench/agents.sqlite3
 ```
 
-首次使用**尚不存在**的数据库文件时，从项目根目录运行 `./scripts/init-db.sh`。脚本拒绝已有文件，并依次执行迁移、bootstrap 和 doctor；已有数据库的升级仍按维护手册手动操作。对应的手动命令需从 `apps/agent` 执行：
+首次建库只运行 `./scripts/init-db.sh`：它会创建数据库父目录，拒绝已有文件，再依次执行迁移、bootstrap 和 doctor。下面的逐步命令仅供已准备好数据目录的维护场景参考，不能替代首次初始化的安全检查；已有数据库的升级仍按维护手册操作。手动执行时，必须先在该终端设置克隆目录绝对路径，并加载与三个脚本相同的路径选择：
 
 ```bash
+export WORKBENCH_ROOT=/absolute/path/to/workbench
+source "$WORKBENCH_ROOT/scripts/lib/local-paths.sh"
+workbench_export_storage "$WORKBENCH_ROOT"
+export WORKBENCH_ASSET_ROOT="$WORKBENCH_ROOT"
+export WORKBENCH_FRONTEND_DIST_ROOT="$WORKBENCH_ROOT/apps/web/dist"
+cd "$WORKBENCH_ROOT/apps/agent"
 uv run workbench db migrate --config "$WORKBENCH_ROOT/config/local/agent.yaml"
 uv run workbench bootstrap --config "$WORKBENCH_ROOT/config/local/agent.yaml"
 uv run workbench doctor --config "$WORKBENCH_ROOT/config/local/agent.yaml"
@@ -59,7 +65,7 @@ uv run workbench doctor --config "$WORKBENCH_ROOT/config/local/agent.yaml"
 
 旧 Workspace 库必须在迁移、doctor 和 readiness 阶段安全拒绝，并提示选择新路径及显式初始化。保留旧库、WAL/SHM 和备份；不得通过清表、删库、手动 stamp 或自动重置绕过拒绝。新库需重新建立成员、Agent、模型与资源绑定，以及部署凭据授权；旧任务不会自动导入。普通启动不迁移、不 bootstrap，也不删除或自动切换数据库。
 
-已有且兼容的 Agent 数据库日常可从项目根目录运行 `./scripts/start.sh`。脚本先执行 doctor，再启动 API、Worker 和 Scheduler；任一进程退出或按 Ctrl-C 时会停止其余进程，不会自动迁移或 bootstrap。也可在确认 doctor 就绪后，在三个终端分别从 `apps/agent` 手动启动，并确保环境变量与配置一致：
+已有且兼容的 Agent 数据库日常可从项目根目录运行 `./scripts/start.sh`。脚本先执行 doctor，再启动 API、Worker 和 Scheduler；任一进程退出或按 Ctrl-C 时会停止其余进程，不会自动迁移或 bootstrap。也可在确认 doctor 就绪后，在三个终端分别从 `apps/agent` 手动启动。每个终端都要先重复上面的 `WORKBENCH_ROOT`、路径 helper 和资源根设置，确保环境变量与配置一致：
 
 ```bash
 uv run workbench api --config "$WORKBENCH_ROOT/config/local/agent.yaml" --host 127.0.0.1 --port 8000

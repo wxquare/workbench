@@ -227,6 +227,26 @@ if sys.argv[1] == "serve":
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self._storage_env()[0]["url"], f"sqlite+aiosqlite:///{custom}/agents.sqlite3")
 
+    def test_init_db_rejects_explicit_empty_storage_variables(self):
+        for name in ("WORKBENCH_PERSISTENT_ROOT", "WORKBENCH_DATABASE_URL"):
+            with self.subTest(name=name):
+                env = {**self.env, name: ""}
+                result = self._run("init-db.sh", env=env)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{name} must not be empty", result.stderr)
+                self.assertFalse(self.calls.exists())
+
+    def test_init_db_encodes_special_characters_in_data_dir(self):
+        custom = self.root / "work?bench%20 data"
+        (self.root / "config/local/data-dir").write_text(f"{custom}\n")
+
+        result = self._run("init-db.sh", env=self._without_storage_env())
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        entry = self._storage_env()[0]
+        self.assertEqual(entry["root"], str(custom))
+        self.assertIn("work%3Fbench%2520 data", entry["url"])
+
     def test_init_db_rejects_invalid_saved_data_dir(self):
         (self.root / "config/local/data-dir").write_text("relative/path\n")
 
@@ -360,6 +380,9 @@ if sys.argv[1] == "serve":
                 content = path.read_text()
                 for expected in ("install.sh", "init-db.sh", "start.sh", "--data-dir", "$HOME/.workbench"):
                     self.assertIn(expected, content)
+        runbook = (REPO_ROOT / "docs/runbooks/source-layout.md").read_text()
+        self.assertIn('workbench_export_storage "$WORKBENCH_ROOT"', runbook)
+        self.assertIn("首次建库只运行 `./scripts/init-db.sh`", runbook)
 
 
 if __name__ == "__main__":
