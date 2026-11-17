@@ -9,6 +9,7 @@
 var/
 config/local/agent.yaml
 config/local/mcp-server.yaml
+config/local/data-dir
 docs/specs/*.html
 docs/specs/*.zip
 *.pcap
