@@ -13,12 +13,17 @@
 
 ## 本地开始
 
-需要 Python 3.12、SQLite 3.51.3 或更高版本，以及 Node.js 22、npm 和 uv。从仓库根目录安装依赖并构建 Web 界面：
+需要 Python 3.12、SQLite 3.51.3 或更高版本，以及 Node.js 22、npm 和 uv。克隆仓库后，在项目根目录执行：
 
 ```bash
 ./scripts/install.sh
 ```
 
-安装脚本仅在本地配置不存在时复制示例，不会覆盖已有配置。按环境设置 `WORKBENCH_PERSISTENT_ROOT`、`WORKBENCH_DATABASE_URL` 和所需密钥后，首次使用**新数据库路径**时显式运行 `./scripts/init-db.sh`；日常运行使用 `./scripts/start.sh`。配置好 MCP 数据源与权限后，可用 `./scripts/start.sh --mcp` 一起启动 MCP 服务。
+安装后、初始化前，先检查 `config/local/agent.yaml` 并按需注入模型等凭据。数据默认存放在 `$HOME/.workbench`；安装时可用 `./scripts/install.sh --data-dir /absolute/path` 选择其他目录。选择记录在被 Git 忽略的本地文件中，重新安装不会覆盖已有配置或移动数据。
 
-本地配置已被 Git 忽略，实际密钥由运行环境注入。数据库迁移与 bootstrap 不会在日常启动时自动执行。环境变量示例、手动命令和测试步骤见 [本地安装与启动](docs/runbooks/source-layout.md)。
+```bash
+./scripts/init-db.sh
+./scripts/start.sh
+```
+
+`init-db.sh` 仅用于**新数据库**，不会覆盖现有文件；已有且兼容的数据库直接运行 `start.sh`。日常启动不会自动迁移或 bootstrap。配置好 MCP 数据源与权限后，可用 `./scripts/start.sh --mcp` 一起启动 MCP 服务。实际密钥仍由运行环境注入；路径覆盖、手动命令和测试步骤见 [本地安装与启动](docs/runbooks/source-layout.md)。
