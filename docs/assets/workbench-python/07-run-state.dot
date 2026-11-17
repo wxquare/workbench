@@ -1,0 +1,32 @@
+digraph G {
+graph [rankdir=LR, nodesep=0.52, ranksep=0.85, splines=true, overlap=false, pad=0.2];
+node [shape=box, style=rounded, fontname="Helvetica", fontsize=14, width=2.35, height=0.88, margin=0.15];
+edge [fontname="Helvetica", fontsize=11, arrowsize=0.85];
+q [label="queued\n持久化等待执行"];
+r [label="running\n执行租约与 epoch"];
+wi [label="waiting_input\n已保存输入等待点"];
+wa [label="waiting_approval\n已保存确认等待点"];
+f [label="finalizing\n已有有效 Outcome"];
+s [label="succeeded\n分析结果已提交"];
+p [label="partial\n保留未完成项"];
+cr [label="cancel_requested\n协作停止"];
+c [label="cancelled\n已终止执行"];
+e [label="expired\n等待 / 墙钟期限"];
+fail [label="failed\n不可恢复错误"];
+t [label="timed_out\n无有效 Outcome 的硬超时"];
+q -> r [label="claim"];
+r -> wi [label="need input"];
+r -> wa [label="need approval"];
+wi -> q [label="resume"];
+wa -> q [label="resume"];
+r -> f [label="outcome"];
+f -> s [label="commit"];
+f -> p [label="commit partial"];
+r -> cr [label="cancel"];
+cr -> c [label="stopped"];
+r -> fail [label="fatal"];
+r -> t [label="deadline"];
+wi -> e [label="expiry"];
+wa -> e [label="expiry"];
+r -> q [label="safe recovery"];
+}

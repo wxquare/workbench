@@ -1,0 +1,20 @@
+sequenceDiagram
+  actor Ops as 运维发布
+  participant Mig as 迁移作业
+  participant DB as StorageBackend SQLite v1
+  participant API as FastAPI
+  participant Sch as Scheduler
+  participant W as Worker
+  participant R as Runner
+  Ops->>Mig: db migrate
+  Mig->>DB: SQLite 初始化 / PRAGMA / 统一 Schema
+  DB-->>Mig: Schema 版本
+  Ops->>API: 启动
+  API->>DB: 校验配置和 Schema
+  DB-->>API: ready
+  Ops->>Sch: 启动 Scheduler / Dispatcher
+  Sch->>DB: 扫描 Job / Schedule / Outbox
+  Ops->>W: 启动并注册 Graph 版本
+  W->>DB: 领取能力匹配的 Job
+  Ops->>R: 启动 Runner
+  R-->>DB: 执行能力与镜像 digest

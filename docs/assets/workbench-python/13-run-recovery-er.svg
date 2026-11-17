@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1040" viewBox="0 0 1280 1040" role="img" aria-labelledby="13-run-recovery-er-title 13-run-recovery-er-desc">
+<title id="13-run-recovery-er-title">执行与恢复：业务会话、租约、中断和检查点</title>
+<desc id="13-run-recovery-er-desc">Job generation 管续执行单元；Run epoch 管所有权；恢复保持同一个 run_id。 Lease 还以复合外键绑定同 Thread 的 Run、同 Run 的 Job；这些连线省略，Guard 必须全部核对。 accepted 指针选择唯一有效 ResumeRequest；pending writes 与 checkpoint 父链一起保留。</desc>
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .muted{fill:#5b6473} .field{font-size:14px} .node-title{font-size:19px;font-weight:600}</style>
+<defs>
+<marker id="13-run-recovery-er-fk" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#2563eb" stroke-width="1.3"/></marker>
+<marker id="13-run-recovery-er-logical" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#7c3aed" stroke-width="1.3"/></marker>
+<marker id="13-run-recovery-er-domain" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#4f5d75" stroke-width="1.3"/></marker>
+</defs>
+<rect width="1280" height="1040" fill="#ffffff"/>
+<text x="48" y="52" font-size="27" font-weight="600">执行与恢复：业务会话、租约、中断和检查点</text>
+<text x="48" y="88" font-size="16" class="muted">Job generation 管续执行单元；Run epoch 管所有权；恢复保持同一个 run_id。</text>
+<path d="M 356,224 L 488,224" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 356,224 L 488,224" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 788,224 L 920,224" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 788,224 L 920,224" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 206,308 L 206,416" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 206,308 L 206,416" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 638,308 L 638,416" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 638,308 L 638,416" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 788,464 L 920,464" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 788,464 L 920,464" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 788,540 L 920,540" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 788,540 L 920,540" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 552,308 L 552,340 Q 552,348 544,348 L 440,348 Q 432,348 432,356 L 432,624 Q 432,632 424,632 L 214,632 Q 206,632 206,640 L 206,680" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 552,308 L 552,340 Q 552,348 544,348 L 440,348 Q 432,348 432,356 L 432,624 Q 432,632 424,632 L 214,632 Q 206,632 206,640 L 206,680" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 356,752 L 488,752" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 356,752 L 488,752" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<path d="M 724,308 L 724,372 Q 724,380 732,380 L 1244,380 Q 1252,380 1252,388 L 1252,624 Q 1252,632 1244,632 L 1078,632 Q 1070,632 1070,640 L 1070,680" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 724,308 L 724,372 Q 724,380 732,380 L 1244,380 Q 1252,380 1252,388 L 1252,624 Q 1252,632 1244,632 L 1078,632 Q 1070,632 1070,640 L 1070,680" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#13-run-recovery-er-fk)"/>
+<rect x="382.64" y="181" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="422" y="200" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="814.64" y="181" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="200" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="246.64" y="341" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="286" y="360" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..1</text>
+<rect x="742.64" y="341" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="782" y="360" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="814.64" y="421" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="440" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="795.04" y="497" width="117.92" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="516" text-anchor="middle" font-size="14" style="fill:#2563eb">accepted 0..1</text>
+<rect x="310.64" y="589" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="350" y="608" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="382.64" y="709" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="422" y="728" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="950.64" y="589" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="990" y="608" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="56" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,152 H348 Q356,152 356,160 V206 H56 V160 Q56,152 64,152" fill="#f8fafc"/>
+<line x1="56" y1="206" x2="356" y2="206" stroke="#cbd5e1"/>
+<text x="72" y="185" font-size="19" font-weight="600">threads</text>
+<text x="72" y="234" class="field">PK thread_id</text>
+<text x="72" y="259" class="field">FK active_run_id</text>
+<text x="72" y="284" class="field">   revision</text>
+<rect x="488" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#ea580c" stroke-width="1.7"/>
+<path d="M496,152 H780 Q788,152 788,160 V206 H488 V160 Q488,152 496,152" fill="#fff7ed"/>
+<line x1="488" y1="206" x2="788" y2="206" stroke="#ea580c"/>
+<text x="504" y="185" font-size="19" font-weight="600">runs</text>
+<text x="504" y="234" class="field">PK run_id</text>
+<text x="504" y="259" class="field">FK thread_id</text>
+<text x="504" y="284" class="field">   run_epoch</text>
+<rect x="920" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,152 H1212 Q1220,152 1220,160 V206 H920 V160 Q920,152 928,152" fill="#f8fafc"/>
+<line x1="920" y1="206" x2="1220" y2="206" stroke="#cbd5e1"/>
+<text x="936" y="185" font-size="19" font-weight="600">run_jobs</text>
+<text x="936" y="234" class="field">PK job_id</text>
+<text x="936" y="259" class="field">FK run_id</text>
+<text x="936" y="284" class="field">   generation</text>
+<rect x="56" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,416 H348 Q356,416 356,424 V470 H56 V424 Q56,416 64,416" fill="#f8fafc"/>
+<line x1="56" y1="470" x2="356" y2="470" stroke="#cbd5e1"/>
+<text x="72" y="449" font-size="19" font-weight="600">execution_leases</text>
+<text x="72" y="498" class="field">PK thread_id</text>
+<text x="72" y="523" class="field">FK owner_run_id</text>
+<text x="72" y="548" class="field">FK owner_job_id</text>
+<rect x="488" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M496,416 H780 Q788,416 788,424 V470 H488 V424 Q488,416 496,416" fill="#f8fafc"/>
+<line x1="488" y1="470" x2="788" y2="470" stroke="#cbd5e1"/>
+<text x="504" y="449" font-size="19" font-weight="600">interrupts</text>
+<text x="504" y="498" class="field">PK interrupt_id</text>
+<text x="504" y="523" class="field">FK run_id</text>
+<text x="504" y="548" class="field">FK accepted_resume_request_id</text>
+<rect x="920" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,416 H1212 Q1220,416 1220,424 V470 H920 V424 Q920,416 928,416" fill="#f8fafc"/>
+<line x1="920" y1="470" x2="1220" y2="470" stroke="#cbd5e1"/>
+<text x="936" y="449" font-size="19" font-weight="600">resume_requests</text>
+<text x="936" y="498" class="field">PK request_id</text>
+<text x="936" y="523" class="field">FK interrupt_id</text>
+<text x="936" y="548" class="field">   status</text>
+<rect x="56" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,680 H348 Q356,680 356,688 V734 H56 V688 Q56,680 64,680" fill="#f8fafc"/>
+<line x1="56" y1="734" x2="356" y2="734" stroke="#cbd5e1"/>
+<text x="72" y="713" font-size="19" font-weight="600">graph_checkpoints</text>
+<text x="72" y="762" class="field">PK run_id</text>
+<text x="72" y="787" class="field">PK namespace_hash</text>
+<text x="72" y="812" class="field">PK checkpoint_id</text>
+<rect x="488" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M496,680 H780 Q788,680 788,688 V734 H488 V688 Q488,680 496,680" fill="#f8fafc"/>
+<line x1="488" y1="734" x2="788" y2="734" stroke="#cbd5e1"/>
+<text x="504" y="713" font-size="19" font-weight="600">graph_pending_writes</text>
+<text x="504" y="762" class="field">PK checkpoint_id</text>
+<text x="504" y="787" class="field">PK task_id</text>
+<text x="504" y="812" class="field">PK write_index</text>
+<rect x="920" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,680 H1212 Q1220,680 1220,688 V734 H920 V688 Q920,680 928,680" fill="#f8fafc"/>
+<line x1="920" y1="734" x2="1220" y2="734" stroke="#cbd5e1"/>
+<text x="936" y="713" font-size="19" font-weight="600">run_events</text>
+<text x="936" y="762" class="field">PK run_id</text>
+<text x="936" y="787" class="field">PK seq</text>
+<text x="936" y="812" class="field">   type</text>
+<line x1="48" y1="880" x2="1232" y2="880" stroke="#e2e8f0"/>
+<path d="M52,906 h36" stroke="#2563eb" stroke-width="2" fill="none"/>
+<text x="98" y="910" font-size="14" class="muted">已声明 FK</text>
+<text x="221.52" y="910" font-size="14" class="muted">箭头：父 / 引用方 → 子 / 被引用方；不表示级联删除</text>
+<text x="48" y="952" font-size="14" class="muted">Lease 还以复合外键绑定同 Thread 的 Run、同 Run 的 Job；这些连线省略，Guard 必须全部核对。</text>
+<text x="48" y="981" font-size="14" class="muted">accepted 指针选择唯一有效 ResumeRequest；pending writes 与 checkpoint 父链一起保留。</text>
+</svg>

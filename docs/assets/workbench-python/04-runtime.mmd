@@ -1,0 +1,24 @@
+sequenceDiagram
+  actor U as 用户入口
+  participant A as API SSE
+  participant D as StorageBackend SQLite v1
+  participant W as Worker
+  participant L as LangChain Agent Tools
+  participant O as Dispatcher
+  participant X as 业务下游
+  U->>A: 创建 Run 与幂等键
+  A->>D: 消息 / Run / Job / accepted 事务
+  D-->>A: commit
+  A-->>U: 202 与标识
+  U->>A: SSE 订阅 / 续传
+  W->>D: 原子领取 Job / Lease / epoch
+  D-->>W: 版本与检查点
+  W->>L: 专家与受控工具循环
+  L-->>W: Evidence / Outcome
+  W->>D: 检查点与 finalize
+  D-->>A: 已提交事件
+  A-->>U: 最终结果
+  O->>D: 领取已授权 Outbox
+  O->>X: 外部动作
+  X-->>O: 回执
+  O->>D: 投递状态

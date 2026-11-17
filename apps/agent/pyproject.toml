@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workbench-agents"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2,<3",
+    "PyYAML>=6,<7",
+    "SQLAlchemy[asyncio]>=2,<3",
+    "aiosqlite>=0.21,<1",
+    "alembic>=1.14,<2",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
+    "PyJWT[crypto]>=2.10,<3",
+    "cryptography>=46,<47",
+    "httpx>=0.28,<1",
+    "langchain>=1,<2",
+    "langgraph>=1,<2",
+    "redis>=6,<8",
+    "langchain-deepseek>=1,<2",
+    "mcp>=1,<2",
+    "jsonschema>=4,<5",
+    "boto3>=1.35,<2",
+    "croniter==6.0.0",
+    "langfuse==4.15.1",
+]
+
+[project.scripts]
+workbench = "workbench_agent.cli.main:main"
+workbench-synthetic-policy = "workbench_agent.cli.synthetic_source_policy:main"
+workbench-synthetic-proposal-policy = "workbench_agent.cli.synthetic_proposal_policy:main"
+workbench-synthetic-batch-policy = "workbench_agent.cli.synthetic_batch_policy:main"
+workbench-local-dispatch = "workbench_agent.cli.local_dispatcher:main"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "build>=1,<2", "setuptools>=75"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
+include = ["workbench_agent", "workbench_agent.*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["live: opt-in external integration checks"]
+testpaths = ["tests"]

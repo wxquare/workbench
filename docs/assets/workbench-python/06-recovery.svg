@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1381" viewBox="0 0 1560 1381">
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .secondary{fill:#6b7280}</style>
+<defs>
+<marker id="a-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#2563eb"/></marker>
+<marker id="a-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#059669"/></marker>
+<marker id="a-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#7c3aed"/></marker>
+<marker id="a-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#ea580c"/></marker>
+<marker id="a-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#6b7280"/></marker>
+<marker id="a-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#dc2626"/></marker>
+</defs>
+<rect x="0.00" y="0.00" width="1560.00" height="1381.00" rx="0" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="40.00" y="40.00" text-anchor="start" font-size="27" font-weight="600" style="fill:#111827">Worker 故障恢复与外部操作对账</text>
+<text x="40.00" y="70.00" text-anchor="start" font-size="15" font-weight="400" style="fill:#6b7280">CAS 接管和检查点写入通过同事务 Guard 校验；外部动作独立对账</text>
+<rect x="18.00" y="105.00" width="164.00" height="72.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="100.00" y="132.00" text-anchor="middle" font-size="17" font-weight="600" style="fill:#111827">旧 Worker</text>
+<line x1="100.0" y1="177" x2="100.0" y2="1291" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5,5"/>
+<rect x="290.00" y="105.00" width="164.00" height="72.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="372.00" y="132.00" text-anchor="middle" font-size="17" font-weight="600" style="fill:#111827">StorageBackend</text>
+<text x="372.00" y="154.00" text-anchor="middle" font-size="17" font-weight="400" style="fill:#111827">SQLite v1</text>
+<line x1="372.0" y1="177" x2="372.0" y2="1291" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5,5"/>
+<rect x="562.00" y="105.00" width="164.00" height="72.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="644.00" y="132.00" text-anchor="middle" font-size="17" font-weight="600" style="fill:#111827">协调器</text>
+<line x1="644.0" y1="177" x2="644.0" y2="1291" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5,5"/>
+<rect x="834.00" y="105.00" width="164.00" height="72.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="916.00" y="132.00" text-anchor="middle" font-size="17" font-weight="600" style="fill:#111827">新 Worker</text>
+<line x1="916.0" y1="177" x2="916.0" y2="1291" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5,5"/>
+<rect x="1106.00" y="105.00" width="164.00" height="72.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="1188.00" y="132.00" text-anchor="middle" font-size="17" font-weight="600" style="fill:#111827">Dispatcher</text>
+<text x="1188.00" y="154.00" text-anchor="middle" font-size="17" font-weight="400" style="fill:#111827">与对账</text>
+<line x1="1188.0" y1="177" x2="1188.0" y2="1291" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5,5"/>
+<rect x="1378.00" y="105.00" width="164.00" height="72.00" rx="8" fill="#eff6ff" stroke="#cbd5e1" stroke-width="1.5"/>
+<text x="1460.00" y="132.00" text-anchor="middle" font-size="17" font-weight="600" style="fill:#111827">外部下游</text>
+<line x1="1460.0" y1="177" x2="1460.0" y2="1291" stroke="#cbd5e1" stroke-width="1.3" stroke-dasharray="5,5"/>
+<rect x="367.00" y="264.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 105.0,277 H 365.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 105.0,277 H 365.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="146.50" y="239.00" width="179.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="236.00" y="257.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">持久化检查点与执行状态</text>
+<rect x="367.00" y="334.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 639.0,347 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 639.0,347 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="403.50" y="309.00" width="209.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="508.00" y="327.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">扫描过期租约，安排恢复候选</text>
+<rect x="639.00" y="404.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 377.0,417 H 637.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 377.0,417 H 637.0" fill="none" stroke="#059669" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-green)"/>
+<rect x="412.50" y="379.00" width="191.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="508.00" y="397.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">非终态 Run 与检查点位置</text>
+<rect x="367.00" y="474.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 639.0,487 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 639.0,487 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="454.20" y="449.00" width="107.60" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="508.00" y="467.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">创建恢复 Job</text>
+<rect x="367.00" y="544.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 911.0,557 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 911.0,557 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="523.30" y="519.00" width="241.40" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="644.00" y="537.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">CAS 接管，新 epoch 与固定版本</text>
+<rect x="367.00" y="614.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 911.0,627 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 911.0,627 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="497.80" y="589.00" width="292.40" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="644.00" y="607.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">检查中断 / ResumeRequest / Outcome</text>
+<rect x="911.00" y="684.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 377.0,697 H 909.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 377.0,697 H 909.0" fill="none" stroke="#059669" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-green)"/>
+<rect x="546.70" y="659.00" width="194.60" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="644.00" y="677.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">恢复位置或只需 finalize</text>
+<rect x="367.00" y="754.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1183.0,767 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1183.0,767 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="673.70" y="729.00" width="212.60" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="780.00" y="747.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">动作 ID 与领取记录已持久化</text>
+<rect x="1455.00" y="824.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1193.0,837 H 1453.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1193.0,837 H 1453.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="1249.50" y="799.00" width="149.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1324.00" y="817.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">发送已授权外部动作</text>
+<rect x="1183.00" y="894.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1455.0,907 H 1195.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1455.0,907 H 1195.0" fill="none" stroke="#dc2626" stroke-width="1.9" stroke-dasharray="6,4"/>
+<path d="M 1189.0,901 L 1201.0,913 M 1201.0,901 L 1189.0,913" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1189.0,901 L 1201.0,913 M 1201.0,901 L 1189.0,913" fill="none" stroke="#dc2626" stroke-width="1.9"/>
+<rect x="1242.00" y="869.00" width="164.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1324.00" y="887.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">响应丢失，未确认结果</text>
+<rect x="367.00" y="964.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1183.0,977 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1183.0,977 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="656.90" y="939.00" width="246.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="780.00" y="957.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">保存 unknown；失效租约也需对账</text>
+<rect x="1455.00" y="1034.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1193.0,1047 H 1453.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1193.0,1047 H 1453.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="1203.30" y="1009.00" width="241.40" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1324.00" y="1027.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">查询同一 action_id 的执行事实</text>
+<rect x="1183.00" y="1104.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1455.0,1117 H 1195.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1455.0,1117 H 1195.0" fill="none" stroke="#059669" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-green)"/>
+<rect x="1230.90" y="1079.00" width="186.20" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="1324.00" y="1097.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">事实回执或仍为 unknown</text>
+<rect x="367.00" y="1174.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 1183.0,1187 H 379.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1183.0,1187 H 379.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="675.50" y="1149.00" width="209.00" height="26.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="780.00" y="1167.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">保存回执，禁止盲目重复动作</text>
+<rect x="367.00" y="1250.00" width="10.00" height="29.00" rx="1" fill="#dbeafe" stroke="#bfdbfe" stroke-width="1.5"/>
+<path d="M 105.0,1263 H 365.0" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 105.0,1263 H 365.0" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<rect x="117.10" y="1205.00" width="237.80" height="46.00" rx="3" fill="#ffffff" stroke="none" stroke-width="1.5"/>
+<text x="236.00" y="1223.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">旧 epoch 晚返回：拒绝更新当前</text>
+<text x="236.00" y="1243.00" text-anchor="middle" font-size="15" font-weight="400" style="fill:#111827">Run</text>
+<path d="M 42,1339 H 75" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 42,1339 H 75" fill="none" stroke="#2563eb" stroke-width="1.9" marker-end="url(#a-blue)"/>
+<text x="85.00" y="1344.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">请求 / 主流程</text>
+<path d="M 337.2,1339 H 370.2" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 337.2,1339 H 370.2" fill="none" stroke="#059669" stroke-width="1.9" marker-end="url(#a-green)"/>
+<text x="380.20" y="1344.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">返回 / 持久化</text>
+<path d="M 632.4,1339 H 665.4" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 632.4,1339 H 665.4" fill="none" stroke="#7c3aed" stroke-width="1.9" stroke-dasharray="6,4" marker-end="url(#a-purple)"/>
+<text x="675.40" y="1344.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">异步 / 恢复</text>
+<path d="M 927.5999999999999,1339 H 960.5999999999999" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 927.5999999999999,1339 H 960.5999999999999" fill="none" stroke="#ea580c" stroke-width="1.9" marker-end="url(#a-orange)"/>
+<text x="970.60" y="1344.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">等待 / 决策</text>
+<path d="M 1222.8,1339 H 1255.8" fill="none" stroke="#ffffff" stroke-width="6"/>
+<path d="M 1222.8,1339 H 1255.8" fill="none" stroke="#dc2626" stroke-width="1.9" marker-end="url(#a-red)"/>
+<text x="1265.80" y="1344.00" text-anchor="start" font-size="14" font-weight="400" style="fill:#64748b">失败 / 终止</text>
+</svg>

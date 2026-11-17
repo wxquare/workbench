@@ -1,0 +1,28 @@
+digraph G {
+graph [rankdir=LR, nodesep=0.52, ranksep=0.85, splines=true, overlap=false, pad=0.2];
+node [shape=box, style=rounded, fontname="Helvetica", fontsize=14, width=2.35, height=0.88, margin=0.15];
+edge [fontname="Helvetica", fontsize=11, arrowsize=0.85];
+p [label="planned\n参数与 action_id 已持久化"];
+w [label="waiting_approval\n绑定主体 / 参数摘要"];
+a [label="authorized\n执行前重查权限"];
+d [label="dispatching\n已领取并发送"];
+s [label="succeeded\n有真实成功回执"];
+rt [label="retry_wait\n已确认可安全重试"];
+u [label="unknown\n已发送但结果不确定"];
+f [label="failed\n明确永久失败"];
+rej [label="rejected\n用户明确拒绝"];
+exp [label="expired / cancelled\n确认过期或取消"];
+p -> w [label="policy"];
+p -> a [label="allowed"];
+w -> a [label="approve"];
+w -> rej [label="reject"];
+w -> exp [label="expiry / cancel"];
+a -> d [label="claim"];
+d -> s [label="receipt"];
+d -> rt [label="safe retry"];
+rt -> d [label="retry"];
+d -> f [label="permanent failure"];
+d -> u [label="lost acknowledgement"];
+u -> s [label="verified success"];
+u -> f [label="verified failure"];
+}

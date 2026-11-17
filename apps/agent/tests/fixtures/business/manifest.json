@@ -1,0 +1,184 @@
+{
+  "cases": [
+    {
+      "id": "candidate-01",
+      "input": "How is a payment timeout investigated?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-02",
+      "input": "Where are deployment instructions documented?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-03",
+      "input": "What does retry status mean?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-04",
+      "input": "Which metric indicates increased failure rate?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-05",
+      "input": "How can a service owner be found?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-06",
+      "input": "How is a failed transaction identified in logs?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-07",
+      "input": "Which trace field identifies a request?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-08",
+      "input": "How do I locate the current on-call engineer?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-09",
+      "input": "Where is the rollback procedure?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-10",
+      "input": "What is the escalation process?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-11",
+      "input": "How is a regional outage identified?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-12",
+      "input": "How do I verify a deployment version?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-13",
+      "input": "Which dashboards show request latency?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-14",
+      "input": "How can I find related trace spans?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-15",
+      "input": "What information belongs in an incident?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-16",
+      "input": "Which knowledge page explains timeout handling?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-17",
+      "input": "How are errors grouped by service?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-18",
+      "input": "How do I find an on-call schedule?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-19",
+      "input": "What does a missing metric mean?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-20",
+      "input": "How can I inspect a single request?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-21",
+      "input": "Where is the service runbook?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-22",
+      "input": "How can recent failure counts be checked?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-23",
+      "input": "What identifies a log entry?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-24",
+      "input": "How is trace duration measured?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-25",
+      "input": "Who should receive an incident handoff?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-26",
+      "input": "What checks precede a rollback?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-27",
+      "input": "How do I find a service dashboard?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-28",
+      "input": "How do I investigate an unexpected response?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-29",
+      "input": "Which region did a request run in?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    },
+    {
+      "id": "candidate-30",
+      "input": "How do I identify the current duty owner?",
+      "source": "synthetic test candidate",
+      "review_status": "pending_manual_review"
+    }
+  ]
+}

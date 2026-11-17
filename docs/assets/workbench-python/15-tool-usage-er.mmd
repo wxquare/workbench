@@ -1,0 +1,15 @@
+flowchart LR
+  %% 由同一关系清单生成；实线 FK、虚线逻辑，基数见边标签。
+  b["usage_budget_policies<br/>run_id<br/>summary_tokens"]
+  r["runs<br/>run_id<br/>budgets<br/>run_epoch"]
+  i["tool_invocations<br/>invocation_id<br/>logical_call_id<br/>attempt"]
+  v["usage_reservations<br/>reservation_id<br/>invocation<br/>send_state"]
+  u["usage_records<br/>record_id<br/>reservation_id<br/>usage_pending"]
+  q["usage_quarantine<br/>quarantine_id<br/>invocation<br/>guard_json"]
+  r -- "1 : 0..1" --> b
+  r -- "1 : 0..N" --> v
+  r -- "1 : 0..N" --> i
+  i -. "按 invocation" .-> v
+  v -- "0..1 : 0..N" --> u
+  r -- "1 : 0..N" --> q
+  u -. "可信对账" .-> q

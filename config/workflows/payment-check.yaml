@@ -1,0 +1,16 @@
+name: payment-check
+steps:
+  - step_id: metrics
+    tool: metrics_query
+    required: true
+    arguments:
+      template_id: error_rate
+    timeout_seconds: 20
+    failure_policy: stop
+  - step_id: logs
+    tool: logs_search
+    required: true
+    depends_on:
+      - metrics
+    timeout_seconds: 20
+    failure_policy: stop

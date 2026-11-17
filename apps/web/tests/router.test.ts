@@ -1,0 +1,21 @@
+import { expect, it, vi } from 'vitest'
+import router from '../src/router'
+import Agents from '../src/views/Agents.vue'
+
+vi.mock('../src/session', async () => {
+  const { ref } = await import('vue')
+  return { bearerToken: ref(''), api: {} }
+})
+
+vi.mock('vue-router', async importOriginal => {
+  const actual = await importOriginal<typeof import('vue-router')>()
+  return { ...actual, createWebHistory: actual.createMemoryHistory }
+})
+
+it('exposes agent management at its canonical app route', async () => {
+  await router.push({ name: 'agents' })
+  expect(router.resolve({ name: 'agents' }).href).toBe('/app/agents')
+  expect(router.currentRoute.value.matched[0].components?.default).toBe(Agents)
+  expect(router.getRoutes().filter(route => route.components?.default === Agents).map(route => route.path))
+    .toEqual(['/agents'])
+})

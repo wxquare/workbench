@@ -1,0 +1,14 @@
+flowchart LR
+  %% 由同一关系清单生成；实线 FK、虚线逻辑，基数见边标签。
+  thread["Thread · 业务会话<br/>thread_id<br/>active_run_id"]
+  run["Run · 一次执行<br/>run_id<br/>thread_id<br/>versions"]
+  outcome["Outcome · 最终结果<br/>run_id<br/>result_id<br/>payload"]
+  action["Action · 外部动作<br/>action_id<br/>run_id<br/>state"]
+  scope["QueryScope · 范围修订<br/>scope_id<br/>run_id<br/>version"]
+  evidence["Evidence · 观察证据<br/>evidence_id<br/>scope_id<br/>quality"]
+  thread -- "1 : 0..N" --> run
+  run -- "1 : 0..1" --> outcome
+  run -- "1 : 0..N" --> scope
+  run -- "1 : 0..N" --> action
+  scope -- "1 : 0..N" --> evidence
+  outcome -. "引用 0..N" .-> evidence

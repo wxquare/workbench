@@ -1,0 +1,9 @@
+flowchart TD
+  A[领域与应用服务] --> P[Repository / Store 接口]
+  G[LangGraph] --> C[PortableCheckpointSaver]
+  C --> P
+  P --> U[UnitOfWork / BackendFactory]
+  U --> S[(SQLite 首版)]
+  U -.后续适配.-> M[(MySQL)]
+  U -.后续适配.-> Q[(PostgreSQL)]
+  N[同一事务校验 Guard 与写入；统一数据和迁移格式]

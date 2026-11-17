@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1040" viewBox="0 0 1280 1040" role="img" aria-labelledby="15-tool-usage-er-title 15-tool-usage-er-desc">
+<title id="15-tool-usage-er-title">调用与预算：预留、结算和迟到回执</title>
+<desc id="15-tool-usage-er-desc">一次实际尝试对应稳定 invocation；恢复不会刷新父 Run 的额度。 结算到预留的现有 FK 只保证同团队，物理上可多行；服务要求同 Run / invocation 且单次结算。 迟到回执先隔离再查证；Token 未知与费用未知分别保持 pending，不能按零结算。</desc>
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .muted{fill:#5b6473} .field{font-size:14px} .node-title{font-size:19px;font-weight:600}</style>
+<defs>
+<marker id="15-tool-usage-er-fk" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#2563eb" stroke-width="1.3"/></marker>
+<marker id="15-tool-usage-er-logical" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#7c3aed" stroke-width="1.3"/></marker>
+<marker id="15-tool-usage-er-domain" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#4f5d75" stroke-width="1.3"/></marker>
+</defs>
+<rect width="1280" height="1040" fill="#ffffff"/>
+<text x="48" y="52" font-size="27" font-weight="600">调用与预算：预留、结算和迟到回执</text>
+<text x="48" y="88" font-size="16" class="muted">一次实际尝试对应稳定 invocation；恢复不会刷新父 Run 的额度。</text>
+<path d="M 488,224 L 356,224" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 488,224 L 356,224" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#15-tool-usage-er-fk)"/>
+<path d="M 638,308 L 638,416" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 638,308 L 638,416" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#15-tool-usage-er-fk)"/>
+<path d="M 552,308 L 552,344 Q 552,352 544,352 L 214,352 Q 206,352 206,360 L 206,416" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 552,308 L 552,344 Q 552,352 544,352 L 214,352 Q 206,352 206,360 L 206,416" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#15-tool-usage-er-fk)"/>
+<path d="M 356,488 L 488,488" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 356,488 L 488,488" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#15-tool-usage-er-logical)"/>
+<path d="M 788,488 L 920,488" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 788,488 L 920,488" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#15-tool-usage-er-fk)"/>
+<path d="M 788,224 L 1244,224 Q 1252,224 1252,232 L 1252,744 Q 1252,752 1244,752 L 1220,752" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 788,224 L 1244,224 Q 1252,224 1252,232 L 1252,744 Q 1252,752 1244,752 L 1220,752" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#15-tool-usage-er-fk)"/>
+<path d="M 1070,572 L 1070,680" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 1070,572 L 1070,680" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#15-tool-usage-er-logical)"/>
+<rect x="382.64" y="181" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="422" y="200" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..1</text>
+<rect x="678.64" y="341" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="718" y="360" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="340.64" y="313" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="380" y="332" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="363.88" y="445" width="116.24" height="25" rx="3" fill="#ffffff"/>
+<text x="422" y="464" text-anchor="middle" font-size="14" style="fill:#7c3aed">按 invocation</text>
+<rect x="802.88" y="445" width="102.24" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="464" text-anchor="middle" font-size="14" style="fill:#2563eb">0..1 : 0..N</text>
+<rect x="1030.64" y="181" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="1070" y="200" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="1114" y="605" width="72" height="25" rx="3" fill="#ffffff"/>
+<text x="1150" y="624" text-anchor="middle" font-size="14" style="fill:#7c3aed">可信对账</text>
+<rect x="56" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,152 H348 Q356,152 356,160 V206 H56 V160 Q56,152 64,152" fill="#f8fafc"/>
+<line x1="56" y1="206" x2="356" y2="206" stroke="#cbd5e1"/>
+<text x="72" y="185" font-size="19" font-weight="600">usage_budget_policies</text>
+<text x="72" y="234" class="field">PK run_id</text>
+<text x="72" y="259" class="field">   summary_tokens</text>
+<rect x="488" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#ea580c" stroke-width="1.7"/>
+<path d="M496,152 H780 Q788,152 788,160 V206 H488 V160 Q488,152 496,152" fill="#fff7ed"/>
+<line x1="488" y1="206" x2="788" y2="206" stroke="#ea580c"/>
+<text x="504" y="185" font-size="19" font-weight="600">runs</text>
+<text x="504" y="234" class="field">PK run_id</text>
+<text x="504" y="259" class="field">   budgets</text>
+<text x="504" y="284" class="field">   run_epoch</text>
+<rect x="56" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,416 H348 Q356,416 356,424 V470 H56 V424 Q56,416 64,416" fill="#f8fafc"/>
+<line x1="56" y1="470" x2="356" y2="470" stroke="#cbd5e1"/>
+<text x="72" y="449" font-size="19" font-weight="600">tool_invocations</text>
+<text x="72" y="498" class="field">PK invocation_id</text>
+<text x="72" y="523" class="field">   logical_call_id</text>
+<text x="72" y="548" class="field">   attempt</text>
+<rect x="488" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M496,416 H780 Q788,416 788,424 V470 H488 V424 Q488,416 496,416" fill="#f8fafc"/>
+<line x1="488" y1="470" x2="788" y2="470" stroke="#cbd5e1"/>
+<text x="504" y="449" font-size="19" font-weight="600">usage_reservations</text>
+<text x="504" y="498" class="field">PK reservation_id</text>
+<text x="504" y="523" class="field">   invocation</text>
+<text x="504" y="548" class="field">   send_state</text>
+<rect x="920" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,416 H1212 Q1220,416 1220,424 V470 H920 V424 Q920,416 928,416" fill="#f8fafc"/>
+<line x1="920" y1="470" x2="1220" y2="470" stroke="#cbd5e1"/>
+<text x="936" y="449" font-size="19" font-weight="600">usage_records</text>
+<text x="936" y="498" class="field">PK record_id</text>
+<text x="936" y="523" class="field">FK reservation_id</text>
+<text x="936" y="548" class="field">   usage_pending</text>
+<rect x="920" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,680 H1212 Q1220,680 1220,688 V734 H920 V688 Q920,680 928,680" fill="#f8fafc"/>
+<line x1="920" y1="734" x2="1220" y2="734" stroke="#cbd5e1"/>
+<text x="936" y="713" font-size="19" font-weight="600">usage_quarantine</text>
+<text x="936" y="762" class="field">PK quarantine_id</text>
+<text x="936" y="787" class="field">   invocation</text>
+<text x="936" y="812" class="field">   guard_json</text>
+<line x1="48" y1="880" x2="1232" y2="880" stroke="#e2e8f0"/>
+<path d="M52,906 h36" stroke="#2563eb" stroke-width="2" fill="none"/>
+<text x="98" y="910" font-size="14" class="muted">已声明 FK</text>
+<path d="M211.52,906 h36" stroke="#7c3aed" stroke-width="2" fill="none" stroke-dasharray="7 5"/>
+<text x="257.52" y="910" font-size="14" class="muted">JSON / 服务关联</text>
+<text x="426.4" y="910" font-size="14" class="muted">箭头：父 / 引用方 → 子 / 被引用方；不表示级联删除</text>
+<text x="48" y="952" font-size="14" class="muted">结算到预留的现有 FK 只保证同团队，物理上可多行；服务要求同 Run / invocation 且单次结算。</text>
+<text x="48" y="981" font-size="14" class="muted">迟到回执先隔离再查证；Token 未知与费用未知分别保持 pending，不能按零结算。</text>
+</svg>

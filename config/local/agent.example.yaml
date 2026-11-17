@@ -1,0 +1,75 @@
+# Deployment resources are outside the wheel. Export WORKBENCH_ASSET_ROOT and
+# WORKBENCH_DATABASE_URL; WORKBENCH_PERSISTENT_ROOT declares the local persistent directory.
+# Set WORKBENCH_SKILL_OBJECT_ROOT to a shared persistent directory to enable Skills.
+# Ordinary processes do not create/migrate the database or change journal_mode.
+environment: development
+service:
+  name: workbench-agents
+  default_timezone: Asia/Shanghai
+  auth_mode: development
+  oidc_issuer_ref: env://WORKBENCH_OIDC_ISSUER
+  oidc_audience: workbench-agents
+  model_credential_bindings: []
+llm:
+  bootstrap_policy: create_if_missing
+  default_profile: deepseek-dod-default
+  profiles:
+    - name: deepseek-dod-default
+      provider: deepseek
+      adapter: deepseek
+      protocol: openai_chat_completions
+      base_url: https://api.deepseek.com
+      model_id: deepseek-flash
+      secret_ref: env://DEEPSEEK_API_KEY
+      temperature: 0
+      request_timeout_seconds: 60
+      max_output_tokens: 4096
+      max_context_tokens: 64000
+      streaming: true
+      sdk_max_retries: 0
+      invocation_max_attempts: 3
+      structured_output_strategy: json_mode
+      provider_options:
+        thinking:
+          type: disabled
+storage:
+  backend: sqlite
+  database_url_ref: env://WORKBENCH_DATABASE_URL
+  schema_version: dod-storage-agent-v1
+  checkpoint_store: portable
+  checkpoint_codec_version: dod-checkpoint-v1
+  sqlite:
+    journal_mode: WAL
+    synchronous: FULL
+    foreign_keys: true
+    busy_timeout_ms: 5000
+    wal_autocheckpoint_pages: 1000
+  object_endpoint_ref: env://WORKBENCH_S3_ENDPOINT
+  object_bucket: dod-artifacts
+  object_auth_ref: secret://dod/object-storage
+redis:
+  url_ref: env://WORKBENCH_REDIS_URL
+  required_for_admission: false
+jobs:
+  backend: database
+  poll_interval_ms: 1000
+  lease_seconds: 45
+  heartbeat_seconds: 10
+  max_segment_attempts: 3
+worker:
+  concurrency: 2
+  supported_graph_versions: [dod.v1, dod.v2, dod.v3]
+  expert_concurrency_per_run: 2
+  tool_concurrency_per_run: 4
+stream:
+  flush_interval_ms: 250
+  flush_max_chars: 256
+  heartbeat_seconds: 15
+  event_retention_days: 7
+  client_buffer_events: 100
+runner:
+  image_profile: python312-tools-v1
+  script_timeout_seconds: 60
+  cpu_limit: 2
+  memory_mib: 2048
+  max_artifact_mib: 20

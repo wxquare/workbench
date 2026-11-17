@@ -1,0 +1,16 @@
+stateDiagram-v2
+  [*] --> planned
+  planned --> waiting_approval: policy
+  planned --> authorized: allowed
+  waiting_approval --> authorized: approve
+  waiting_approval --> rejected: reject
+  waiting_approval --> expired: expiry
+  waiting_approval --> cancelled: cancel
+  authorized --> dispatching: claim
+  dispatching --> succeeded: receipt
+  dispatching --> retry_wait: known safe failure
+  retry_wait --> dispatching: retry
+  dispatching --> failed: permanent failure
+  dispatching --> unknown: lost acknowledgement
+  unknown --> succeeded: verified success
+  unknown --> failed: verified failure
