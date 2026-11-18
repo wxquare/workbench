@@ -6,6 +6,7 @@ import { agentName, type Agent } from '../api'
 import { openRunStream } from '../sse'
 import { useRunDetail } from '../composables/useRunDetail'
 import StreamingAnswer from '../components/StreamingAnswer.vue'
+import EvidenceReferences from '../components/EvidenceReferences.vue'
 import RunActions from '../components/RunActions.vue'
 import WaitingInputForm from '../components/WaitingInputForm.vue'
 import ApprovalCard from '../components/ApprovalCard.vue'
@@ -19,6 +20,8 @@ const { run, error, loading, connection, draft, waiting, refresh, applyRunView }
 const actions = createRunActions({ cancel: (id, key) => api.cancelRun(id, key), resume: (id, body, key) => api.resumeRun(id, body, key), refresh, apply: applyRunView, current: () => run.value })
 const { busy, pending, error: actionError, readOnly } = actions
 const question = ref(''), now = ref(Date.now())
+const evidenceGeneration = ref(0)
+watch(run, () => { evidenceGeneration.value++ }, { flush: 'sync' })
 const timer = setInterval(() => { now.value = Date.now() }, 1000)
 onUnmounted(() => { clearInterval(timer); questionGeneration++; actions.reset() })
 const remaining = computed(() => waiting.value && waiting.value.kind !== 'unsupported' ? Math.max(0, waiting.value.expiresAt - now.value) : null)
@@ -73,6 +76,7 @@ const labels: Record<string, string> = { queued: '排队中', running: '执行�
       <StreamingAnswer v-if="draft && !(run.outcome && connection === 'closed')" :text="draft" />
       <template v-if="run.outcome"><div class="summary-box"><p class="result-text">{{ run.outcome.summary }}</p></div>
         <div v-if="run.outcome.findings?.length" class="result-section"><h3>发现</h3><ul><li v-for="(item, index) in run.outcome.findings" :key="index">{{ item.summary }}</li></ul></div>
+        <EvidenceReferences v-if="run.run_id === runId" :key="evidenceGeneration" :run-id="runId" :token="bearerToken" :refs="run.outcome.findings?.flatMap(item => item.evidence_refs ?? []) ?? []" :get-evidence="(id, evidenceId) => api.evidence(id, evidenceId)" />
         <div v-if="run.outcome.unresolved_items?.length" class="result-section"><h3>未完成事项</h3><ul><li v-for="item in run.outcome.unresolved_items" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.knowledge_gaps?.length" class="result-section"><h3>知识缺口</h3><ul><li v-for="item in run.outcome.knowledge_gaps" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.evidence_refs?.length" class="result-section"><h3>证据 ID</h3><ul><li v-for="item in run.outcome.evidence_refs" :key="item">{{ item }}</li></ul></div>
@@ -82,6 +86,7 @@ const labels: Record<string, string> = { queued: '排队中', running: '执行�
 </template>
 
 <style scoped>
+.result-section li { white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-info dd { text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .agent-info small { display: block; margin-top: 4px; color: #84919c; }
 </style>

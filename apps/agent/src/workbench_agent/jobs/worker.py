@@ -174,7 +174,7 @@ class Worker:
             execution._expert_name = 'knowledge'
         elif claim.context.graph_version == 'dod.v6':
             execution._expert_name = 'code'
-        elif claim.context.graph_version in ('dod.v7', 'dod.v8', 'dod.v16'):
+        elif claim.context.graph_version in ('dod.v7', 'dod.v8', 'dod.v16', 'dod.v19'):
             execution._expert_name = 'coordinator'
         execution._tool_owner=self
         self._tool_executions[id(execution)]=(execution,execution.tool_permissions,execution._expert_name,execution.claim)
@@ -188,8 +188,8 @@ class Worker:
     def expert_execution(self, parent, name):
         """Issue narrowly scoped child authority only for a live pinned coordinator Run."""
         if (not self._owns_tool_execution(parent) or parent._expert_name != 'coordinator'
-                or parent.claim.context.graph_version not in ('dod.v7', 'dod.v8', 'dod.v16') or name not in {'knowledge', 'code'}
-                or parent.claim.context.graph_version == 'dod.v16' and name != 'knowledge'):
+                or parent.claim.context.graph_version not in ('dod.v7', 'dod.v8', 'dod.v16', 'dod.v19') or name not in {'knowledge', 'code'}
+                or parent.claim.context.graph_version in ('dod.v16', 'dod.v19') and name != 'knowledge'):
             raise PermissionError('trusted coordinator required')
         child = Execution(self.backend, parent.claim, self.connector_policy, self.tool_permissions,
                           cancelled=parent.cancelled)

@@ -54,11 +54,12 @@ def main() -> None:
     evaluate = subcommands.add_parser("evaluate", help="evaluate a human-reviewed quality dataset")
     evaluate.add_argument("--dataset", required=True)
     evaluate.add_argument("--output", required=True)
+    evaluate.add_argument("--dataset-type", choices=("rca", "knowledge"), default="rca")
     args = parser.parse_args()
     if args.command == "evaluate":
         from workbench_agent.cli.evaluate import run_evaluate
         try:
-            passed = run_evaluate(args.dataset, args.output)
+            passed = run_evaluate(args.dataset, args.output, args.dataset_type)
         except (ValueError, OSError):
             print(json.dumps({"error": "invalid or unreadable evaluation dataset or output"}))
             sys.exit(1)

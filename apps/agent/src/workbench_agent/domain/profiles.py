@@ -34,6 +34,7 @@ class ProfileDraft(FrozenModel):
     allowed_modes: tuple[Literal["auto", "qa", "rca", "code", "sop", "inspection"], ...] = Field(default=("auto", "qa", "rca", "code", "sop", "inspection"), exclude_if=lambda v: v == ("auto", "qa", "rca", "code", "sop", "inspection"))
     budget_limits: ProfileBudgetLimits | None = Field(default=None, exclude_if=lambda v: v is None)
     role_models: tuple[RoleModelBinding, ...] = ()
+    knowledge_max_age_seconds: int | None = Field(default=None, gt=0, strict=True, exclude_if=lambda value: value is None)
     graph_version: str = Field(default='dod.v3', min_length=1, max_length=128)
     skills: tuple[VersionRef, ...] = ()
     tools: tuple[VersionRef, ...] = ()
