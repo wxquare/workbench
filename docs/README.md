@@ -1,7 +1,7 @@
 ---
 title: 文档入口
 status: stable
-verified_commit: b56962d
+verified_commit: 463e524
 ---
 
 # Workbench 文档
@@ -37,10 +37,13 @@ $EDITOR config/local/agent.yaml
 运行测试：
 
 ```bash
-cd apps/agent      && uv run python -m pytest
-cd apps/mcp-server && uv run python -m pytest && uv run ruff check .
-cd apps/web        && npm test && npm run typecheck && npm run build
+(cd apps/agent && uv sync --frozen && uv run python -m pytest -q -ra --durations=25)
+(cd apps/mcp-server && uv sync --frozen && uv run ruff check src tests && uv run ruff format --check src tests && uv run python -m pytest -q -ra)
+(cd apps/web && npm ci && npm run typecheck && npm test && npm run build)
+python3 -m unittest discover -s scripts/tests -v
 ```
+
+以上脚本测试需要先完成 agent 的 `uv sync --frozen`。CI 和本地命令见 [03 开发 §9.3](03-development.md#93-持续集成与本地等价命令)。
 
 首次建库、升级、备份恢复与容器部署的完整步骤见 [04 运维](04-operations.md)；代码入口与开发流程见 [03 开发](03-development.md)。
 
