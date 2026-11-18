@@ -112,3 +112,19 @@ describe('real QA API', () => {
     expect(validQaWindow(new Date('invalid'), new Date())).toBe(false)
   })
 })
+
+it('exposes error codes, active finalizing and idempotent run operations', async () => {
+  const fetcher = vi.fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ error: { code: 'FINALIZATION_STARTED' } }, { status: 409 }))
+    .mockResolvedValueOnce(Response.json({ status: 'cancelling' }))
+    .mockResolvedValueOnce(Response.json({ accepted: true }, { status: 202 }))
+  const client = new ApiClient(() => 'token', fetcher)
+  await expect(client.run('r')).rejects.toMatchObject({ status: 409, code: 'FINALIZATION_STARTED' })
+  expect(isRunActive('finalizing')).toBe(true)
+  await client.cancelRun('r', 'cancel-key')
+  const body = { interrupt_id: 'i', expected_revision: 2, response: { kind: 'user_input' as const, values: { region: 'sg' } } }
+  await client.resumeRun('r', body, 'resume-key')
+  expect(new Headers(fetcher.mock.calls[1][1]?.headers).get('Idempotency-Key')).toBe('cancel-key')
+  expect(new Headers(fetcher.mock.calls[2][1]?.headers).get('Idempotency-Key')).toBe('resume-key')
+  expect(JSON.parse(fetcher.mock.calls[2][1]?.body as string)).toEqual(body)
+})
