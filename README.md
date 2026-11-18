@@ -26,4 +26,4 @@
 ./scripts/start.sh
 ```
 
-`init-db.sh` 仅用于**新数据库**，不会覆盖现有文件；已有且兼容的数据库直接运行 `start.sh`。日常启动不会自动迁移或 bootstrap。配置好 MCP 数据源与权限后，可用 `./scripts/start.sh --mcp` 一起启动 MCP 服务。实际密钥仍由运行环境注入；路径覆盖、手动命令和测试步骤见 [运维手册](docs/04-operations.md)。
+`init-db.sh` 仅用于**新数据库**，不会覆盖现有文件；已有且兼容的数据库直接运行 `start.sh`。日常启动不会自动迁移或 bootstrap。配置好 MCP 数据源与权限后，可用 `./scripts/start.sh --mcp` 一起启动 MCP 服务。实际密钥仍由运行环境注入；路径覆盖和手动命令见 [运维手册](docs/04-operations.md)，测试步骤见 [开发指南](docs/03-development.md#91-测试层次与命令)。
