@@ -20,7 +20,7 @@ const actions = createRunActions({ cancel: (id, key) => api.cancelRun(id, key), 
 const { busy, pending, error: actionError, readOnly } = actions
 const question = ref(''), now = ref(Date.now())
 const timer = setInterval(() => { now.value = Date.now() }, 1000)
-onUnmounted(() => { clearInterval(timer); actions.reset() })
+onUnmounted(() => { clearInterval(timer); questionGeneration++; actions.reset() })
 const remaining = computed(() => waiting.value && waiting.value.kind !== 'unsupported' ? Math.max(0, waiting.value.expiresAt - now.value) : null)
 const disabled = computed(() => busy.value || pending.value || readOnly.value || remaining.value === 0)
 watch(() => [runId.value, bearerToken.value, run.value?.waiting?.interrupt_id, run.value?.waiting?.revision], () => actions.reset())

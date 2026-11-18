@@ -7,6 +7,8 @@ import RunDetail from '../src/views/RunDetail.vue'
 import source from '../src/views/RunDetail.vue?raw'
 import { api, bearerToken } from '../src/session'
 
+vi.mock('../src/components/RunActions.vue', () => ({ default: { render: () => null } }))
+
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'run-1' } }) }))
 vi.mock('../src/session', async () => {
   const { ref } = await import('vue')
