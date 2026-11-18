@@ -9,7 +9,7 @@ const run = ref<RunView | null>(null), error = ref(''), loading = ref(false)
 const agents = ref<Agent[]>([])
 let timer: ReturnType<typeof setTimeout> | undefined
 let generation = 0
-const labels: Record<string, string> = { queued: '排队中', running: '执行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', expired: '已过期', timed_out: '已超时', waiting_input: '等待输入', waiting_approval: '等待审批', cancelling: '取消中', partial: '部分完成' }
+const labels: Record<string, string> = { queued: '排队中', running: '执行中', finalizing: '整理结果中', succeeded: '已完成', failed: '失败', cancelled: '已取消', expired: '已过期', timed_out: '已超时', waiting_input: '等待输入', waiting_approval: '等待审批', cancelling: '取消中', partial: '部分完成' }
 async function refresh(current = generation) {
   if (!bearerToken.value) { loading.value = false; error.value = '请先提供 Bearer Token。'; return }
   loading.value = true
