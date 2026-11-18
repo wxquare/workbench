@@ -10,7 +10,7 @@ export function useRunDetail(id: Ref<string>, token: Ref<string>, deps: Dependen
   const run = ref<RunView | null>(null), error = ref(''), loading = ref(false)
   const connection = ref<'idle' | 'live' | 'polling' | 'closed'>('idle')
   const state = ref(initialRunState(id.value))
-  const waiting = computed(() => parseWaiting(run.value?.waiting ?? null))
+  const waiting = computed(() => parseWaiting(run.value?.waiting ?? null, run.value?.revision))
   const draft = computed(() => Object.values(state.value.messages).filter(m => !m.superseded).map(m => m.text).join(''))
   let generation = 0, request = 0, poll: ReturnType<typeof setTimeout> | undefined, debounce: ReturnType<typeof setTimeout> | undefined
   let controller: AbortController | undefined
@@ -44,6 +44,7 @@ export function useRunDetail(id: Ref<string>, token: Ref<string>, deps: Dependen
       else schedulePolling(current, count + 1)
     }, 3000)
   }
+  const isClosed = () => connection.value === 'closed'
   async function connect(current: number) {
     if (current !== generation) return
     controller?.abort(); controller = new AbortController()
@@ -62,7 +63,7 @@ export function useRunDetail(id: Ref<string>, token: Ref<string>, deps: Dependen
       if (current === generation && value && isRunActive(value.status)) schedulePolling(current)
     } catch (e) {
       if (current !== generation || active.signal.aborted) return
-      if (e instanceof EventCursorExpired) { await refresh(current); if (current === generation) connection.value = 'closed' }
+      if (e instanceof EventCursorExpired) { const value = await refresh(current); if (current === generation && !isClosed() && (!value || isRunActive(value.status))) schedulePolling(current) }
       else if (e instanceof StreamHttpError && [401, 403, 404].includes(e.status)) { error.value = '无权限访问任务或任务不存在。'; connection.value = 'closed' }
       else schedulePolling(current)
     }
