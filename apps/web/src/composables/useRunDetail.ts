@@ -60,7 +60,7 @@ export function useRunDetail(id: Ref<string>, token: Ref<string>, deps: Dependen
       }
       if (current !== generation || active.signal.aborted) return
       const value = await refresh(current)
-      if (current === generation && value && isRunActive(value.status)) schedulePolling(current)
+      if (current === generation && !isClosed() && (!value || isRunActive(value.status))) schedulePolling(current)
     } catch (e) {
       if (current !== generation || active.signal.aborted) return
       if (e instanceof EventCursorExpired) { const value = await refresh(current); if (current === generation && !isClosed() && (!value || isRunActive(value.status))) schedulePolling(current) }

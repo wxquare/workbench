@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 41e306a
+verified_commit: 7e0bf7a
 ---
 
 # 开发指南

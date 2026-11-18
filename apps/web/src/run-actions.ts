@@ -13,7 +13,7 @@ export function createRunActions(deps: Dependencies) {
   const busy = ref(false), pending = ref(false), error = ref(''), readOnly = ref(false)
   const keys = createIntentKeys(deps.makeKey)
   let generation = 0
-  function reset() { generation++; busy.value = false; pending.value = false; error.value = ''; readOnly.value = false; keys.clear() }
+  function reset(preserveError = false) { generation++; busy.value = false; pending.value = false; if (!preserveError) error.value = ''; readOnly.value = false; keys.clear() }
   async function act(kind: 'cancel' | 'resume', body?: ResumeBody) {
     const run = deps.current()
     if (!run || busy.value || pending.value) return
@@ -36,8 +36,8 @@ export function createRunActions(deps: Dependencies) {
     } catch (e) {
       if (current !== generation || deps.current()?.run_id !== id) return
       const code = e instanceof ApiError ? e.code : undefined
-      if (['REVISION_CONFLICT', 'INTERRUPT_CONFLICT', 'APPROVAL_CONFLICT', 'APPROVAL_INVALIDATED', 'STALE_QUERY_SCOPE'].includes(code ?? '')) { error.value = '状态已变化，已为你刷新。'; keys.clear(); void deps.refresh() }
-      else if (['INTERRUPT_EXPIRED', 'APPROVAL_EXPIRED'].includes(code ?? '')) { error.value = '等待已过期。'; keys.clear(); void deps.refresh() }
+      if (['REVISION_CONFLICT', 'INTERRUPT_CONFLICT', 'APPROVAL_CONFLICT', 'APPROVAL_INVALIDATED', 'STALE_QUERY_SCOPE'].includes(code ?? '')) { error.value = '状态已变化，请确认最新状态。'; readOnly.value = true; keys.clear(); void deps.refresh() }
+      else if (['INTERRUPT_EXPIRED', 'APPROVAL_EXPIRED'].includes(code ?? '')) { error.value = '等待已过期。'; readOnly.value = true; keys.clear(); void deps.refresh() }
       else if (code === 'FINALIZATION_STARTED') { error.value = '任务已进入结果整理，无法取消。'; void deps.refresh() }
       else if (code === 'INTERRUPT_ACTOR_MISMATCH') { error.value = '只有发起人可以处理该等待。'; readOnly.value = true }
       else if (code === 'INVALID_RESPONSE' || (e instanceof ApiError && e.status === 422)) error.value = '输入不合法，请检查后重试。'
