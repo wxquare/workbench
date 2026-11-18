@@ -29,3 +29,10 @@ describe('run waiting and action intent', () => {
     expect(intents.key('resume', 'i:5', { region: 'id' })).toBe('4')
   })
 })
+
+it('refreshes the authoritative Run on start and terminal notifications', async () => {
+  const { shouldRefresh } = await import('../src/run-detail-state')
+  expect(shouldRefresh('run.started')).toBe(true)
+  expect(shouldRefresh('run.completed')).toBe(true)
+  expect(shouldRefresh('assistant.delta')).toBe(false)
+})
