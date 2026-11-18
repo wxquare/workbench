@@ -1,0 +1,16 @@
+flowchart LR
+  %% 由同一关系清单生成；实线 FK、虚线逻辑，基数见边标签。
+  a["agents<br/>agent_id<br/>active_profile_id"]
+  s["schedules<br/>schedule_id<br/>agent_id<br/>payload"]
+  v["workflow_versions<br/>workflow_version_id<br/>version<br/>hash"]
+  m["schedule_manual_fires<br/>fire_id<br/>schedule_id<br/>run_id"]
+  f["schedule_fires<br/>fire_id<br/>schedule_id<br/>run_id"]
+  r["runs<br/>run_id<br/>thread_id<br/>versions"]
+  t["threads<br/>thread_id<br/>active_run_id"]
+  a -- "1 : 0..N" --> s
+  s -. "固定版本引用" .-> v
+  s -- "1 : 0..N" --> f
+  s -- "1 : 0..N" --> m
+  r -- "0..1 : 0..N" --> f
+  r -- "1 : 0..1" --> m
+  t -- "1 : 0..N" --> r

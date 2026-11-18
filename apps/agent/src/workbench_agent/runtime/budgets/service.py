@@ -102,7 +102,7 @@ class BudgetService:
         if policy is None:
             error=DomainError('BUDGET_POLICY_UNINITIALIZED',409)
             error.links={'create_run':'/v1/runs'}
-            error.add_note('Historical summary policy is unknown. Do not infer or reset it: create a replacement Run, or obtain reviewed offline reconciliation supported by authoritative evidence. See docs/runbooks/budget-policy.md.')
+            error.add_note('Historical summary policy is unknown. Do not infer or reset it: create a replacement Run, or obtain reviewed offline reconciliation supported by authoritative evidence. See docs/04-operations.md (Budget policy).')
             raise error
         token_hold=policy['summary_tokens']
         if token_hold>summary_model.max_context_tokens:
