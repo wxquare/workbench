@@ -4,16 +4,17 @@ export type WaitingModel =
   | { kind: 'approval'; interruptId: string; revision: number; expiresAt: number; approvalId: string; argsHash: string; actor: string }
   | { kind: 'unsupported'; reason: string }
 const sameKeys = (value: object, keys: string[]) => Object.keys(value).sort().join(',') === keys.sort().join(',')
-export function parseWaiting(w: WaitingView | null): WaitingModel | null {
+export function parseWaiting(w: WaitingView | null, runRevision?: number): WaitingModel | null {
   if (!w) return null
+  if (!Number.isSafeInteger(runRevision) || (runRevision ?? -1) < 0) return { kind: 'unsupported', reason: '任务版本不可用' }
   const schema = w.schema
   if (w.kind === 'approval' && schema && sameKeys(schema, ['type']) && schema.type === 'approval-v1' && w.approval_id && /^[0-9a-f]{64}$/.test(w.args_hash ?? ''))
-    return { kind: 'approval', interruptId: w.interrupt_id, revision: w.revision, expiresAt: w.expires_at_ms, approvalId: w.approval_id, argsHash: w.args_hash!, actor: w.actor ?? '' }
+    return { kind: 'approval', interruptId: w.interrupt_id, revision: runRevision!, expiresAt: w.expires_at_ms, approvalId: w.approval_id, argsHash: w.args_hash!, actor: w.actor ?? '' }
   const properties = schema?.properties
   if (w.kind === 'user_input' && schema && sameKeys(schema, ['type', 'properties', 'required', 'additionalProperties']) && schema.type === 'object' && schema.additionalProperties === false && Array.isArray(schema.required) && schema.required.length === 1 && schema.required[0] === 'region' && properties && typeof properties === 'object' && sameKeys(properties, ['region'])) {
     const region = (properties as Record<string, unknown>).region
     if (region && typeof region === 'object' && sameKeys(region, ['type']) && (region as Record<string, unknown>).type === 'string')
-      return { kind: 'input', interruptId: w.interrupt_id, revision: w.revision, expiresAt: w.expires_at_ms, scope: w.expected_scope_id }
+      return { kind: 'input', interruptId: w.interrupt_id, revision: runRevision!, expiresAt: w.expires_at_ms, scope: w.expected_scope_id }
   }
   return { kind: 'unsupported', reason: `无法在网页处理的等待类型：${w.name}` }
 }

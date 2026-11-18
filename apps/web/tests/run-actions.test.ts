@@ -39,3 +39,11 @@ it('keeps accepted resumes disabled until the waiting state changes', async () =
   actions.reset()
   expect(actions.pending.value).toBe(false)
 })
+
+it.each(['APPROVAL_INVALIDATED', 'STALE_QUERY_SCOPE'])('refreshes after %s', async (code) => {
+  const refresh = vi.fn()
+  const actions = createRunActions({ cancel: vi.fn(), resume: vi.fn().mockRejectedValue(new ApiError(409, code, code)), refresh, apply: vi.fn(), current: () => run })
+  await actions.resume(body)
+  expect(refresh).toHaveBeenCalledOnce()
+  expect(actions.error.value).toContain('状态已变化')
+})
