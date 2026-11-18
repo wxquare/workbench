@@ -47,3 +47,11 @@ it.each(['APPROVAL_INVALIDATED', 'STALE_QUERY_SCOPE'])('refreshes after %s', asy
   expect(refresh).toHaveBeenCalledOnce()
   expect(actions.error.value).toContain('状态已变化')
 })
+
+it('retains a conflict message when refreshed waiting data changes', async () => {
+  const actions = createRunActions({ cancel: vi.fn(), resume: vi.fn().mockRejectedValue(new ApiError(409, 'conflict', 'REVISION_CONFLICT')), refresh: vi.fn(), apply: vi.fn(), current: () => run })
+  await actions.resume(body)
+  actions.reset(true)
+  expect(actions.error.value).toContain('状态已变化')
+  expect(actions.error.value).not.toContain('已为你刷新')
+})
