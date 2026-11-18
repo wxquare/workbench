@@ -70,10 +70,14 @@ export function useRunDetail(id: Ref<string>, token: Ref<string>, deps: Dependen
   function restart() {
     generation++; request++; clear(); run.value = null; error.value = ''; state.value = initialRunState(id.value); connection.value = 'idle'
     const current = generation
-    void refresh(current).then(value => { if (current === generation && value && isRunActive(value.status)) void connect(current) })
+    void refresh(current).then(value => {
+      if (current !== generation) return
+      if (value && isRunActive(value.status)) void connect(current)
+      else if (!value && token.value.trim() && connection.value !== 'closed') schedulePolling(current)
+    })
   }
   watch([id, token], restart, { immediate: true })
   onScopeDispose(() => { generation++; clear() })
-  function applyRunView(value: RunView) { run.value = value; if (!isRunActive(value.status)) { clear(); connection.value = 'closed' } }
+  function applyRunView(value: RunView) { request++; loading.value = false; run.value = value; if (!isRunActive(value.status)) { clear(); connection.value = 'closed' } }
   return { run, error, loading, connection, waiting, draft, refresh: () => refresh(), applyRunView }
 }
