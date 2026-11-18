@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 status: stable
-verified_commit: b56962d
+verified_commit: 8fb6307
 ---
 
 # 配置参考（Agent 与 MCP Server）
@@ -434,3 +434,7 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 | 6 | 未涉及 MCP Server 配置 | 样例 `scope_enforced: false` 无法通过校验（要求为 true）；`audit.redact_fields` 样例会替换默认 | 本文第 5 节，建议修正样例注释 |
 | 7 | 原文称 `agent_scope` 用于身份限制 | settings.py 中未出现 `agent_scope` | 待核 |
 | 8 | 未列的待核项 | `secret://` 后端、`tool_permissions`/`scope_grants` 结构、工作流加载入口、MCP 命令名、`WORKBENCH_MODEL_SECRET_MASTER_KEY` 格式 | 已逐处标「待核」 |
+
+## 知识问答 v19 配置
+
+发布 Agent profile 时可配置 `knowledge_max_age_seconds`，必须是正整数，单位为秒，受理时冻结到 Run；缺省无阈值，不能判定来源新鲜。部署需要显式将 `dod.v19` 加入 `worker.supported_graph_versions` 并设置知识工具及完整范围授权。真实上游的协议、范围隔离、允许域名与阈值必须先经确认，不应直接启用示例来源。

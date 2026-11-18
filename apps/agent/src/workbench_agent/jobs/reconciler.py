@@ -131,6 +131,7 @@ class Reconciler:
             # tool invocation identities; resumed dispatch cannot replay a sent tool.
             'dod.v4':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
             'dod.v5':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
+            'dod.v19':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','synthesize_answer','verify_answer','compose_outcome','finalize'},
             'dod.v16':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
             'dod.v17':{'answer'},
             'dod.v18':{'answer'},

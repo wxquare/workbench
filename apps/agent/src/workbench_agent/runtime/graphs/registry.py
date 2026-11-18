@@ -40,7 +40,7 @@ class FoundationExecutor:
                 request=json.loads(message['content_ref'])
                 initial={'run_id':execution.guard.run_id,'input_text':request['input']['text'],'messages':[]}
                 if version in ('dod.v2','dod.v3','dod.v9','dod.v10','dod.v13','dod.v14','dod.v15'): initial['actor']=execution.claim.context.subject
-                if version in ('dod.v4','dod.v5','dod.v6','dod.v7','dod.v8','dod.v11','dod.v12','dod.v16','dod.v17','dod.v18'): initial['mode']=request['mode']
+                if version in ('dod.v4','dod.v5','dod.v6','dod.v7','dod.v8','dod.v11','dod.v12','dod.v16','dod.v17','dod.v18','dod.v19'): initial['mode']=request['mode']
                 if version in ('dod.v9','dod.v10','dod.v13','dod.v14','dod.v15'): initial.update(mode=request['mode'], business_context=request['business_context'])
                 if version=='dod.v3':
                     from workbench_agent.application.foundation_context import recording_fields
@@ -96,6 +96,8 @@ def foundation_worker_registry(backend):
     graphs.register('dod.v5',QA_STATE_VERSION,build_qa(saver))
     from workbench_agent.runtime.graphs.qa_v16 import build_dod as build_qa_v16, STATE_SCHEMA_VERSION as QA_V16_STATE_VERSION
     graphs.register('dod.v16', QA_V16_STATE_VERSION, build_qa_v16(saver))
+    from workbench_agent.runtime.graphs.qa_v19 import build_dod as build_qa_v19, STATE_SCHEMA_VERSION as QA_V19_STATE_VERSION
+    graphs.register('dod.v19', QA_V19_STATE_VERSION, build_qa_v19(saver))
     from workbench_agent.runtime.graphs.direct_qa import build_direct_qa, STATE_SCHEMA_VERSION as DIRECT_QA_STATE_VERSION
     graphs.register('dod.v17', DIRECT_QA_STATE_VERSION, build_direct_qa(saver))
     from workbench_agent.runtime.graphs.conversation_qa import build_conversation_qa, STATE_SCHEMA_VERSION as CONVERSATION_QA_STATE_VERSION
@@ -127,6 +129,7 @@ def foundation_worker_registry(backend):
     registry.register('dod.v4',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v5',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v16',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
+    registry.register('dod.v19',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v17',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v18',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v6',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))

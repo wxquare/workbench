@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 7e0bf7a
+verified_commit: 8fb6307
 ---
 
 # 开发指南
@@ -943,3 +943,9 @@ cd apps/agent
 | 旧草稿只覆盖到一次请求路径 | 本次补齐工作流、存储、Skill、MCP、Web、测试与开发指引 | 章节目录见文首 |
 
 字段、接口和配置的逐项核对以 [06 参考](06-reference/) 与源文件为准。
+
+## 知识问答 v19 离线评估
+
+`dod.v19` 需要在目标 Worker 的 `supported_graph_versions` 中显式加入，且发布的 Agent profile 必须显式设置正整数 `knowledge_max_age_seconds`；该值在 Run 受理时冻结。无阈值或来源时间无法判断时不得完成。真实知识源和范围隔离尚待确认，不应仅根据合成测试启用。切回 v16 应发布新的 profile，只影响新 Run。
+
+使用 `workbench evaluate --dataset <文件> --dataset-type knowledge --output <报告>` 运行独立知识评估，原 RCA 命令默认行为不变。真实验收需要至少 30 条独立业务标注和人工审核，覆盖可答（含多来源）、无答案、冲突和过期；引用正确率至少 95%，可答可用率至少 80%，不可答误答、无引用结论和越权均为零。`apps/agent/tests/fixtures/knowledge-eval-synthetic.json` 仅用于测试，不构成业务验收。

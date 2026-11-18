@@ -58,7 +58,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
                 if context.graph_version in ('dod.v4', 'dod.v10', 'dod.v11', 'dod.v12', 'dod.v13', 'dod.v14', 'dod.v15'): expert = 'diagnosis'
-                elif context.graph_version in ('dod.v5', 'dod.v7', 'dod.v8', 'dod.v16'): expert = 'knowledge'
+                elif context.graph_version in ('dod.v5', 'dod.v7', 'dod.v8', 'dod.v16', 'dod.v19'): expert = 'knowledge'
                 else: continue
                 authority = (expert, binding.permission)
             else:
@@ -107,13 +107,36 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
 
 async def sanitize_v8_outcome(backend, uow, claim, outcome):
     """Discard inaccessible evidence and text atomically before projection."""
-    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16') or not outcome.evidence_refs:
+    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16', 'dod.v19') or not outcome.evidence_refs:
         return outcome
     await backend.jobs.lock_scope(uow, claim.guard)
     await backend.lease_guard.require(uow, claim.guard, {'running', 'finalizing'})
     refs = {str(ref) for ref in outcome.evidence_refs}
-    allowed, _ = await authorized_sources(backend, uow, claim.guard, claim.context, refs)
-    if set(allowed) == refs:
+    allowed, scope_id = await authorized_sources(backend, uow, claim.guard, claim.context, refs)
+    safe = set(allowed) == refs
+    if safe and claim.context.graph_version == 'dod.v19':
+        from datetime import datetime, timedelta, timezone
+        from workbench_agent.runtime.graphs.qa_v19_validation import CitedAnswer, extract_knowledge_sources, verify_answer
+        try:
+            saved = await backend.runs.checkpoint(uow, claim.guard.team_id, claim.guard.run_id)
+            state = saved['values']
+            answer = CitedAnswer.model_validate(state['cited_answer'])
+            sources, problems = [], []
+            for ref, payload in allowed.items():
+                extracted = extract_knowledge_sources(ref, payload)
+                sources.extend(extracted.sources)
+                problems.extend(extracted.rejection_reasons)
+            age = claim.context.knowledge_max_age_seconds
+            now = datetime.fromtimestamp((await backend.clock.now_ms(uow)) / 1000, timezone.utc)
+            verified = verify_answer(answer, sources, now=now,
+                max_age=timedelta(seconds=age) if age is not None else None)
+            accepted = [item.model_dump(mode='json') for item, _ in verified.accepted]
+            safe = (bool(scope_id) and scope_id == state.get('synthesis_scope_id') and answer.answerable
+                and not problems and accepted == state.get('verified_claims')
+                and bool(accepted) and (not outcome.completed or verified.completed))
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            safe = False
+    if safe:
         return outcome
     from workbench_agent.domain.outcomes import RunOutcome
     value = outcome.model_dump(mode='json')
