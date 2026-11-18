@@ -23,7 +23,8 @@ const timer = setInterval(() => { now.value = Date.now() }, 1000)
 onUnmounted(() => { clearInterval(timer); questionGeneration++; actions.reset() })
 const remaining = computed(() => waiting.value && waiting.value.kind !== 'unsupported' ? Math.max(0, waiting.value.expiresAt - now.value) : null)
 const disabled = computed(() => busy.value || pending.value || readOnly.value || remaining.value === 0)
-watch(() => [runId.value, bearerToken.value, run.value?.waiting?.interrupt_id, run.value?.waiting?.revision, run.value?.revision], () => actions.reset())
+watch([runId, bearerToken], () => actions.reset())
+watch(() => [run.value?.waiting?.interrupt_id, run.value?.waiting?.revision, run.value?.revision], () => actions.reset(true))
 watch(remaining, (value, old) => { if (value === 0 && old !== 0) void refresh() })
 let questionGeneration = 0
 watch(() => [run.value?.thread_id, run.value?.run_id, bearerToken.value], async () => {

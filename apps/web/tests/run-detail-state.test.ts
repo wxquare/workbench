@@ -7,7 +7,7 @@ describe('run waiting and action intent', () => {
     expect(waiting?.kind).toBe('input')
     if (waiting?.kind !== 'input') throw new Error('missing input')
     expect(buildInputResume(waiting, ' sg ')).toEqual({ interrupt_id: 'i', expected_revision: 9, response: { kind: 'user_input', values: { region: 'sg' } } })
-    expect(parseWaiting({ ...base, schema: { ...base.schema, additionalProperties: true } })?.kind).toBe('unsupported')
+    expect(parseWaiting({ ...base, schema: { ...base.schema, additionalProperties: true } }, 9)?.kind).toBe('unsupported')
   })
   it('requires a valid approval hash and uses the waiting revision', () => {
     const hash = 'a'.repeat(64)
@@ -17,7 +17,7 @@ describe('run waiting and action intent', () => {
     if (parsed?.kind !== 'approval') throw new Error('missing approval')
     expect(buildApprovalResume(parsed, 'reject').expected_revision).toBe(9)
     expect(buildApprovalResume(parsed, 'reject').response).toEqual({ kind: 'approval', approval_id: 'a', decision: 'reject', expected_args_hash: hash })
-    expect(parseWaiting({ ...wait, args_hash: 'wrong' })?.kind).toBe('unsupported')
+    expect(parseWaiting({ ...wait, args_hash: 'wrong' }, 9)?.kind).toBe('unsupported')
   })
   it('reuses a key only while the complete operation intent is unchanged', () => {
     let next = 0
