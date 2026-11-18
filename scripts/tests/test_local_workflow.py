@@ -375,14 +375,14 @@ if sys.argv[1] == "serve":
             process.communicate(timeout=5)
 
     def test_docs_show_default_and_custom_data_dir_workflow(self):
-        for path in (REPO_ROOT / "README.md", REPO_ROOT / "docs/runbooks/source-layout.md"):
+        for path in (REPO_ROOT / "README.md", REPO_ROOT / "docs/04-operations.md"):
             with self.subTest(path=path):
                 content = path.read_text()
                 for expected in ("install.sh", "init-db.sh", "start.sh", "--data-dir", "$HOME/.workbench"):
                     self.assertIn(expected, content)
-        runbook = (REPO_ROOT / "docs/runbooks/source-layout.md").read_text()
+        runbook = (REPO_ROOT / "docs/04-operations.md").read_text()
         self.assertIn('workbench_export_storage "$WORKBENCH_ROOT"', runbook)
-        self.assertIn("首次建库只运行 `./scripts/init-db.sh`", runbook)
+        self.assertIn("脚本创建数据库父目录、拒绝已有文件", runbook)
 
 
 if __name__ == "__main__":
