@@ -2,6 +2,7 @@ name: ci
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -85,3 +86,35 @@ jobs:
         working-directory: apps/agent
         run: uv sync --frozen
       - run: python3 -m unittest discover -s scripts/tests -v
+
+  docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check documentation
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          DOCS_SKIP_BUMP: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'docs-typo') && '1' || '' }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            python3 scripts/check_docs.py --base "origin/$BASE_REF"
+          else
+            python3 scripts/check_docs.py
+          fi
+
+  ci-ok:
+    if: always()
+    needs: [agent, mcp-server, web, scripts, docs]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require all jobs to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null
