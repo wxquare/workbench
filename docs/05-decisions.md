@@ -1,7 +1,7 @@
 ---
 title: 决策记录
 status: stable
-verified_commit: b56962d
+verified_commit: 1b0f7b3
 ---
 
 # 决策记录
@@ -22,6 +22,7 @@ verified_commit: b56962d
 | [ADR-008](#adr-008-mcp-server-独立服务) | 只读取证能力独立进程、独立包、独立身份 | 已采纳 |
 | [ADR-009](#adr-009-直接问答与知识问答分图) | `dod.v17/v18` 纯模型回答；`dod.v16` 带检索且恒为 partial | 已采纳 |
 | [ADR-010](#adr-010-sqlite-先行) | 单机、单 Worker、短写事务；WAL 不放网络文件系统 | 已采纳 |
+| [ADR-011](#adr-011-ci-的-sqlite-版本由断言守住) | CI 使用 uv 管理的 Python 并断言 SQLite 版本 | 已采纳 |
 
 ---
 
@@ -282,6 +283,26 @@ Run 受理后需要异步执行，且必须满足：受理即持久（返回 202
 **状态**
 
 已采纳并落地。备份恢复见 [04 运维 §3](04-operations.md#3-sqlite-备份与恢复)。
+
+---
+
+## ADR-011 CI 的 SQLite 版本由断言守住
+
+**背景**
+
+Agent 要求 SQLite ≥ 3.51.3，系统 Python 使用的 SQLite 可能低于该版本。
+
+**决策**
+
+CI 使用 uv 管理的 Python，打印并断言 SQLite 版本。若版本不满足，改用带校验和的 SQLite 源码构建及 `LD_LIBRARY_PATH`，与 agent Dockerfile 的构建方式一致。
+
+**代价**
+
+解释器的 SQLite 版本依赖上游发布；启用源码回退时需同步 Dockerfile 中的版本和校验和。
+
+**状态**
+
+已采纳。关联 [ADR-010](#adr-010-sqlite-先行)。
 
 ---
 
