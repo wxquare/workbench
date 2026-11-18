@@ -41,7 +41,8 @@ sources:
 - id: demo-knowledge
   kind: knowledge
   adapter: normalized-http-v1
-  endpoint: https://knowledge-gateway.example.invalid/query
+  # Replace with the Agent API internal KB endpoint before enabling this source.
+  endpoint: https://agent.example.invalid/internal/kb/query
   auth_secret_ref: env://WORKBENCH_KNOWLEDGE_TOKEN
   binding_id: demo-knowledge@1
   scopes:
@@ -50,6 +51,7 @@ sources:
     region: id
     service: checkout
     source_id: demo-knowledge
+  # Enable only after verifying the Agent grant and exact scope match.
   scope_enforced: false
   isolation: upstream-enforced
   timeout_seconds: 20

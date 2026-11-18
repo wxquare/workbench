@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from sqlalchemy.engine import make_url
+from workbench_agent.knowledge.config import KnowledgeSettings
 
 SCHEMA_VERSION = "dod-storage-agent-v1"
 CHECKPOINT_CODEC_VERSION = "dod-checkpoint-v1"
@@ -552,6 +553,7 @@ class Settings(ConfigModel):
     stream: StreamSettings = Field(default_factory=StreamSettings)
     runner: RunnerSettings = Field(default_factory=RunnerSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    knowledge: KnowledgeSettings = Field(default_factory=KnowledgeSettings)
 
     @field_validator("asset_root")
     @classmethod
@@ -574,6 +576,8 @@ class Settings(ConfigModel):
         if self.environment == "production":
             if self.service.auth_mode != "oidc" or not self.service.oidc_issuer_ref:
                 raise ValueError("production identity requires OIDC configuration")
+            if self.knowledge.public_base_url and urlsplit(self.knowledge.public_base_url).scheme != 'https':
+                raise ValueError('production knowledge public URL requires HTTPS')
         return self
 
 

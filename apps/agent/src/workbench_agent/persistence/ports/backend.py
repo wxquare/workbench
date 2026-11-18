@@ -13,8 +13,10 @@ from workbench_agent.persistence.ports.results import ResultStore
 from workbench_agent.persistence.ports.usage import UsageStore
 from workbench_agent.persistence.ports.tools import ToolStore
 from workbench_agent.persistence.ports.runner_cleanup import RunnerCleanupStore
+from workbench_agent.persistence.ports.knowledge import KnowledgeStore
 
 class StorageBackend(Protocol):
+    knowledge: KnowledgeStore
     runner_cleanup: RunnerCleanupStore
     tools: ToolStore
     usage: UsageStore

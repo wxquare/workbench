@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 7e0bf7a
+verified_commit: 2115cf7
 ---
 
 # 开发指南
@@ -711,13 +711,13 @@ SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4
 
 ### 5.2 Schema 与显式迁移
 
-当前业务 Schema 在 `persistence/schema_agent_v3.py`，Agent 独立迁移链在 `persistence/agent_migrations/versions/`。历史 Workspace 迁移在 `persistence/migrations/versions/`，供旧规格和历史理解使用，不能对旧 Workspace 数据库运行 Agent 初始化。`cli/db.py::_preflight` 在写入之前检查版本元数据、revision、WAL 和必需结构；未知旧库安全拒绝。`workbench db migrate` 是维护命令，API/Worker/Scheduler 启动不自动迁移。
+当前业务 Schema 在 `persistence/schema_agent_v4.py`，Agent 独立迁移链在 `persistence/agent_migrations/versions/`。历史 Workspace 迁移在 `persistence/migrations/versions/`，供旧规格和历史理解使用，不能对旧 Workspace 数据库运行 Agent 初始化。`cli/db.py::_preflight` 在写入之前检查版本元数据、revision、WAL 和必需结构；未知旧库安全拒绝。`workbench db migrate` 是维护命令，API/Worker/Scheduler 启动不自动迁移。
 
 | 情形 | 预期行为 | 核对点 |
 | --- | --- | --- |
 | 新的空路径 | 显式 `db migrate` 建立 Agent Schema | `cli/db.py::migrate`、`agent_migrations/versions/0001_agent_domain.py` |
 | 已在当前 revision 的 Agent 库 | 迁移命令可重复运行，不重建业务数据 | `cli/db.py::_preflight` |
-| 受支持的早期 Agent revision | 在维护窗口升级到 head，并做外键检查 | `0002_shared_skills.py`、`0003_run_trace_contexts.py` |
+| 受支持的早期 Agent revision | 在维护窗口升级到 head，并做外键检查 | `0002_shared_skills.py`、`0003_run_trace_contexts.py`、`0004_knowledge_base.py` |
 | 旧 Workspace 或结构不兼容的库 | 拒绝并保留原库 | `FreshAgentDatabaseRequired` |
 
 版本与表字段的快照见[02 数据字典](06-reference/02-data-dictionary.md)。安装与迁移、备份恢复的步骤见 [04 运维](04-operations.md)。
@@ -943,3 +943,9 @@ cd apps/agent
 | 旧草稿只覆盖到一次请求路径 | 本次补齐工作流、存储、Skill、MCP、Web、测试与开发指引 | 章节目录见文首 |
 
 字段、接口和配置的逐项核对以 [06 参考](06-reference/) 与源文件为准。
+
+## 内置知识库开发与测试
+
+知识模块位于 `apps/agent/src/workbench_agent/knowledge/`，管理与内部查询路由分别在 `api/knowledge.py`、`api/kb_internal.py`，SQLite 实现在 `persistence/backends/knowledge.py`。新问答图为 `runtime/graphs/knowledge_qa.py`（`dod.v19`），不改变旧 `dod.v16` 的 partial 语义。配置 Agent 时须选择对应图、配置已发布工具绑定和授权，并确保 Worker 支持该图版本。
+
+`tests/integration/test_kb_mcp_chain.py` 覆盖真实 MCP 协议链路，相关迁移、检索、缺口、恢复、问答和 UI 测试分别位于 `test_kb_*` 与 `apps/web/tests/knowledge-*`。测试使用受控数据和模型替身，不能据此宣称真实模型表现或业务质量已验证。

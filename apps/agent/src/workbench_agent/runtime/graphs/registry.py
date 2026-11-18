@@ -40,7 +40,7 @@ class FoundationExecutor:
                 request=json.loads(message['content_ref'])
                 initial={'run_id':execution.guard.run_id,'input_text':request['input']['text'],'messages':[]}
                 if version in ('dod.v2','dod.v3','dod.v9','dod.v10','dod.v13','dod.v14','dod.v15'): initial['actor']=execution.claim.context.subject
-                if version in ('dod.v4','dod.v5','dod.v6','dod.v7','dod.v8','dod.v11','dod.v12','dod.v16','dod.v17','dod.v18'): initial['mode']=request['mode']
+                if version in ('dod.v4','dod.v5','dod.v6','dod.v7','dod.v8','dod.v11','dod.v12','dod.v16','dod.v17','dod.v18','dod.v19'): initial['mode']=request['mode']
                 if version in ('dod.v9','dod.v10','dod.v13','dod.v14','dod.v15'): initial.update(mode=request['mode'], business_context=request['business_context'])
                 if version=='dod.v3':
                     from workbench_agent.application.foundation_context import recording_fields
@@ -52,7 +52,7 @@ class FoundationExecutor:
                 if any(task.interrupts for task in snapshot.tasks): return saved.config
                 initial=None
             # v10 must persist its cross-source authority before any tool dispatch.
-            if version in ('dod.v10', 'dod.v11', 'dod.v12', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v17', 'dod.v18'):
+            if version in ('dod.v10', 'dod.v11', 'dod.v12', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v17', 'dod.v18', 'dod.v19'):
                 await graph.ainvoke(initial,config,context=execution,durability='sync')
             else:
                 await graph.ainvoke(initial,config,context=execution)
@@ -100,6 +100,8 @@ def foundation_worker_registry(backend):
     graphs.register('dod.v17', DIRECT_QA_STATE_VERSION, build_direct_qa(saver))
     from workbench_agent.runtime.graphs.conversation_qa import build_conversation_qa, STATE_SCHEMA_VERSION as CONVERSATION_QA_STATE_VERSION
     graphs.register('dod.v18', CONVERSATION_QA_STATE_VERSION, build_conversation_qa(saver))
+    from workbench_agent.runtime.graphs.knowledge_qa import build_knowledge_qa, STATE_SCHEMA_VERSION as KNOWLEDGE_QA_STATE_VERSION
+    graphs.register('dod.v19', KNOWLEDGE_QA_STATE_VERSION, build_knowledge_qa(saver))
     from workbench_agent.runtime.graphs.code import build_dod as build_code, STATE_SCHEMA_VERSION as CODE_STATE_VERSION
     graphs.register('dod.v6',CODE_STATE_VERSION,build_code(saver))
     from workbench_agent.runtime.graphs.multi import build_dod as build_multi, STATE_SCHEMA_VERSION as MULTI_STATE_VERSION
@@ -129,6 +131,7 @@ def foundation_worker_registry(backend):
     registry.register('dod.v16',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v17',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v18',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
+    registry.register('dod.v19',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v6',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v7',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register('dod.v8',FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))

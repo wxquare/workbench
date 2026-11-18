@@ -58,7 +58,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
                 if context.graph_version in ('dod.v4', 'dod.v10', 'dod.v11', 'dod.v12', 'dod.v13', 'dod.v14', 'dod.v15'): expert = 'diagnosis'
-                elif context.graph_version in ('dod.v5', 'dod.v7', 'dod.v8', 'dod.v16'): expert = 'knowledge'
+                elif context.graph_version in ('dod.v5', 'dod.v7', 'dod.v8', 'dod.v16', 'dod.v19'): expert = 'knowledge'
                 else: continue
                 authority = (expert, binding.permission)
             else:
@@ -74,6 +74,29 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
             if row['quality'] == 'truncated' and (not include_truncated or not truncated):
                 continue
             value = json.loads(payload['payload'])
+            if context.graph_version == 'dod.v19':
+                # Knowledge receipts bind the frozen scope but carry no time window.
+                # Verify the immutable payload and each upstream reference again.
+                current = json.loads(scope['scope_json'])
+                upstream = value.get('evidence_refs') if isinstance(value, dict) else None
+                if (receipt.get('kind') != 'mcp-evidence-v1' or binding.tool_name != 'knowledge_search'
+                        or digest(value) != row['summary'] or value.get('status') != 'ok'
+                        or not isinstance(upstream, list) or not upstream):
+                    continue
+                if any(not isinstance(item, dict) or not isinstance(item.get('scope'), dict)
+                       or any(item['scope'].get(k) != current[k] for k in ('service', 'environment', 'region'))
+                       or item.get('invocation_id') != invocation['logical_call_id']
+                       or item.get('query_scope_ref') != scope_id or item.get('source_type') != 'knowledge'
+                       or item.get('quality_status') != 'valid' or not item.get('source_locator')
+                       for item in upstream):
+                    continue
+                from workbench_agent.tools.mcp import permits_knowledge_evidence
+                policy = getattr(backend, '_mcp_connection_policy', None)
+                if any(not permits_knowledge_evidence(policy, team_id=context.team_id, agent_id=context.agent_id,
+                        binding=binding, query_scope=current, run_id=guard.run_id,
+                        invocation_id=invocation['logical_call_id'], scope_id=scope_id,
+                        upstream_scope=item['scope']) for item in upstream):
+                    continue
             if context.graph_version in ('dod.v10','dod.v13','dod.v14','dod.v15') or (context.graph_version in ('dod.v11','dod.v12') and receipt.get('kind') == 'mcp-evidence-v1' and binding.tool_name in DOD_MCP_TOOLS):
                 # Pre-binding v10 receipts did not prove the business team.
                 # Keep them unavailable instead of guessing their provenance.
@@ -107,7 +130,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
 
 async def sanitize_v8_outcome(backend, uow, claim, outcome):
     """Discard inaccessible evidence and text atomically before projection."""
-    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16') or not outcome.evidence_refs:
+    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16', 'dod.v19') or not outcome.evidence_refs:
         return outcome
     await backend.jobs.lock_scope(uow, claim.guard)
     await backend.lease_guard.require(uow, claim.guard, {'running', 'finalizing'})
@@ -119,5 +142,5 @@ async def sanitize_v8_outcome(backend, uow, claim, outcome):
     value = outcome.model_dump(mode='json')
     value.update(completed=False, summary='Analysis is incomplete because evidence scope or permissions changed.',
                  findings=[], root_cause_hypotheses=[], impact=None, evidence_refs=[], proposed_actions=[],
-                 unresolved_items=['Evidence is no longer available under the current scope or permissions.'])
+                 unresolved_items=['Evidence is no longer available under the current scope or permissions.'], knowledge_answer=None)
     return RunOutcome.model_validate(value)

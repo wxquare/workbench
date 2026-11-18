@@ -5,6 +5,7 @@ from typing import Literal
 from uuid import UUID
 from pydantic import Field,model_validator
 from workbench_agent.domain.profiles import FrozenModel
+from workbench_agent.domain.knowledge_answers import KnowledgeAnswer
 
 class Finding(FrozenModel):
     summary:str=Field(min_length=1,max_length=16384)
@@ -53,6 +54,7 @@ class RunOutcome(FrozenModel):
     proposed_actions:tuple[ProposedAction,...]
     knowledge_gaps:tuple[str,...]
     usage_summary:UsageSummary
+    knowledge_answer:KnowledgeAnswer|None=Field(default=None,exclude_if=lambda value:value is None)
 
     @model_validator(mode='after')
     def completeness(self):
@@ -60,6 +62,11 @@ class RunOutcome(FrozenModel):
         if not self.completed and not any(x.strip() for x in self.unresolved_items): raise ValueError('incomplete result requires unresolved work')
         if self.completed and self.unresolved_items: raise ValueError('completed result cannot have unresolved work')
         refs=set(self.evidence_refs)
+        if self.knowledge_answer:
+            if self.kind != 'analysis.v1': raise ValueError('knowledge answer requires analysis result')
+            cited={citation.evidence_ref for claim in self.knowledge_answer.claims for citation in claim.citations}
+            if not cited <= refs: raise ValueError('unlisted knowledge evidence reference')
+            if self.completed and self.knowledge_answer.verification != 'passed': raise ValueError('completed answer requires verification')
         for value in (*self.findings,*self.root_cause_hypotheses,*self.proposed_actions,*((self.impact,) if self.impact else ())):
             if not set(value.evidence_refs)<=refs: raise ValueError('unlisted evidence reference')
         if self.kind=='foundation.recorded.v1' and (self.findings or self.root_cause_hypotheses or self.impact or self.evidence_refs or self.proposed_actions):

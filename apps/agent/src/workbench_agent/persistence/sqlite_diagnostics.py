@@ -71,8 +71,10 @@ def validate_required_schema(connection, constrain_lock_wait=lambda:None, *, bas
         from workbench_agent.persistence.schema_agent_v1 import metadata, MIGRATION_HEAD
     elif revision == '0002_shared_skills':
         from workbench_agent.persistence.schema_agent_v2 import metadata, MIGRATION_HEAD
-    else:
+    elif revision == '0003_run_trace_contexts':
         from workbench_agent.persistence.schema_agent_v3 import metadata, MIGRATION_HEAD
+    else:
+        from workbench_agent.persistence.schema_agent_v4 import metadata, MIGRATION_HEAD
     def query(sql):
         constrain_lock_wait()
         return connection.execute(sql).fetchall()
@@ -123,6 +125,14 @@ def validate_required_schema(connection, constrain_lock_wait=lambda:None, *, bas
                            for constraint in table.constraints if isinstance(constraint, CheckConstraint)}
         if expected_checks and not expected_checks <= _check_expressions(actual_tables[name]):
             return ["required business schema CHECK constraints are missing/incompatible"]
+    if MIGRATION_HEAD == '0004_knowledge_base':
+        sql = actual_tables.get('kb_fts', '')
+        expected = ('title', 'content', 'tags', 'aliases', 'team_id', 'entry_id', 'version',
+                    'chunk_id', 'heading_path', 'line_start', 'line_end', 'content_hash', 'chunker_version')
+        if not sql or "tokenize='trigram'" not in sql.replace(' ', '').lower():
+            return ['knowledge index is missing/incompatible']
+        if tuple(row[1] for row in query('PRAGMA table_info("kb_fts")')) != expected:
+            return ['knowledge index is missing/incompatible']
     if query("PRAGMA quick_check") != [("ok",)] or query("PRAGMA foreign_key_check"):
         return ["storage integrity validation failed"]
     return []

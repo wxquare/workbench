@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 status: stable
-verified_commit: b56962d
+verified_commit: 2115cf7
 ---
 
 # 配置参考（Agent 与 MCP Server）
@@ -414,7 +414,9 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 
 样例语义：先执行 `metrics`（`metrics_query`，`template_id: error_rate`），成功后执行依赖它的 `logs`（`logs_search`）；任一步失败即停止。注：MCP 样例的 `error_rate` 模板声明了 `route` 参数（`purchase|refund`），而该工作流未传 `route`，是否必需待核。
 
-## 9. 配置项数量统计（由 AST 脚本枚举）
+## 9. 配置项数量统计（v4 前快照）
+
+以下是加入 `knowledge` 配置之前的历史统计，不包含下述知识库模型。
 
 | 范围 | 模型数 | 字段数 |
 | --- | --- | --- |
@@ -434,3 +436,11 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 | 6 | 未涉及 MCP Server 配置 | 样例 `scope_enforced: false` 无法通过校验（要求为 true）；`audit.redact_fields` 样例会替换默认 | 本文第 5 节，建议修正样例注释 |
 | 7 | 原文称 `agent_scope` 用于身份限制 | settings.py 中未出现 `agent_scope` | 待核 |
 | 8 | 未列的待核项 | `secret://` 后端、`tool_permissions`/`scope_grants` 结构、工作流加载入口、MCP 命令名、`WORKBENCH_MODEL_SECRET_MASTER_KEY` 格式 | 已逐处标「待核」 |
+
+## 内置知识库服务身份配置
+
+`config/local/agent.example.yaml` 的顶层 `knowledge` 默认 `enabled: false`，内部端点默认拒绝请求；启用时至少配置一条 grant，名称须唯一。每条 grant 包含 `name`、Workbench `team_id`（UUID）、`business_team`、`source_id`、`token_secret_ref`（仅 `env://NAME`）和非空 `allowed_scopes`（每项具体的 `service`、`environment`、`region`，不允许通配符）。令牌由部署环境注入，MCP Server 的源出站认证引用与之对应，且应与 MCP 入站令牌分开。
+
+`public_base_url` 默认 null；可配置无凭据、query、fragment 的 HTTP(S) URL，用于生成来源地址。部署时还需设置 MCP 的 `allowed_source_hosts` 和匹配的 source/principal 范围。示例配置里的 UUID、范围和令牌引用均需按实际环境替换；启用配置本身不证明业务查询或模型质量通过验收。
+
+启用 `dod.v19` 时，还需将它加入 worker 支持的图版本，在 Agent 的 `service.mcp_connections` 配置 MCP 连接与对应工具权限和范围，并配置可用的模型凭据。MCP Server 的 knowledge source 指向 Agent 内部查询端点，source ID、业务团队和具体范围须与 Agent grant 及 MCP principal 的授权一致；源出站令牌须匹配 grant，MCP 入站令牌使用独立凭据。配置文件变更后需重启相关进程，当前不支持在线重载。

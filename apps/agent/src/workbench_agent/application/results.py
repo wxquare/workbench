@@ -67,6 +67,11 @@ class ResultService:
         if run['status'] in TERMINAL_RUN_STATUSES: raise DomainError('RESULT_CONFLICT',409)
         await self.backend.jobs.lock_scope(uow,guard)
         await self.backend.lease_guard.require(uow,guard)
+        if context.graph_version == 'dod.v19':
+            from types import SimpleNamespace
+            from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome
+            outcome=await sanitize_v8_outcome(self.backend,uow,SimpleNamespace(guard=guard,context=context),outcome)
+            digest=outcome.digest()
         if context.graph_version in ('dod.v13','dod.v14','dod.v15'):
             from types import SimpleNamespace
             from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome

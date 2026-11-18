@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Grid, List, ChatLineRound, FolderOpened, Cpu, Collection, Connection, Timer, Warning, DataAnalysis, MagicStick } from '@element-plus/icons-vue'
+import { Grid, List, ChatLineRound, FolderOpened, Cpu, Collection, Reading, Connection, Timer, Warning, DataAnalysis, MagicStick } from '@element-plus/icons-vue'
 import { bearerToken, setBearerToken } from './session'
 const tokenInput = ref(bearerToken.value)
 watch(bearerToken, value => { tokenInput.value = value })
@@ -12,10 +12,10 @@ const primary = [
 ]
 const manage = [
   { label: 'Agent 管理', path: '/agents', icon: FolderOpened }, { label: '模型配置', path: '/models', icon: Cpu },
-  { label: 'Skills', path: '/skills', icon: Collection }, { label: '工具连接', path: '/tools', icon: Connection },
+  { label: 'Skills', path: '/skills', icon: Collection }, { label: '知识库', path: '/knowledge', icon: Reading }, { label: '工具连接', path: '/tools', icon: Connection },
   { label: '定时任务', path: '/schedules', icon: Timer }, { label: '数据统计', path: '/statistics', icon: DataAnalysis },
 ]
-const active = computed(() => route.path.startsWith('/runs') ? '/runs' : route.path)
+const active = computed(() => route.path.startsWith('/runs') ? '/runs' : route.path.startsWith('/knowledge') ? '/knowledge' : route.path)
 </script>
 <template>
   <div class="shell">

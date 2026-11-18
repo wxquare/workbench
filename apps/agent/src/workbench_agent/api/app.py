@@ -21,6 +21,9 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     if backend is None:
         from workbench_agent.tools.permissions import DeploymentToolPermissions
         backend = SQLiteBackend(settings.storage.database_url.get_secret_value(), tool_permissions=DeploymentToolPermissions(lambda: settings.service.tool_permissions))
+    from workbench_agent.tools.mcp import configured_connection_policy
+    if not hasattr(backend, '_mcp_connection_policy'):
+        backend._mcp_connection_policy = configured_connection_policy(lambda: settings.service.mcp_connections)
     telemetry = None
     if settings.observability.tracing.enabled and not hasattr(backend, '_telemetry'):
         from workbench_agent.observability import Telemetry
@@ -80,7 +83,9 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     from workbench_agent.api import events
     app.state.events=RunEventStore(backend,event_hints)
     from workbench_agent.application.artifacts import ArtifactService
-    from workbench_agent.api import artifacts, tool_bindings, evidence, skills, skill_library, repositories, uploads
+    from workbench_agent.api import artifacts, tool_bindings, evidence, skills, skill_library, repositories, uploads, knowledge, kb_internal
+    from workbench_agent.knowledge.internal_auth import KBInternalAccess
+    app.state.knowledge_access = KBInternalAccess(settings.knowledge, resolve_env_reference)
     app.state.artifacts=ArtifactService(backend,artifact_signer)
     from workbench_agent.api import ingress, schedules, actions, incidents
     from workbench_agent.application.actions import ActionService
@@ -95,6 +100,8 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     app.include_router(repositories.router)
     app.include_router(skills.router)
     app.include_router(skill_library.router)
+    app.include_router(knowledge.router)
+    app.include_router(kb_internal.router)
     app.include_router(evidence.router)
     app.include_router(tool_bindings.router)
     app.include_router(artifacts.router)

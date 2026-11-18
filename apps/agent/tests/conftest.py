@@ -15,7 +15,7 @@ def config_data(tmp_path):
             "storage": {"backend": "sqlite", "database_url": f"sqlite+aiosqlite:///{tmp_path}/db.sqlite3",
                         "persistent_root": str(tmp_path)}}
 
-pytest_plugins = ['support.runs', 'support.platform']
+pytest_plugins = ['support.runs', 'support.platform', 'support.kb']
 
 @pytest.fixture(autouse=True)
 def fictional_model_reference(monkeypatch,request):

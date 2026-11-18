@@ -7,6 +7,8 @@ import Agents from './views/Agents.vue'
 import Models from './views/Models.vue'
 import Threads from './views/Threads.vue'
 import Skills from './views/Skills.vue'
+import Knowledge from './views/Knowledge.vue'
+import KnowledgeEntry from './views/KnowledgeEntry.vue'
 import Placeholder from './views/Placeholder.vue'
 
 export default createRouter({
@@ -20,6 +22,8 @@ export default createRouter({
     { path: '/models', name: 'models', component: Models },
     { path: '/threads', name: 'threads', component: Threads },
     { path: '/skills', name: 'skills', component: Skills },
+    { path: '/knowledge', name: 'knowledge', component: Knowledge },
+    { path: '/knowledge/:id/versions/:version', name: 'knowledge-version', component: KnowledgeEntry },
     { path: '/:section(tools|schedules|incidents|statistics)', name: 'section', component: Placeholder },
   ],
 })

@@ -74,6 +74,8 @@ class SQLiteBackend:
         self.actions=SQLiteActionStore()
         from workbench_agent.persistence.backends.feedback import SQLiteFeedbackStore
         self.feedback=SQLiteFeedbackStore()
+        from workbench_agent.persistence.backends.knowledge import SQLiteKnowledgeStore
+        self.knowledge=SQLiteKnowledgeStore()
 
     def create_uow(self):
         return SQLiteUnitOfWork(self)

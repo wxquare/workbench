@@ -12,6 +12,7 @@ import ApprovalCard from '../components/ApprovalCard.vue'
 import { buildInputResume, buildApprovalResume } from '../run-detail-state'
 import { createRunActions } from '../run-actions'
 import { listMessages } from '../threads-api'
+import KnowledgeAnswer from '../components/KnowledgeAnswer.vue'
 
 const route = useRoute()
 const runId = computed(() => String(route.params.id))
@@ -71,13 +72,13 @@ const labels: Record<string, string> = { queued: '排队中', running: '执行�
     <div class="detail-grid"><div class="detail-primary"><section class="panel detail-panel"><div class="panel-heading"><div><h2>结果</h2><p>已保存的任务结果</p></div></div>
       <p v-if="connection === 'polling'" class="form-note">实时连接不可用，正在轮询更新。</p>
       <StreamingAnswer v-if="draft && !(run.outcome && connection === 'closed')" :text="draft" />
-      <template v-if="run.outcome"><div class="summary-box"><p class="result-text">{{ run.outcome.summary }}</p></div>
-        <div v-if="run.outcome.findings?.length" class="result-section"><h3>发现</h3><ul><li v-for="(item, index) in run.outcome.findings" :key="index">{{ item.summary }}</li></ul></div>
+      <template v-if="run.outcome"><KnowledgeAnswer v-if="run.outcome.knowledge_answer" :run-id="run.run_id" :answer="run.outcome.knowledge_answer" /><div v-else class="summary-box"><p class="result-text">{{ run.outcome.summary }}</p></div>
+        <div v-if="!run.outcome.knowledge_answer && run.outcome.findings?.length" class="result-section"><h3>发现</h3><ul><li v-for="(item, index) in run.outcome.findings" :key="index">{{ item.summary }}</li></ul></div>
         <div v-if="run.outcome.unresolved_items?.length" class="result-section"><h3>未完成事项</h3><ul><li v-for="item in run.outcome.unresolved_items" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.knowledge_gaps?.length" class="result-section"><h3>知识缺口</h3><ul><li v-for="item in run.outcome.knowledge_gaps" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.evidence_refs?.length" class="result-section"><h3>证据 ID</h3><ul><li v-for="item in run.outcome.evidence_refs" :key="item">{{ item }}</li></ul></div>
       </template><p v-else class="form-note">尚无已保存的结果。</p>
-    </section></div><aside class="detail-secondary"><section class="panel info-panel"><h2>任务信息</h2><dl><div><dt>状态</dt><dd>{{ labels[run.status] ?? run.status }}</dd></div><div><dt>阶段</dt><dd>{{ run.phase ?? '—' }}</dd></div><div class="agent-info"><dt>Agent</dt><dd>{{ agentName(run.agent_id, agents) }}<small v-if="agentName(run.agent_id, agents) !== run.agent_id">{{ run.agent_id }}</small></dd></div><div><dt>创建时间</dt><dd>{{ new Date(run.created_at).toLocaleString() }}</dd></div></dl></section></aside></div>
+    </section></div><aside class="detail-secondary"><section class="panel info-panel"><h2>任务信息</h2><dl><div><dt>状态</dt><dd>{{ labels[run.status] ?? run.status }}</dd></div><div><dt>阶段</dt><dd>{{ run.phase ?? '—' }}</dd></div><div class="agent-info"><dt>Agent</dt><dd>{{ agentName(run.agent_id, agents) }}<small v-if="agentName(run.agent_id, agents) !== run.agent_id">{{ run.agent_id }}</small></dd></div><div><dt>创建时间</dt><dd>{{ new Date(run.created_at).toLocaleString() }}</dd></div></dl><router-link v-if="run.links?.original_run" :to="{ name: 'run-detail', params: { id: run.links.original_run.split('/').pop() } }">查看原任务</router-link><router-link v-if="run.links?.knowledge_gap" :to="{ name: 'knowledge', query: { gap: run.links.knowledge_gap.split('/').pop() } }">查看知识缺口</router-link></section></aside></div>
   </template>
 </template>
 

@@ -32,6 +32,7 @@ class ExpertResult:
     subtask_id: str
     text: str
     evidence_refs: tuple[str, ...]
+    tool_statuses: tuple[str, ...] = ()
 
 
 class KnowledgeChatModel(BaseChatModel):
@@ -60,8 +61,38 @@ class KnowledgeChatModel(BaseChatModel):
         from workbench_agent.application.idempotency import digest
         from langchain_core.messages import messages_to_dict
         logical_id = str(uuid5(UUID(self._subtask_id), 'model:' + digest(messages_to_dict(messages))))
+        dispatch_check = None
+        execution = self._invoker.execution
+        if execution.claim.context.graph_version == 'dod.v19':
+            # Tool messages survive checkpoint replay. Their content may be sent
+            # only if the current guarded transaction still authorizes the exact
+            # persisted evidence represented in every successful message.
+            from workbench_agent.application.errors import DomainError
+            from workbench_agent.runtime.graphs.evidence_authority import authorized_sources
+            evidence = {}
+            for message in messages:
+                if not isinstance(message, ToolMessage):
+                    continue
+                try:
+                    value = json.loads(message.content)
+                    if not isinstance(value, dict): raise ValueError()
+                    if value.get('status') == 'ok':
+                        ref = value.get('evidence_ref')
+                        if not isinstance(ref, str) or not ref or not isinstance(value.get('data'), dict): raise ValueError()
+                        if ref in evidence and evidence[ref] != value['data']: raise ValueError()
+                        evidence[ref] = value['data']
+                    elif value.get('data') is not None:
+                        raise ValueError()
+                except (TypeError, ValueError):
+                    raise DomainError('FORBIDDEN', 403) from None
+            async def dispatch_check(uow):
+                await execution.backend.lease_guard.require(uow, self._guard, {'running'})
+                allowed, _ = await authorized_sources(execution.backend, uow, self._guard,
+                    execution.claim.context, evidence)
+                if allowed != evidence:
+                    raise DomainError('FORBIDDEN', 403)
         result = await self._invoker.invoke(self._guard, 'knowledge', messages,
-            tools=list(self._tools) or None, logical_call_id=logical_id)
+            tools=list(self._tools) or None, logical_call_id=logical_id, dispatch_check=dispatch_check)
         if result.status != 'ok' or not isinstance(result.message, AIMessage):
             raise CapabilityBlocked(result.error_code or 'MODEL_UNAVAILABLE')
         return ChatResult(generations=[ChatGeneration(message=result.message)])
@@ -174,12 +205,14 @@ class KnowledgeExpert:
         if not messages or not isinstance(messages[-1], AIMessage) or not isinstance(messages[-1].content, str):
             raise CapabilityBlocked('expert did not produce a final text')
         refs = []
+        statuses = []
         for message in messages:
             if isinstance(message, ToolMessage):
                 try:
                     payload = json.loads(message.content)
                 except (TypeError, ValueError):
                     continue
+                statuses.append(payload.get('status', 'unknown') if isinstance(payload, dict) else 'unknown')
                 if payload.get('status') == 'ok' and payload.get('evidence_ref'):
                     refs.append(payload['evidence_ref'])
-        return ExpertResult(subtask_id, messages[-1].content, tuple(dict.fromkeys(refs)))
+        return ExpertResult(subtask_id, messages[-1].content, tuple(dict.fromkeys(refs)), tuple(statuses))

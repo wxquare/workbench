@@ -54,6 +54,16 @@ def main() -> None:
     evaluate = subcommands.add_parser("evaluate", help="evaluate a human-reviewed quality dataset")
     evaluate.add_argument("--dataset", required=True)
     evaluate.add_argument("--output", required=True)
+    kb = subcommands.add_parser('kb', help='explicit knowledge index maintenance')
+    kb_commands = kb.add_subparsers(dest='kb_command', required=True)
+    kb_check = kb_commands.add_parser('check-index', help='inspect index consistency without repair')
+    kb_check.add_argument('--config', required=True)
+    kb_check.add_argument('--team-id', required=True)
+    kb_rebuild = kb_commands.add_parser('rebuild-index', help='rebuild one entry index at its expected revision')
+    kb_rebuild.add_argument('--config', required=True)
+    kb_rebuild.add_argument('--team-id', required=True)
+    kb_rebuild.add_argument('--entry-id', required=True)
+    kb_rebuild.add_argument('--expected-revision', type=int, required=True)
     args = parser.parse_args()
     if args.command == "evaluate":
         from workbench_agent.cli.evaluate import run_evaluate
@@ -74,6 +84,17 @@ def main() -> None:
     if args.command in ('api', 'worker', 'scheduler'):
         from workbench_agent.observability import configure_logging
         configure_logging(settings.observability, args.command, settings.environment)
+    if args.command == 'kb':
+        import asyncio
+        from workbench_agent.cli.knowledge import maintain
+        try:
+            report = asyncio.run(maintain(settings, args.kb_command, args.team_id,
+                entry_id=getattr(args, 'entry_id', None), expected_revision=getattr(args, 'expected_revision', None)))
+        except Exception:
+            print(json.dumps({'ready': False, 'errors': ['knowledge index maintenance failed']}))
+            sys.exit(1)
+        print(json.dumps({'ready': True, **report}))
+        return
     if args.command == "action-policy":
         import asyncio
         from workbench_agent.cli.action_policy import sync_action_policy,action_policy_status

@@ -30,5 +30,5 @@ async def project_outcome(backend, uow, run, auth, outcome):
     value = dict(outcome)
     value.update(completed=False, summary='Analysis is unavailable because evidence scope or permissions changed.',
                  findings=[], root_cause_hypotheses=[], impact=None, evidence_refs=[], proposed_actions=[],
-                 knowledge_gaps=[], unresolved_items=['Evidence is not available under your current scope or permissions.'])
+                 knowledge_gaps=[], knowledge_answer=None, unresolved_items=['Evidence is not available under your current scope or permissions.'])
     return value

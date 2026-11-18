@@ -1,15 +1,15 @@
 ---
 title: 数据字典
 status: stable
-verified_commit: b56962d
+verified_commit: 2115cf7
 ---
 
-# 数据字典（schema_agent_v3 最终形态）
+# 数据字典（schema_agent_v4：v3 字段快照与知识库增量）
 
 > **读者**：查字段、写迁移、核对数据的人。**以代码为准**，由 SQLAlchemy 元数据抽取。
 > 小节编号保留 `A.x` 前缀，便于从旧文档迁移引用；接口见 [01 接口参考](01-api.md)，配置见 [03 配置参考](03-configuration.md)。
 
-> 本文用途：给出 Workbench Agent 持久层在 `schema_v1…schema_v20`（Workspace 历史链）叠加、再经 `schema_agent_v1…v3`（Agent 链）演进后的最终物理结构（表、字段、约束、索引与演进）。**一切以代码为准**：结构信息由脚本从 `apps/agent/src/workbench_agent/persistence/` 下的 SQLAlchemy 元数据实际导入后抽取并人工整理，原文 13.2 仅用作分组与业务语义参考，其差异见文末「核对记录」。
+> 本文用途：给出 Workbench Agent 持久层在 `schema_v1…schema_v20`（Workspace 历史链）叠加、再经 `schema_agent_v1…v4`（Agent 链）演进后的最终物理结构（表、字段、约束、索引与演进）。**一切以代码为准**：结构信息由脚本从 `apps/agent/src/workbench_agent/persistence/` 下的 SQLAlchemy 元数据实际导入后抽取并人工整理，原文 13.2 仅用作分组与业务语义参考，其差异见文末「核对记录」。
 
 ## A.0 概览与约定
 
@@ -17,21 +17,21 @@ verified_commit: b56962d
 
 | 项 | 取值（来源） |
 | --- | --- |
-| 最终 Schema | `schema_agent_v3.metadata`（`persistence/schema.py` 导出） |
-| Agent 迁移头 | `0003_run_trace_contexts`（`agent_migrations/versions/`，链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts） |
+| 最终 Schema | `schema_agent_v4.metadata`（`persistence/schema.py` 导出） |
+| Agent 迁移头 | `0004_knowledge_base`（链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts → 0004_knowledge_base） |
 | 存储协议 / Codec | `dod-storage-agent-v1` / `dod-checkpoint-v1`（`schema_agent_v1.py` 常量；写入 `dod_storage_metadata`） |
 | 历史 Workspace 链 | `schema_v1…schema_v20`，对应 `migrations/versions/0001_core…0021_synthetic_batch_policy`（共 21 个迁移，其中 `0005_resume_protocol` 仅数据规整，无 Schema 变化，所以 `schema_vN` 与迁移编号自 v5 起错位 1） |
 | Agent 基线生成方式 | `schema_agent_v1` 在导入时遍历 `schema_v20`，把表名 `workspaces→agents`、列名 `workspace_id→agent_id` 机械替换，约束/索引名同步替换；`0001_agent_domain` 仅允许在**全新库**上 `create_all`，已有库直接报错，不迁移 Workspace 数据 |
-| 表 / 字段 | 61 张表 / 586 个字段；显式外键 105 条、UNIQUE 82 条、CHECK 7 条、显式二级索引 13 个（均由元数据统计） |
+| 表 / 字段 | v4 共 63 张普通表 / 610 个字段，另有 FTS5 虚表；下方原有字段明细和约束统计为 v3 快照 |
 
 ### A.0.2 通用约定（均已在 DDL 中核实）
 
 - 类型仅出现 `VARCHAR(n)`、`TEXT`、`BIGINT`、`BLOB`；无原生 Enum、无 JSON 类型、无自增主键。状态/角色等取值由领域服务约束，DDL 未声明 CHECK（除 A.0.2 所列 7 个 CHECK）。
 - 时间戳与 0/1 标志均为 `BIGINT`（UTC 毫秒或布尔值），由应用层写入。
 - 所有外键均为 `ON DELETE RESTRICT`；绝大多数外键为 `(team_id, xxx_id)` 复合形式，指向父表的 `UNIQUE(team_id, xxx_id)`，以在 DB 层固化租户隔离。
-- 复合主键仅 4 张表：`run_events`、`graph_checkpoints`、`graph_pending_writes`、`admin_job_events`；`dod_storage_metadata` 无主键。
+- v3 有 4 张表使用复合主键：`run_events`、`graph_checkpoints`、`graph_pending_writes`、`admin_job_events`；v4 新增 `kb_entries` 和 `kb_entry_versions` 两张复合主键表。`dod_storage_metadata` 无主键。
 - CHECK 共 7 个：`teams.active_executions >= 0`、`artifacts.size >= 0`、`usage_reservations.tokens >= 0`，以及 4 张部署策略单例表（`action_policy_state`、`synthetic_source_policy`、`synthetic_proposal_policy`、`synthetic_batch_policy`）的 `policy_id = 'deployment'`。
-- 迁移文件中未发现触发器（trigger）与手写索引 DDL；所有结构变化均来自 `schema_vN` 元数据（`create`/`add_column`）。
+- v4 迁移以手写 DDL 创建 FTS5 虚表；以下旧字段表及 ER 图是 v3 快照，v4 增量见文末。
 - 字段表“引入”列：`vN` = `schema_vN`（Workspace 链）首次出现；`agent_vN` = Agent 链新增；Agent 基线中 `workspace_id` 已改名为 `agent_id`，其“引入”仍按历史列首次出现计。
 - 每节“语义说明”及字段“说明”列的业务含义取自原文 13.2 并经 DDL 复核，其中出现的「第 13.x / 14 节」均指原文（`doc-src/original.md`）章节；类型、可空、默认、约束与索引则全部来自 DDL。
 
@@ -47,14 +47,15 @@ verified_commit: b56962d
 | A.6 外部动作与投递 | 7 | 67 | `actions`、`approvals`、`outbox`、`action_policy_state`、`incidents`、`incident_links`、`incident_action_links` | 图 16（PNG）+ Mermaid |
 | A.7 调度与巡检 | 3 | 26 | `schedules`、`schedule_fires`、`schedule_manual_fires` | 图 17（PNG）+ Mermaid |
 | A.8 Skill 与共享库 | 3 | 25 | `skills`、`skill_versions`、`skill_drafts` | 仅 Mermaid |
-| A.9 其它：反馈、幂等、审计、管理任务、合成验证与协议元数据 | 15 | 119 | `feedback`、`knowledge_gaps`、`idempotency_records`、`team_idempotency_records`、`source_events`、`audit_logs`、`admin_jobs`、`admin_job_events`、`synthetic_alert_sources`、`synthetic_result_bindings`、`synthetic_source_policy`、`synthetic_proposal_policy`、`synthetic_batch_policy`、`synthetic_action_policy_bindings`、`dod_storage_metadata` | 仅 Mermaid |
-| 合计 | 61 | 586 | | |
+| A.9 其它：反馈、幂等、审计、管理任务、合成验证与协议元数据 | 15 | 126 | `feedback`、`knowledge_gaps`、`idempotency_records`、`team_idempotency_records`、`source_events`、`audit_logs`、`admin_jobs`、`admin_job_events`、`synthetic_alert_sources`、`synthetic_result_bindings`、`synthetic_source_policy`、`synthetic_proposal_policy`、`synthetic_batch_policy`、`synthetic_action_policy_bindings`、`dod_storage_metadata` | 仅 Mermaid |
+| A.11 知识库 | 2 | 17 | `kb_entries`、`kb_entry_versions` | 文末增量 |
+| 合计（普通表） | 63 | 610 | | |
 
 现有 ER 图总览（11 号为域概览，非物理 ER）：
 
 ![11-domain-overview](../assets/11-domain-overview.svg)
 
-> 现有 11–17 号图是“重构前快照”：12、17 号图仍使用 `workspaces`/`workspace_id` 命名，13–16 号图为 flowchart 手绘关系，字段列表不完整；各分组下的 Mermaid erDiagram 才是按 schema_agent_v3 重新生成的当前关系。
+> 现有 11–17 号图是“重构前快照”：12、17 号图仍使用 `workspaces`/`workspace_id` 命名，13–16 号图为 flowchart 手绘关系，字段列表不完整；各分组下的 Mermaid erDiagram 为按 schema_agent_v3 生成的历史快照。
 
 ---
 
@@ -66,7 +67,7 @@ verified_commit: b56962d
 
 ![12-config-version-er](../assets/12-config-version-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -374,7 +375,7 @@ erDiagram
 
 ![13-run-recovery-er](../assets/13-run-recovery-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -680,7 +681,7 @@ erDiagram
 
 ![13-run-recovery-er](../assets/13-run-recovery-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -765,7 +766,7 @@ erDiagram
 
 ![14-evidence-outcome-er](../assets/14-evidence-outcome-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -957,7 +958,7 @@ erDiagram
 
 ![15-tool-usage-er](../assets/15-tool-usage-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -1168,7 +1169,7 @@ erDiagram
 
 ![16-action-delivery-er](../assets/16-action-delivery-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -1389,7 +1390,7 @@ erDiagram
 
 ![17-schedule-run-er](../assets/17-schedule-run-er.svg)
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -1493,7 +1494,7 @@ erDiagram
 
 本组 3 张表：`skills`、`skill_versions`、`skill_drafts`。
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -1588,7 +1589,7 @@ erDiagram
 
 本组 15 张表：`feedback`、`knowledge_gaps`、`idempotency_records`、`team_idempotency_records`、`source_events`、`audit_logs`、`admin_jobs`、`admin_job_events`、`synthetic_alert_sources`、`synthetic_result_bindings`、`synthetic_source_policy`、`synthetic_proposal_policy`、`synthetic_batch_policy`、`synthetic_action_policy_bindings`、`dod_storage_metadata`。
 
-按当前 schema_agent_v3 重新生成的 Mermaid ER 图（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
+按 schema_agent_v3 生成的 Mermaid ER 快照（仅列 PK/FK 列；省略所有指向 `teams` 的外键，且除 `teams` 自身外不列 team_id 列；来自其它分组的被引用表只列主键）：
 
 ```mermaid
 erDiagram
@@ -2020,13 +2021,14 @@ erDiagram
 | schema_v19 | `0020_synthetic_action_policy` | 新增 synthetic_action_policy_bindings | 0020 仅 DDL |
 | schema_v20 | `0021_synthetic_batch_policy` | 新增 synthetic_batch_policy 单例表 | 0021 仅 DDL；Workspace 链终点，共 59 表 575 字段 |
 
-### A.10.2 Agent 链（schema_agent_v1…v3）
+### A.10.2 Agent 链（schema_agent_v1…v4）
 
 | Schema | 迁移 | Schema 变化 | 迁移的数据行为 |
 | --- | --- | --- | --- |
 | schema_agent_v1 | `0001_agent_domain` | 由 schema_v20 机械重命名得到 59 张表（`workspaces→agents`，13 处 `workspace_id→agent_id`），写入 `dod-storage-agent-v1` / `dod-checkpoint-v1` | 仅限全新库；库内已有任何表即抛错，不转换 Workspace 数据 |
 | schema_agent_v2 | `0002_shared_skills` | 新增 `skill_drafts`（7 列） | 仅 DDL |
 | schema_agent_v3 | `0003_run_trace_contexts` | 新增 `run_trace_contexts`（4 列） | 仅 DDL |
+| schema_agent_v4 | `0004_knowledge_base` | 两张知识表、缺口扩展与 FTS5 | 旧行保留；降级恢复备份 |
 
 ### A.10.3 时间线图
 
@@ -2101,3 +2103,16 @@ timeline
 - 各 `*_json`、`payload`、`response_ref` 等 TEXT 列的内部 JSON Schema：不在 DDL 范围，见原文 13.8，未在本文核对（待核）。
 - 字段说明列的业务文字未逐条对照 Store/Service 代码；若与代码冲突，以代码为准。
 - 迁移的真实执行时间/发布日期：仓库内无记录，时间线只表示顺序。
+
+## A.11 Agent v4 知识库增量
+
+`0004_knowledge_base` 新增两张普通表：
+
+| 表 | 字段 | 约束和含义 |
+| --- | --- | --- |
+| `kb_entries` | team_id、entry_id、status、published_version、draft_json、revision、owner、created_at、updated_at | 主键 `(team_id, entry_id)`；团队外键，发布版本复合外键指向版本表 |
+| `kb_entry_versions` | team_id、entry_id、version、content_json、content_hash、author、change_note、created_at | 主键 `(team_id, entry_id, version)`；关联条目，发布快照不可变 |
+
+`knowledge_gaps` 增加可空的 `query_scope`、`dedup_digest`、`resolved_entry_id`、`resolved_version`、`replay_run_id`、`verification_status` 和非空 `gap_revision`（默认 0）；按团队与 digest 建唯一索引，并通过复合外键约束关联版本和重放 Run。历史行保持可读。
+
+迁移还建立 `kb_fts` FTS5 trigram 虚表（不计入普通表统计），保存 title、content、tags、aliases 及不索引的团队、条目、版本、分段、行号和 hash 等定位字段。v3 的字段明细和图示不包含本增量。

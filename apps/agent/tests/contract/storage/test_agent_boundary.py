@@ -8,6 +8,7 @@ from workbench_agent.cli.db import migrate
 from workbench_agent.persistence import schema
 from workbench_agent.persistence.schema_v20 import metadata as historical
 from workbench_agent.persistence.sqlite_diagnostics import validate_required_schema
+from workbench_agent.persistence.schema_agent_v3 import metadata as agent_v3
 
 
 @pytest.mark.parametrize('legacy', [False, True])
@@ -50,9 +51,10 @@ def test_agent_metadata_preserves_historical_structure():
     def mapped(name):
         return name.replace('workspaces', 'agents').replace('workspace_id', 'agent_id')
 
-    assert set(schema.metadata.tables) == {mapped(name) for name in historical.tables} | {'skill_drafts', 'run_trace_contexts'}
+    assert set(agent_v3.tables) == {mapped(name) for name in historical.tables} | {'skill_drafts', 'run_trace_contexts'}
+    assert set(schema.metadata.tables) == set(agent_v3.tables) | {'kb_entries', 'kb_entry_versions'}
     for old in historical.tables.values():
-        new = schema.metadata.tables[mapped(old.name)]
+        new = agent_v3.tables[mapped(old.name)]
         assert [(c.name, str(c.type), c.nullable, c.primary_key,
                  str(c.server_default.arg) if c.server_default is not None else None)
                 for c in new.columns] == [
@@ -78,7 +80,7 @@ def test_fresh_and_repeated_agent_initialization(tmp_path):
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT * FROM dod_storage_metadata').fetchall() == [
             ('dod-storage-agent-v1', 'dod-checkpoint-v1')]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0003_run_trace_contexts',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0004_knowledge_base',)]
         assert not validate_required_schema(db)
         db.execute("INSERT INTO teams(team_id,name,status) VALUES ('a','a','active')")
         db.execute("INSERT INTO agents(team_id,agent_id,name) VALUES ('a','agent','Agent')")
@@ -108,7 +110,7 @@ def test_upgrade_existing_agent_database_preserves_agents_and_private_skills(tmp
         assert not validate_required_schema(db)
         assert db.execute('SELECT agent_id FROM agents').fetchall() == [('a',)]
         assert db.execute('SELECT agent_id,name FROM skills').fetchall() == [('a', 'private')]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0003_run_trace_contexts',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0004_knowledge_base',)]
 
 
 def test_upgrade_shared_skills_database_keeps_drafts(tmp_path):
@@ -130,7 +132,7 @@ def test_upgrade_shared_skills_database_keeps_drafts(tmp_path):
     migrate(f'sqlite+aiosqlite:///{path}')
     with closing(sqlite3.connect(path)) as db:
         assert db.execute('SELECT content FROM skill_drafts').fetchall() == [('keep me',)]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0003_run_trace_contexts',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0004_knowledge_base',)]
         assert not validate_required_schema(db)
 
 
@@ -222,7 +224,7 @@ async def test_missing_or_weakened_check_is_unready_and_migration_rejects(tmp_pa
     from sqlalchemy import CheckConstraint, MetaData, create_engine
     from workbench_agent.persistence.backends.sqlite import SQLiteBackend
     from workbench_agent.persistence.schema_agent_v1 import CHECKPOINT_CODEC_VERSION, SCHEMA_VERSION
-    from workbench_agent.persistence.schema_agent_v3 import MIGRATION_HEAD
+    from workbench_agent.persistence.schema_agent_v4 import MIGRATION_HEAD
 
     path = tmp_path / 'invalid-check.db'
     url = f'sqlite+aiosqlite:///{path}'

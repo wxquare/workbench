@@ -1,0 +1,38 @@
+[
+  {
+    "case_id": "short-chinese",
+    "question": "库存",
+    "scope": {"service": "stock", "environment": "test", "region": "sg"},
+    "entry_fixture": {"title": "库存检查", "kind": "faq", "body_md": "检查库存状态。", "service": "stock", "environment": "test", "region": "sg"},
+    "expected_source": "published-entry",
+    "expected_behavior": "hit",
+    "review_status": "synthetic"
+  },
+  {
+    "case_id": "identifier-alias",
+    "question": "stock_retry",
+    "scope": {"service": "stock", "environment": "test", "region": "sg"},
+    "entry_fixture": {"title": "库存重试", "kind": "runbook", "body_md": "检查扣减状态后再重试。", "aliases": ["stock_retry"], "service": "stock", "environment": "test", "region": "sg"},
+    "expected_source": "published-entry",
+    "expected_behavior": "hit",
+    "review_status": "synthetic"
+  },
+  {
+    "case_id": "scope-exclusion",
+    "question": "扣减失败",
+    "scope": {"service": "checkout", "environment": "test", "region": "sg"},
+    "entry_fixture": {"title": "库存扣减失败", "kind": "faq", "body_md": "检查库存状态。", "service": "stock", "environment": "test", "region": "sg"},
+    "expected_source": null,
+    "expected_behavior": "empty",
+    "review_status": "synthetic"
+  },
+  {
+    "case_id": "no-match",
+    "question": "支付失败",
+    "scope": {"service": "stock", "environment": "test", "region": "sg"},
+    "entry_fixture": {"title": "库存重试", "kind": "faq", "body_md": "检查库存状态。", "service": "stock", "environment": "test", "region": "sg"},
+    "expected_source": null,
+    "expected_behavior": "empty",
+    "review_status": "synthetic"
+  }
+]

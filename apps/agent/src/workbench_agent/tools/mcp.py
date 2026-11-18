@@ -21,6 +21,39 @@ class ConnectionPolicy:
         if not any(b.team_id==team_id and b.agent_id==agent_id and b.server==server and b.credential_scope==credential_scope and (tool_name is None or tool_name in b.read_tools) for b in self._bindings()):
             raise PermissionError('MCP_CONNECTION_DENIED')
 
+def configured_connection_policy(bindings):
+    """Read deployment grants on each check, without opening a connection."""
+    provider = bindings if callable(bindings) else lambda: bindings
+    def current():
+        return [TrustedConnection(b.team_id, b.agent_id, b.server, b.credential_scope,
+            frozenset(b.read_tools), tuple(b.scope_grants)) for b in provider()]
+    return ConnectionPolicy(current)
+
+
+def permits_knowledge_evidence(policy, *, team_id, agent_id, binding, query_scope, run_id,
+                               invocation_id, scope_id, upstream_scope):
+    """Match an upstream knowledge source against a current deployment grant."""
+    if not isinstance(policy, ConnectionPolicy) or not isinstance(upstream_scope, dict):
+        return False
+    correlation = {'run_id': run_id, 'invocation_id': invocation_id, 'query_scope_ref': scope_id}
+    try:
+        for rule in policy._bindings():
+            if ((rule.team_id, rule.agent_id, rule.server, rule.credential_scope) !=
+                    (team_id, agent_id, binding.server, binding.credential_scope)
+                    or 'knowledge_search' not in rule.read_tools):
+                continue
+            for grant in rule.scope_grants:
+                try:
+                    mapped = build_dod_arguments('knowledge_search', {}, query_scope, grant, correlation)
+                except PermissionError:
+                    continue
+                if mapped['scope'] == upstream_scope:
+                    return True
+    except (TypeError, AttributeError, KeyError):
+        return False
+    return False
+
+
 @dataclass(frozen=True)
 class ToolCatalog:
     names: tuple[str,...]
@@ -169,10 +202,12 @@ class MCPAdapter:
                     except PermissionError: pass
         raise PermissionError('MCP_SCOPE_MAPPING_UNAVAILABLE')
 
-    async def call(self,connection_ref,credential_scope,tool_name,args,*,team_id,agent_id,expected_schema=None,query_scope=None,correlation=None,expected_business_scope=None):
+    async def call(self,connection_ref,credential_scope,tool_name,args,*,team_id,agent_id,expected_schema=None,query_scope=None,correlation=None,expected_business_scope=None,expected_knowledge_scope=None):
         if tool_name in {'SRE-Log-Query','SRE-Log-TraceQuery'} and any(key in args for key in ('session_key','smart_thread_id','smart_user_id','parameter_template_id','instantiated_parameters')):
             raise PermissionError('MCP_UNSAFE_ARGUMENT')
         args=self.prepare(connection_ref,credential_scope,tool_name,args,team_id=team_id,agent_id=agent_id,query_scope=query_scope,correlation=correlation)
+        if expected_knowledge_scope is not None and args.get('scope') != expected_knowledge_scope:
+            raise ScopeMappingChanged('MCP_SCOPE_CHANGED')
         if expected_business_scope is not None and dod_business_identity(args, query_scope) != tuple(expected_business_scope):
             raise ScopeMappingChanged('MCP_SCOPE_CHANGED')
         self.policy.require(team_id,agent_id,connection_ref,credential_scope,tool_name)

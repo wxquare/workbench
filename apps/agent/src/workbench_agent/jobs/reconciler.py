@@ -134,6 +134,7 @@ class Reconciler:
             'dod.v16':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
             'dod.v17':{'answer'},
             'dod.v18':{'answer'},
+            'dod.v19':{'prepare','retrieve','draft_answer','validate_citations','review_support','record_gap','compose_outcome'},
             'dod.v15':{'prepare','input','scope','bind_baseline','collect_baseline','propose','compose'},
             'dod.v14':{'prepare','input','scope','bind_baseline','collect_baseline','propose','compose'},
             'dod.v13':{'prepare','input','scope','bind_baseline','collect_baseline','compose'},

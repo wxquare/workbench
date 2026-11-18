@@ -19,3 +19,8 @@ it('exposes agent management at its canonical app route', async () => {
   expect(router.getRoutes().filter(route => route.components?.default === Agents).map(route => route.path))
     .toEqual(['/agents'])
 })
+
+it('preserves a knowledge citation exact version and fragment in its route', () => {
+  const route = router.resolve({ name: 'knowledge-version', params: { id: 'entry', version: '2' }, hash: '#chunk' })
+  expect(route.href).toBe('/app/knowledge/entry/versions/2#chunk')
+})

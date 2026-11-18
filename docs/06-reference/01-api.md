@@ -1,7 +1,7 @@
 ---
 title: 接口参考
 status: stable
-verified_commit: e3ae819
+verified_commit: 2115cf7
 ---
 
 # 接口参考（HTTP API 与 MCP Server 工具）
@@ -13,7 +13,7 @@ verified_commit: e3ae819
 
 ## 1. 接口总览
 
-路由清单由脚本扫描 `@router.<method>(...)` 装饰器得到：api/ 下共 **63 条路由装饰器**（其中 61 条 `/v1/*` 业务接口，2 条 `/app` 前端静态路由），另有 `app.py` 内联的 2 条健康检查，合计 65 个 HTTP 入口。
+路由清单包含原有业务接口及文末内置知识库接口；实际注册路由以当前源码和 OpenAPI 为准。
 
 | 分组 | 数量 | 路径前缀 |
 | --- | --- | --- |
@@ -415,3 +415,22 @@ flowchart LR
 | 15 | `POST /v1/agents`、`publish` 等回执状态码 | 由服务回执决定，路由层未固定 | 待核 |
 | 16 | 各列表分页响应包装字段 | 仅 agents 路由层可见，余者在服务层 | 待核 |
 | 17 | MCP Server | 原文第 11 章未列 | 本文新增第 5 章 |
+
+## 内置知识库 API
+
+以下 `/v1/kb` 接口使用用户认证与团队权限；修改操作带 `Idempotency-Key`，除新建条目外还带 `If-Match` revision。实际错误码和响应结构以 OpenAPI 与源码为准。
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `GET/POST /v1/kb/entries` | 列表及创建草稿；列表支持游标、过滤，limit 1–100 |
+| `GET/PATCH /v1/kb/entries/{entry_id}` | 读取及保存草稿 |
+| `POST /v1/kb/entries/{entry_id}/publish`、`/archive` | 发布或归档 |
+| `GET /v1/kb/entries/{entry_id}/versions`、`/versions/{version}` | 历史列表及不可变版本 |
+| `POST /v1/kb/entries/{entry_id}/versions/{version}/rollback` | 从历史版本回滚 |
+| `POST /v1/kb/entries/{entry_id}/import` | 导入 `text/markdown` 或 `text/plain`，`X-Filename` 指定文件名；非 ASCII 文件名使用 UTF-8 百分号编码 |
+| `POST /v1/kb/search` | 按 query、具体 service/environment/region 检索，limit 1–10 |
+| `GET /v1/kb/gaps`、`GET /v1/kb/gaps/{gap_id}` | 缺口列表与详情 |
+| `POST /v1/kb/gaps/{gap_id}/draft`、`/replay` | 关联草稿或创建重放 Run |
+| `PATCH /v1/kb/gaps/{gap_id}` | 人工标记 resolved 或 dismissed，附说明 |
+
+`POST /internal/kb/query` 是服务间只读接口，使用独立 Bearer 令牌及具体范围授权，默认关闭；它接收 normalized-query-v1 并返回 KnowledgeData，不能用普通用户身份替代服务授权。

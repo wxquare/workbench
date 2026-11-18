@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: b56962d
+verified_commit: 2115cf7
 ---
 
 # 架构设计
@@ -67,7 +67,7 @@ verified_commit: b56962d
 | ADR-006 版本冻结 + 实时复核 | 受理时冻结 VersionRef，执行时重新校验当前权限 |
 | ADR-007 移除 Workspace | 领域直接是 Team → Agent → Thread → Run |
 | ADR-008 独立 MCP Server | 只读取证能力独立进程、独立包、独立身份 |
-| ADR-009 直接问答与知识问答分图 | `dod.v17/v18` 纯模型回答；`dod.v16` 带检索且结果恒为 partial |
+| ADR-009 直接问答与知识问答分图 | `dod.v17/v18` 纯模型回答；`dod.v16` 带检索且恒为 partial；`dod.v19` 校验引用并独立检查支持性 |
 | ADR-010 SQLite 先行 | 单机、单 Worker、短写事务；WAL 不放网络文件系统 |
 
 ---
@@ -586,9 +586,9 @@ Redis 只承担 Job 唤醒信号：未部署或信号丢失时 Worker 仍从 Job
 ### 9.6 Schema 演进
 
 - Workspace 链：schema_v1…schema_v20（21 个迁移）。
-- Agent 链：schema_agent_v1…v3（3 个迁移）。
+- Agent 链：schema_agent_v1…v4（4 个迁移）。
 - agent_v1 在导入时遍历 v20，机械替换 workspace→agent 命名。仅在全新库上 create_all，已有库直接报错。
-- 最终形态：61 张表、586 个字段。详细字段字典见 [02 数据字典](06-reference/02-data-dictionary.md)。
+- 最终形态：63 张普通表、610 个字段，另有 FTS5 虚表。详细字段字典见 [02 数据字典](06-reference/02-data-dictionary.md)。
 
 ### 9.7 主要数据族及权威源
 
@@ -608,7 +608,7 @@ Redis 是可丢失的唤醒提示，不在上述权威记录中。S3/本地对�
 
 ### 9.8 数据迁移与兼容检查
 
-`schema_agent_v1`、`v2`、`v3` 反映 Agent 新库的阶段性结构；旧 Workspace 的 `schema_v1…v20` 是历史链，不是 Agent 库的升级路径。新库初始化与已受支持 Agent 库升级都走显式维护命令。维护前停写、备份，维护后检查 Alembic head、元数据、外键、WAL、关键资源引用和 doctor 就绪；若检查失败，保持服务不就绪并使用隔离备份恢复。跨数据库引擎迁移尚处设计层，不能以 SQLite 文件复制或 SQL dump 作为可移植合同。
+`schema_agent_v1`、`v2`、`v3`、`v4` 反映 Agent 新库的阶段性结构；旧 Workspace 的 `schema_v1…v20` 是历史链，不是 Agent 库的升级路径。新库初始化与已受支持 Agent 库升级都走显式维护命令。维护前停写、备份，维护后检查 Alembic head、元数据、外键、WAL、关键资源引用和 doctor 就绪；若检查失败，保持服务不就绪并使用隔离备份恢复。跨数据库引擎迁移尚处设计层，不能以 SQLite 文件复制或 SQL dump 作为可移植合同。
 
 ---
 
@@ -859,3 +859,9 @@ API、SSE、产物下载、Resume、Cancel 使用同一资源授权边界。Runn
 ---
 
 > 代码在哪里、怎么改：见 [03 开发指南](03-development.md)。运维动作：见 [04 运维](04-operations.md)。字段、接口、配置：见 [06 参考](06-reference/)。
+
+## 内置知识库实现
+
+Agent v4 迁移新增 `kb_entries`、`kb_entry_versions` 两张普通表，扩展 `knowledge_gaps`，并建立 SQLite FTS5 trigram 虚表 `kb_fts`。草稿和不可变发布版本分开保存，发布及索引更新在事务内进行；检索仅使用发布版本，回执和证据固定命中的版本。归档和回滚不改写已有版本。
+
+管理与阅读走 `/v1/kb/*` 用户认证；MCP Server 经 `normalized-http-v1` 调用默认关闭的 `/internal/kb/query`，用独立服务令牌和具体范围授权。范围中条目未指定的维度表示适用范围，并不授予请求方通配权限。`dod.v19` 先校验引用，再独立调用模型检查每个声明是否受引用支持；仅检查通过且证据有效时完成。无命中、不可回答或引用无效可记录缺口，处理包括草稿、重放和人工确认。仓库的 MCP 链路测试不等于线上部署或模型质量验收。

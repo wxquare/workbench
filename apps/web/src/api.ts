@@ -5,11 +5,13 @@ export function agentName(id: string, agents: Agent[]): string {
 export interface QueryScope { service: string; environment: string; region: string; start_at: string; end_at: string }
 export interface QaRequest { agent_id: string; text: string; scope?: QueryScope }
 export type QaMode = 'llm' | 'knowledge'
-export interface RunOutcome { summary: string; completed?: boolean; unresolved_items?: string[]; knowledge_gaps?: string[]; findings?: { summary: string }[]; evidence_refs?: string[] }
+export interface KnowledgeCitation { evidence_ref: string; source_id: string; quote: string; title: string; source_locator: string | null; source_uri: string | null }
+export interface KnowledgeAnswer { schema_version: 'knowledge-answer-v1'; review_kind: 'model_reviewed'; verification: 'passed' | 'failed'; claims: { text: string; citations: KnowledgeCitation[] }[] }
+export interface RunOutcome { summary: string; completed?: boolean; unresolved_items?: string[]; knowledge_gaps?: string[]; findings?: { summary: string }[]; evidence_refs?: string[]; knowledge_answer?: KnowledgeAnswer | null }
 export interface WaitingView { name: string; kind: string; actor?: string; interrupt_id: string; revision: number; expires_at_ms: number; created_at_ms: number; schema: Record<string, unknown>; approval_id?: string; args_hash?: string; expected_scope_id?: string }
 export type ResumeResponse = { kind: "user_input"; values: Record<string, string> } | { kind: "approval"; approval_id: string; decision: "approve" | "reject"; expected_args_hash: string }
 export interface ResumeBody { interrupt_id: string; expected_revision: number; response: ResumeResponse }
-export interface RunView { run_id: string; agent_id: string; thread_id: string; status: string; phase: string | null; created_at: string; outcome: RunOutcome | null; revision: number; waiting: WaitingView | null }
+export interface RunView { run_id: string; agent_id: string; thread_id: string; status: string; phase: string | null; created_at: string; outcome: RunOutcome | null; revision: number; waiting: WaitingView | null; links?: Record<string, string> }
 export interface AcceptedRun { run_id: string }
 
 export class ApiError extends Error {

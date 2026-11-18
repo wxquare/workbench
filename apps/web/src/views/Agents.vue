@@ -359,12 +359,14 @@ async function publish() {
           <template v-else>
             <label>工作流<select :value="workflow" :disabled="busy" @change="changeWorkflow">
               <option v-if="!workflow" value="" disabled>请先修正配置 JSON</option>
-              <option v-if="workflow && !['dod.v17', 'dod.v18'].includes(workflow)" :value="workflow">{{ workflow }}（当前）</option>
+              <option v-if="workflow && !['dod.v17', 'dod.v18', 'dod.v19'].includes(workflow)" :value="workflow">{{ workflow }}（当前）</option>
               <option value="dod.v17">dod.v17</option>
               <option value="dod.v18">dod.v18</option>
+              <option value="dod.v19">dod.v19 · 知识问答</option>
             </select></label>
             <p v-if="workflow === 'dod.v17'" class="form-note">dod.v17 不执行工具、技能或知识库。</p>
             <p v-if="workflow === 'dod.v18'" class="form-note">dod.v18 使用绑定的技能指令，不执行技能脚本、工具或知识库。</p>
+            <p v-if="workflow === 'dod.v19'" class="form-note">dod.v19 需要已发布的 knowledge_search 工具绑定和对应授权。</p>
             <label>默认模型<select :value="modelKey" :disabled="busy || modelsLoading || !!modelError || !models.length" @change="changeModel">
               <option v-if="!modelKey || !models.some(model => refKey(model.active_ref) === modelKey)" :value="modelKey">当前模型{{ modelKey ? ` (${JSON.parse(modelKey)[0]} · ${JSON.parse(modelKey)[1]})` : '' }}</option>
               <option v-for="model in models" :key="refKey(model.active_ref)" :value="refKey(model.active_ref)">{{ model.name }} · 版本 {{ model.active_ref.version }}</option>

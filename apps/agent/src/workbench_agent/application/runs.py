@@ -82,6 +82,11 @@ class RunService:
                     .model_dump(mode='json'))
         return {'items': items, 'next_cursor': rows[-1]['message_id'] if len(rows) == limit else None}
 
+    async def create_in(self, uow, auth, request: CreateRun, idempotency_key: str) -> AcceptedRun:
+        if auth.identity_kind not in ('user', 'development'):
+            raise DomainError('FORBIDDEN', 403)
+        return await self.create(auth, request, idempotency_key, _uow=uow)
+
     @observe_run_admission
     async def create(self, auth, request: CreateRun, idempotency_key: str, *, source_connector: str | None = None, source_thread: str | None = None, _uow=None, _ingress_capability=None) -> AcceptedRun:
         agent_id = str(request.agent_id)
@@ -150,7 +155,7 @@ class RunService:
                 query_scope = None
                 if profile.graph_version == 'dod.v17' and (request.mode != 'qa' or 'query_scope' in request.business_context):
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if profile.graph_version == 'dod.v16':
+                if profile.graph_version in ('dod.v16', 'dod.v19'):
                     if request.mode != 'qa':
                         raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                     query_scope = request.business_context.get('query_scope')
@@ -282,11 +287,23 @@ class RunService:
         outcome=await self.backend.results.get(uow,auth.team_id,run_id)
         from workbench_agent.application.disclosure import project_outcome
         public_outcome=await project_outcome(self.backend,uow,row,auth,json.loads(outcome['payload'])) if outcome else None
+        links=run_links(run_id)
+        gap_id=await self.backend.knowledge.replay_gap_id(uow,auth.team_id,run_id)
+        if gap_id:
+            from workbench_agent.knowledge.gaps import KnowledgeGaps
+            gaps=KnowledgeGaps(self.backend)
+            try:
+                await gaps._authorize(uow,auth,'operator')
+                gap=await self.backend.knowledge.gap(uow,auth.team_id,gap_id)
+                await gaps._visible(uow,auth,gap,'operator')
+                links.update(original_run=f"/v1/runs/{gap['run_id']}",knowledge_gap=f'/v1/kb/gaps/{gap_id}')
+            except DomainError as error:
+                if error.status not in (403,404): raise
         return RunView(outcome=public_outcome,usage=public_outcome['usage_summary'] if public_outcome else {},run_id=run_id, thread_id=row['thread_id'], agent_id=row['agent_id'],
             status=row['status'], revision=row['revision'], phase=row['phase'],
             attempt=await self.backend.jobs.execution_attempt(uow,auth.team_id,run_id),
             created_at=timestamp(row['created_at']), started_at=timestamp(row['started_at']) if row['started_at'] is not None else None,
-            active_elapsed_ms=active_elapsed(row,now,await self.store.active_until(uow,auth.team_id,run_id)),waiting=waiting,links=run_links(run_id),context=context)
+            active_elapsed_ms=active_elapsed(row,now,await self.store.active_until(uow,auth.team_id,run_id)),waiting=waiting,links=links,context=context)
 
 
     async def resume(self,auth,run_id,request,idempotency_key, *, source_connector=None, source_thread=None, source_event=None, source_payload=None):

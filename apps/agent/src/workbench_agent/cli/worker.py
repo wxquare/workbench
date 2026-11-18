@@ -9,6 +9,8 @@ from workbench_agent.persistence.backends.sqlite import SQLiteBackend
 async def run_worker(settings,*,once=False,registry=None):
     from workbench_agent.tools.permissions import DeploymentToolPermissions
     backend=SQLiteBackend(settings.storage.database_url.get_secret_value(),tool_permissions=DeploymentToolPermissions(lambda:settings.service.tool_permissions))
+    from workbench_agent.tools.mcp import configured_connection_policy
+    backend._mcp_connection_policy = configured_connection_policy(lambda: settings.service.mcp_connections)
     telemetry = None
     if settings.observability.tracing.enabled:
         from workbench_agent.observability import Telemetry

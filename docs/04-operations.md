@@ -1,7 +1,7 @@
 ---
 title: 运维手册
 status: stable
-verified_commit: 11da62d
+verified_commit: 2115cf7
 ---
 
 # 运维手册
@@ -524,3 +524,16 @@ export WORKBENCH_MODEL_SECRET_MASTER_KEY="$(<"$HOME/.config/my-workbench/model-m
 | 日志缺模型正文 | `content_mode` | `metadata_only` 默认不采集；托管密钥模式始终不导出正文 |
 
 Redis 连接失败不会阻断受理、Job 发现与恢复：数据库轮询是权威来源，SSE 最多 1 秒回退。不要把 Redis 恢复当成 Run 恢复的前提。
+
+## 内置知识库升级与索引维护
+
+升级已有受支持的 Agent SQLite 库前，停止 API、Worker、Scheduler 等写入进程并备份；确认运行时 SQLite 支持 FTS5 trigram。使用目标版本执行 `uv run workbench db migrate --config "$WORKBENCH_ROOT/config/local/agent.yaml"`，将 Agent 链从 `0003_run_trace_contexts` 升至 `0004_knowledge_base`；再运行 `uv run workbench doctor --config "$WORKBENCH_ROOT/config/local/agent.yaml"`，检查 revision、完整性和外键后启动进程。迁移失败时保留原库并检查原因；降级需恢复已审阅的兼容备份，不能手工 stamp revision。旧 Workspace 库仍不能沿 Agent 链升级。
+
+索引检查只读，修复需明确指定条目和当前 revision：
+
+```bash
+uv run workbench kb check-index --config "$WORKBENCH_ROOT/config/local/agent.yaml" --team-id "$TEAM_ID"
+uv run workbench kb rebuild-index --config "$WORKBENCH_ROOT/config/local/agent.yaml" --team-id "$TEAM_ID" --entry-id "$ENTRY_ID" --expected-revision "$REVISION"
+```
+
+核对检查输出后再决定是否重建；普通查询不会静默修复索引。内部查询默认禁用，启用前配置服务身份、令牌和具体范围，并配套 MCP Server 数据源及独立出站凭据，参见[配置参考](06-reference/03-configuration.md)。

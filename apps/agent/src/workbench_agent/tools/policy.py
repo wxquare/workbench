@@ -58,7 +58,7 @@ class PolicyToolExecutor:
         self.expert=execution._expert_name
         self.delays=delays
         self.budgets=BudgetService(backend)
-    async def _replay(self,uow,guard,previous,binding_ref,args,scope_id,expected_business_scope=None):
+    async def _replay(self,uow,guard,previous,binding_ref,args,scope_id,expected_business_scope=None,expected_knowledge_scope=None):
         if previous['tool_version'] != binding_ref.resource_id or previous['args_hash'] != digest(args):
             raise DomainError('INVOCATION_CONFLICT',409)
         if previous['status'] != 'succeeded' or not previous['receipt_ref']:
@@ -70,6 +70,8 @@ class PolicyToolExecutor:
                     or expected_business_scope is not None and receipt.get('business_scope') != list(expected_business_scope)):
                 raise ValueError('receipt does not match request')
             if receipt.get('kind') == 'mcp-empty-v1':
+                if expected_knowledge_scope is not None and receipt.get('knowledge_scope') != expected_knowledge_scope:
+                    raise ValueError('knowledge scope changed')
                 return ToolResult(status='empty')
             if receipt.get('kind') != 'mcp-evidence-v1':
                 raise ValueError('unsupported receipt')
@@ -82,7 +84,7 @@ class PolicyToolExecutor:
         except (ValueError,KeyError,TypeError):
             return ToolResult(status='unknown',error=ToolError(code='INVOCATION_RECEIPT_UNAVAILABLE'))
 
-    async def _complete_empty(self,context,guard,binding,binding_ref,scope_id,ident,expected_business_scope=None):
+    async def _complete_empty(self,context,guard,binding,binding_ref,scope_id,ident,expected_business_scope=None,expected_knowledge_scope=None):
         await self.execution.check_operation()
         if not self.permissions.allows(context,binding.permission,self.expert):
             return ToolResult(status='denied',error=ToolError(code='TOOL_DENIED'))
@@ -93,6 +95,7 @@ class PolicyToolExecutor:
             now=await self.backend.clock.now_ms(uow)
             receipt_data={'kind':'mcp-empty-v1','scope_id':scope_id,'binding':binding_ref.model_dump(mode='json')}
             if expected_business_scope is not None: receipt_data['business_scope']=list(expected_business_scope)
+            if expected_knowledge_scope is not None: receipt_data['knowledge_scope']=expected_knowledge_scope
             receipt=canonical(receipt_data)
             if not await self.backend.tools.complete_invocation(uow,guard.team_id,guard.run_id,ident,'succeeded',receipt,now):
                 raise DomainError('INVOCATION_CONFLICT',409)
@@ -142,10 +145,11 @@ class PolicyToolExecutor:
             else:
                 if not validate_arguments(binding,args): return ToolResult(status='invalid_input',error=ToolError(code='INVALID_INPUT'))
                 if not arguments_within_scope(args,values): return ToolResult(status='denied',error=ToolError(code='SCOPE_DENIED'))
+            expected_knowledge_scope = bound_args['scope'] if context.graph_version == 'dod.v19' and binding.tool_name == 'knowledge_search' else None
             if not binding.read_only:
                 return ToolResult(status='ok',proposed_action=ActionProposal(binding_ref=binding_ref,scope_id=scope_id,args=args,args_hash=digest(args)))
             if previous:
-                return await self._replay(uow,guard,previous,binding_ref,args,scope_id,expected_business_scope)
+                return await self._replay(uow,guard,previous,binding_ref,args,scope_id,expected_business_scope,expected_knowledge_scope)
         for attempt in range(1,4):
             if not self.execution._tool_owner._owns_tool_execution(self.execution): raise DomainError('STALE_EXECUTION',409)
             await self.execution.check_operation()
@@ -157,7 +161,7 @@ class PolicyToolExecutor:
                 if (current['scope_id'] if current else None)!=scope_id: raise DomainError('STALE_QUERY_SCOPE',409)
                 previous=await self.backend.tools.invocation(uow,guard.team_id,guard.run_id,invocation_id) if attempt==1 else None
                 if previous:
-                    return await self._replay(uow,guard,previous,binding_ref,args,scope_id,expected_business_scope)
+                    return await self._replay(uow,guard,previous,binding_ref,args,scope_id,expected_business_scope,expected_knowledge_scope)
                 if attempt==1 and max_logical_calls is not None:
                     if type(max_logical_calls) is not int or max_logical_calls <= 0:
                         raise ValueError('invalid logical call limit')
@@ -180,6 +184,7 @@ class PolicyToolExecutor:
                 correlation={'run_id':guard.run_id,'invocation_id':invocation_id,'query_scope_ref':scope_id}
                 options={'correlation':correlation} if binding.tool_name in DOD_MCP_TOOLS else {}
                 if expected_business_scope is not None: options['expected_business_scope']=expected_business_scope
+                if expected_knowledge_scope is not None: options['expected_knowledge_scope']=expected_knowledge_scope
                 from workbench_agent.observability import span_or_none
                 with span_or_none(self.backend, 'tool.execute', attributes={
                     'langfuse.observation.type': 'tool', 'workbench.invocation_id': ident,
@@ -224,7 +229,7 @@ class PolicyToolExecutor:
                                 or result['meta'].get('truncated',False) is not False
                                 or binding.output_schema is not None and not Draft202012Validator(binding.output_schema).is_valid(result)):
                             return ToolResult(status='unknown',error=ToolError(code='INVALID_OUTPUT'))
-                        return await self._complete_empty(context,guard,binding,binding_ref,scope_id,ident,expected_business_scope)
+                        return await self._complete_empty(context,guard,binding,binding_ref,scope_id,ident,expected_business_scope,expected_knowledge_scope)
                     if upstream!='ok':
                         retryable=upstream in ('timeout','unavailable') and result.get('retryable') is True
                         if retryable and attempt<3:
@@ -247,7 +252,7 @@ class PolicyToolExecutor:
                     response=response.structuredContent
                 elif hasattr(response,'model_dump'):
                     response=response.model_dump(mode='json')
-                if response in (None,[],{},''): return await self._complete_empty(context,guard,binding,binding_ref,scope_id,ident,expected_business_scope)
+                if response in (None,[],{},''): return await self._complete_empty(context,guard,binding,binding_ref,scope_id,ident,expected_business_scope,expected_knowledge_scope)
                 if binding.output_schema is not None and not Draft202012Validator(binding.output_schema).is_valid(response): return ToolResult(status='unknown',error=ToolError(code='INVALID_OUTPUT'))
                 if scope_id is None: return ToolResult(status='unknown',error=ToolError(code='QUERY_SCOPE_REQUIRED'))
                 await self.execution.check_operation()
