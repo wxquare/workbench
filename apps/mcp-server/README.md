@@ -171,4 +171,4 @@ Agent 已实现 `workbench_agent.tools.mcp.MCPAdapter` 和 `PolicyToolExecutor`�
 
 四类查询共用经过验证的授权/执行边界，以 QueryRequest 的具名工具区分；不额外创建只有转发作用的四个服务类。CLI 是进程入口，允许配置加载和调用组合根；其余接口不得直连 connector。架构测试验证这些依赖规则。
 
-按行为先写失败测试，再实现，再重构；测试分为 unit、contract、integration、acceptance。真实外部验收需单独完成，见 [MCP 验收记录](../../docs/mcp-server/acceptance.md)。
+按行为先写失败测试，再实现，再重构；测试分为 unit、contract、integration、acceptance。真实外部验收需单独完成，边界见 [架构 §12 MCP Server](../../docs/02-architecture.md#12-mcp-server-边界)。

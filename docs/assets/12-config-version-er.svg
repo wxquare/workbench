@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1040" viewBox="0 0 1280 1040" role="img" aria-labelledby="12-config-version-er-title 12-config-version-er-desc">
+<title id="12-config-version-er-title">配置与版本：发布快照和 Run 固定引用</title>
+<desc id="12-config-version-er-desc">省略部分 team_id 外键和当前生效指针，只展示版本冻结的核心关系。 VersionRef = resource_id + version + content_hash；虚线是 runs.versions 中的冻结引用。 active_profile_id 的外键目前只保证同团队，Agent 一致性仍由服务检查。</desc>
+<style>text{font-family:'Helvetica Neue',Helvetica,Arial,'PingFang SC','Microsoft YaHei',sans-serif;fill:#111827} .muted{fill:#5b6473} .field{font-size:14px} .node-title{font-size:19px;font-weight:600}</style>
+<defs>
+<marker id="12-config-version-er-fk" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#2563eb" stroke-width="1.3"/></marker>
+<marker id="12-config-version-er-logical" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#7c3aed" stroke-width="1.3"/></marker>
+<marker id="12-config-version-er-domain" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7" fill="none" stroke="#4f5d75" stroke-width="1.3"/></marker>
+</defs>
+<rect width="1280" height="1040" fill="#ffffff"/>
+<text x="48" y="52" font-size="27" font-weight="600">配置与版本：发布快照和 Run 固定引用</text>
+<text x="48" y="88" font-size="16" class="muted">省略部分 team_id 外键和当前生效指针，只展示版本冻结的核心关系。</text>
+<path d="M 356,224 L 488,224" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 356,224 L 488,224" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#12-config-version-er-fk)"/>
+<path d="M 788,224 L 920,224" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 788,224 L 920,224" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#12-config-version-er-fk)"/>
+<path d="M 206,308 L 206,416" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 206,308 L 206,416" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#12-config-version-er-fk)"/>
+<path d="M 356,488 L 488,488" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 356,488 L 488,488" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#12-config-version-er-fk)"/>
+<path d="M 1070,308 L 1070,416" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 1070,308 L 1070,416" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#12-config-version-er-fk)"/>
+<path d="M 920,488 L 788,488" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 920,488 L 788,488" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#12-config-version-er-logical)"/>
+<path d="M 984,572 L 984,596 Q 984,604 976,604 L 214,604 Q 206,604 206,612 L 206,680" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 984,572 L 984,596 Q 984,604 976,604 L 214,604 Q 206,604 206,612 L 206,680" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#12-config-version-er-logical)"/>
+<path d="M 1070,572 L 1070,636 Q 1070,644 1062,644 L 646,644 Q 638,644 638,652 L 638,680" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 1070,572 L 1070,636 Q 1070,644 1062,644 L 646,644 Q 638,644 638,652 L 638,680" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#12-config-version-er-logical)"/>
+<path d="M 1156,572 L 1156,680" fill="none" stroke="#ffffff" stroke-width="7"/>
+<path d="M 1156,572 L 1156,680" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#12-config-version-er-logical)"/>
+<rect x="382.64" y="181" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="422" y="200" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="814.64" y="181" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="200" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="240.64" y="341" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="280" y="360" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="382.64" y="445" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="422" y="464" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="1108.64" y="341" width="78.72" height="25" rx="3" fill="#ffffff"/>
+<text x="1148" y="360" text-anchor="middle" font-size="14" style="fill:#2563eb">1 : 0..N</text>
+<rect x="804" y="445" width="100" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="464" text-anchor="middle" font-size="14" style="fill:#7c3aed">固定模型引用</text>
+<rect x="342.48" y="611" width="91.04" height="25" rx="3" fill="#ffffff"/>
+<text x="388" y="630" text-anchor="middle" font-size="14" style="fill:#7c3aed">固定 Skill</text>
+<rect x="818" y="607" width="72" height="25" rx="3" fill="#ffffff"/>
+<text x="854" y="626" text-anchor="middle" font-size="14" style="fill:#7c3aed">固定工具</text>
+<rect x="1032" y="653" width="72" height="25" rx="3" fill="#ffffff"/>
+<text x="1068" y="672" text-anchor="middle" font-size="14" style="fill:#7c3aed">固定快照</text>
+<rect x="56" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,152 H348 Q356,152 356,160 V206 H56 V160 Q56,152 64,152" fill="#f8fafc"/>
+<line x1="56" y1="206" x2="356" y2="206" stroke="#cbd5e1"/>
+<text x="72" y="185" font-size="19" font-weight="600">teams</text>
+<text x="72" y="234" class="field">PK team_id</text>
+<text x="72" y="259" class="field">   status</text>
+<rect x="488" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M496,152 H780 Q788,152 788,160 V206 H488 V160 Q488,152 496,152" fill="#f8fafc"/>
+<line x1="488" y1="206" x2="788" y2="206" stroke="#cbd5e1"/>
+<text x="504" y="185" font-size="19" font-weight="600">agents</text>
+<text x="504" y="234" class="field">PK agent_id</text>
+<text x="504" y="259" class="field">FK team_id</text>
+<text x="504" y="284" class="field">FK active_profile_id</text>
+<rect x="920" y="152" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,152 H1212 Q1220,152 1220,160 V206 H920 V160 Q920,152 928,152" fill="#f8fafc"/>
+<line x1="920" y1="206" x2="1220" y2="206" stroke="#cbd5e1"/>
+<text x="936" y="185" font-size="19" font-weight="600">runtime_profiles</text>
+<text x="936" y="234" class="field">PK profile_id</text>
+<text x="936" y="259" class="field">FK agent_id</text>
+<text x="936" y="284" class="field">   profile_json</text>
+<rect x="56" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,416 H348 Q356,416 356,424 V470 H56 V424 Q56,416 64,416" fill="#f8fafc"/>
+<line x1="56" y1="470" x2="356" y2="470" stroke="#cbd5e1"/>
+<text x="72" y="449" font-size="19" font-weight="600">model_profiles</text>
+<text x="72" y="498" class="field">PK profile_id</text>
+<text x="72" y="523" class="field">FK team_id</text>
+<text x="72" y="548" class="field">   active_version</text>
+<rect x="488" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M496,416 H780 Q788,416 788,424 V470 H488 V424 Q488,416 496,416" fill="#f8fafc"/>
+<line x1="488" y1="470" x2="788" y2="470" stroke="#cbd5e1"/>
+<text x="504" y="449" font-size="19" font-weight="600">model_profile_versions</text>
+<text x="504" y="498" class="field">PK model_version_id</text>
+<text x="504" y="523" class="field">FK profile_id</text>
+<text x="504" y="548" class="field">   version</text>
+<rect x="920" y="416" width="300" height="156" rx="8" fill="#ffffff" stroke="#ea580c" stroke-width="1.7"/>
+<path d="M928,416 H1212 Q1220,416 1220,424 V470 H920 V424 Q920,416 928,416" fill="#fff7ed"/>
+<line x1="920" y1="470" x2="1220" y2="470" stroke="#ea580c"/>
+<text x="936" y="449" font-size="19" font-weight="600">runs</text>
+<text x="936" y="498" class="field">PK run_id</text>
+<text x="936" y="523" class="field">FK runtime_profile_id</text>
+<text x="936" y="548" class="field">   versions</text>
+<rect x="56" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M64,680 H348 Q356,680 356,688 V734 H56 V688 Q56,680 64,680" fill="#f8fafc"/>
+<line x1="56" y1="734" x2="356" y2="734" stroke="#cbd5e1"/>
+<text x="72" y="713" font-size="19" font-weight="600">skill_versions</text>
+<text x="72" y="762" class="field">PK skill_version_id</text>
+<text x="72" y="787" class="field">FK skill_id</text>
+<text x="72" y="812" class="field">   hash</text>
+<rect x="488" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M496,680 H780 Q788,680 788,688 V734 H488 V688 Q488,680 496,680" fill="#f8fafc"/>
+<line x1="488" y1="734" x2="788" y2="734" stroke="#cbd5e1"/>
+<text x="504" y="713" font-size="19" font-weight="600">tool_bindings</text>
+<text x="504" y="762" class="field">PK binding_id</text>
+<text x="504" y="787" class="field">FK agent_id</text>
+<text x="504" y="812" class="field">   version</text>
+<rect x="920" y="680" width="300" height="156" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.7"/>
+<path d="M928,680 H1212 Q1220,680 1220,688 V734 H920 V688 Q920,680 928,680" fill="#f8fafc"/>
+<line x1="920" y1="734" x2="1220" y2="734" stroke="#cbd5e1"/>
+<text x="936" y="713" font-size="19" font-weight="600">repo_snapshots</text>
+<text x="936" y="762" class="field">PK snapshot_id</text>
+<text x="936" y="787" class="field">   commit_sha</text>
+<text x="936" y="812" class="field">   storage_ref</text>
+<line x1="48" y1="880" x2="1232" y2="880" stroke="#e2e8f0"/>
+<path d="M52,906 h36" stroke="#2563eb" stroke-width="2" fill="none"/>
+<text x="98" y="910" font-size="14" class="muted">已声明 FK</text>
+<path d="M211.52,906 h36" stroke="#7c3aed" stroke-width="2" fill="none" stroke-dasharray="7 5"/>
+<text x="257.52" y="910" font-size="14" class="muted">JSON / 服务关联</text>
+<text x="426.4" y="910" font-size="14" class="muted">箭头：父 / 引用方 → 子 / 被引用方；不表示级联删除</text>
+<text x="48" y="952" font-size="14" class="muted">VersionRef = resource_id + version + content_hash；虚线是 runs.versions 中的冻结引用。</text>
+<text x="48" y="981" font-size="14" class="muted">active_profile_id 的外键目前只保证同团队，Agent 一致性仍由服务检查。</text>
+</svg>

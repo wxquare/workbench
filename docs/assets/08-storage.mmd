@@ -1,0 +1,13 @@
+erDiagram
+  agents ||--o{ threads : contains
+  threads ||--o{ runs : contains
+  runs ||--o{ run_jobs : schedules
+  runs ||--o{ run_events : emits
+  runs ||--o{ graph_checkpoints : persists
+  runs ||--o{ interrupts : waits
+  interrupts ||--o{ resume_requests : history
+  runs ||--o{ tool_invocations : invokes
+  tool_invocations ||--o{ evidence : produces
+  artifacts o|--o{ evidence : stores
+  runs ||--o{ actions : proposes
+  actions ||--o{ outbox : dispatches
