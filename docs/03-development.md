@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 463e524
+verified_commit: 1b0f7b3
 ---
 
 # 开发指南
@@ -795,6 +795,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 | Agent e2e | 合成业务旅程；真实外部服务需单独配置 | `cd apps/agent && uv run python -m pytest tests/e2e` |
 | MCP Server | 只读范围、协议与源适配 | `cd apps/mcp-server && uv run ruff check src tests && uv run ruff format --check src tests && uv run python -m pytest -q -ra` |
 | Web | API/视图/SSE/路由组件 | `cd apps/web && npm test && npm run typecheck && npm run build` |
+| 文档门禁 | 元信息、链接与图文件 | `python3 scripts/check_docs.py --base origin/main` |
 | 安装脚本 | 安装、初始化、启动的本地合同 | `python3 -m unittest discover -s scripts/tests -v` |
 
 ### 9.2 变更到测试的对应关系
@@ -813,9 +814,9 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 ### 9.3 持续集成与本地等价命令
 
-`.github/workflows/ci.yml` 在 PR 和推送到 main 时运行四个独立检查：`agent`、`mcp-server`、`web` 和 `scripts`。完整本地命令见[文档入口的测试步骤](README.md#快速开始)。脚本测试调用 agent 虚拟环境中的 Python，因此先执行 agent 的 `uv sync --frozen`。
+`.github/workflows/ci.yml` 在 PR 和推送到 main 时运行五个独立检查：`agent`、`mcp-server`、`web`、`scripts` 和 `docs`，`ci-ok` 要求全部成功。完整本地命令见[文档入口的测试步骤](README.md#快速开始)。脚本测试调用 agent 虚拟环境中的 Python，因此先执行 agent 的 `uv sync --frozen`。
 
-Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3，再运行离线测试（不启用 `--run-live`）。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
+Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3，再运行离线测试（不启用 `--run-live`）。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22。`docs` 检查链接、图和元信息，超 800 行及代码关联文档只警告；纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
 
 ## 10 开发指引
 
@@ -908,7 +909,9 @@ cd apps/agent
 
 两者都使用临时数据库、随机合成凭据、模拟模型（知识问答另有合成 MCP 源）与独立 Worker，打印本地 `/app` 地址和测试令牌；退出后删除临时库，不接触真实模型或数据源。
 
-### 10.4 提交前文档核对
+### 10.5 提交前文档核对
+
+运行 `python3 scripts/check_docs.py`，并更新改动文档的 `verified_commit`。
 
 核对三个层次：产品能力状态是否与真实入口一致；设计不变量是否仍成立；实现路径、接口、Schema 和配置是否在源码中存在。若修改当前实现而设计未改变，只更新实现文档和附录。若打破设计契约，先明确版本和迁移策略，再同步技术设计。不要通过在旧规格上继续堆字段字典来维护新文档。
 
