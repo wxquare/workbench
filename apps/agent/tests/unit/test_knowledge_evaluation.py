@@ -20,6 +20,7 @@ def case(index, answerable=True):
 
 def dataset():
     data = {'dataset_kind': 'business', 'cases': [case(i, i < 27) for i in range(30)]}
+    data['cases'][26].update(scenario='multiple_sources', expected_source_ids=['doc-1', 'doc-2'])
     data['cases'][27]['scenario'] = 'conflict'
     data['cases'][28]['scenario'] = 'stale'
     return data
@@ -141,7 +142,8 @@ def test_explicit_uncited_claim_is_not_in_citation_denominator():
     report = evaluate_knowledge_dataset(data).to_dict()
     assert report['missing_reviews'] == 0
     assert report['cited_claims'] == 27
-    assert report['release_passed']
+    assert not report['release_passed']
+    assert 'uncited_conclusions' in report['failure_reasons']
 
 
 def test_cited_claim_requires_reviewed_correctness():
@@ -206,3 +208,9 @@ def test_scenario_must_be_supported_and_consistent_with_label(scenario, answerab
     report = evaluate_knowledge_dataset(data).to_dict()
     assert report['missing_reviews'] >= 1
     assert not report['release_passed']
+
+
+def test_business_acceptance_requires_reviewed_usable_multi_source_case():
+    data = dataset()
+    data['cases'][26]['expected_source_ids'] = ['doc-1']
+    assert not evaluate_knowledge_dataset(data).release_passed
