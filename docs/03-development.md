@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: b56962d
+verified_commit: 463e524
 ---
 
 # 开发指南
@@ -45,6 +45,8 @@ verified_commit: b56962d
 ```text
 workbench/                          仓库根
   README.md
+  .github/workflows/ci.yml         离线持续集成
+  scripts/                         安装、初始化、启动及测试
   apps/
     agent/                          Python 3.12，发行包 workbench-agents，包名 workbench_agent
       pyproject.toml  uv.lock  alembic.ini  .python-version
@@ -791,7 +793,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 | Agent integration | 真实用例串联和本地依赖 | `cd apps/agent && uv run python -m pytest tests/integration` |
 | Agent fault | 重启、竞态、超时、备份、恢复 | `cd apps/agent && uv run python -m pytest tests/fault` |
 | Agent e2e | 合成业务旅程；真实外部服务需单独配置 | `cd apps/agent && uv run python -m pytest tests/e2e` |
-| MCP Server | 只读范围、协议与源适配 | `cd apps/mcp-server && uv run python -m pytest` |
+| MCP Server | 只读范围、协议与源适配 | `cd apps/mcp-server && uv run ruff check src tests && uv run ruff format --check src tests && uv run python -m pytest -q -ra` |
 | Web | API/视图/SSE/路由组件 | `cd apps/web && npm test && npm run typecheck && npm run build` |
 | 安装脚本 | 安装、初始化、启动的本地合同 | `python3 -m unittest discover -s scripts/tests -v` |
 
@@ -808,6 +810,12 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 | Web 事件 | `tests/run-stream.test.ts`、`tests/sse.test.ts`、页面测试 |
 
 测试通过只能证明相应范围内的合同；合成数据源与本地模拟投递不等同于真实监控、SeaTalk、Jira 或 DoD 的业务验收。
+
+### 9.3 持续集成与本地等价命令
+
+`.github/workflows/ci.yml` 在 PR 和推送到 main 时运行四个独立检查：`agent`、`mcp-server`、`web` 和 `scripts`。完整本地命令见[文档入口的测试步骤](README.md#快速开始)。脚本测试调用 agent 虚拟环境中的 Python，因此先执行 agent 的 `uv sync --frozen`。
+
+Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3，再运行离线测试（不启用 `--run-live`）。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
 
 ## 10 开发指引
 

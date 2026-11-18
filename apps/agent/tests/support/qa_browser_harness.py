@@ -8,10 +8,11 @@ from pathlib import Path
 import secrets
 import sys
 import tempfile
-from uuid import uuid4
 
 # Running this file directly must not shadow stdlib platform with support/platform.py.
 sys.path = [path for path in sys.path if Path(path or '.').resolve() != Path(__file__).resolve().parent]
+
+from uuid import uuid4
 
 import httpx
 import uvicorn

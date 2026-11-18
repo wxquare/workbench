@@ -9,7 +9,10 @@ import pytest
 
 
 @pytest.mark.parametrize('mode', ['knowledge', 'direct'])
-def test_browser_harness_serves_http_and_runs_separate_worker(mode):
+def test_browser_harness_serves_http_and_runs_separate_worker(mode, tmp_path):
+    frontend = tmp_path / "web"
+    frontend.mkdir()
+    (frontend / "index.html").write_text("<!doctype html><title>Fixture</title>")
     with socket.socket() as sock:
         try:
             sock.bind(('127.0.0.1', 0))
@@ -17,14 +20,16 @@ def test_browser_harness_serves_http_and_runs_separate_worker(mode):
             pytest.skip('localhost listeners are unavailable in this sandbox')
         port = sock.getsockname()[1]
     script = Path(__file__).resolve().parents[1] / 'support' / 'qa_browser_harness.py'
-    process = subprocess.Popen([sys.executable, str(script), '--port', str(port), '--mode', mode],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    error_log = tmp_path / 'harness-stderr.log'
+    stderr = error_log.open('w')
+    process = subprocess.Popen([sys.executable, str(script), '--port', str(port), '--mode', mode, '--frontend-dist', str(frontend)],
+        stdout=subprocess.DEVNULL, stderr=stderr)
     base = f'http://127.0.0.1:{port}'
     try:
         with httpx.Client(timeout=2, trust_env=False) as client:
             deadline = time.monotonic() + 40
             while True:
-                assert process.poll() is None
+                assert process.poll() is None, error_log.read_text()
                 try:
                     fixture = client.get(base + '/fixture').json()
                     break
@@ -60,3 +65,4 @@ def test_browser_harness_serves_http_and_runs_separate_worker(mode):
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
+        stderr.close()
