@@ -14,7 +14,7 @@ from workbench_agent.tools.policy import PolicyToolExecutor
 from workbench_agent.tools.registry import ToolRegistry
 from support.runs import make_run_payload
 
-@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'conflict', 'unanswered', 'revoked_during_summary', 'unanswerable', 'missing_age', 'stale', 'empty', 'revoked', 'revoked_before', 'unauthorized_scope', 'recovery', 'scheduler_recovery'])
+@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'conflict', 'unanswered', 'revoked_during_summary', 'unanswerable', 'missing_age', 'stale', 'empty', 'revoked', 'revoked_before', 'unauthorized_scope', 'recovery', 'scheduler_recovery', 'summary_recovery', 'scheduler_expired'])
 async def test_public_run_to_independent_worker(platform, client, monkeypatch, scenario):
     import httpx
     from support.mcp import mcp_server_source
@@ -103,7 +103,7 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                     PolicyToolExecutor(worker_backend, adapter, execution=execution, delays=(0, 0)))
                 registry = foundation_worker_registry(worker_backend)
                 worker = Worker(worker_backend, 'independent-worker', registry)
-                if scenario == 'scheduler_recovery':
+                if scenario in ('scheduler_recovery', 'scheduler_expired'):
                     from workbench_agent.runtime.results import ResultProjector
                     original_project = ResultProjector.project
                     async def crash_projection(*args, **kwargs):
@@ -111,11 +111,36 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                     monkeypatch.setattr(ResultProjector, 'project', crash_projection)
                     assert await worker.run_once() == 'recovery_scheduled'
                     monkeypatch.setattr(ResultProjector, 'project', original_project)
+                    if scenario == 'scheduler_expired':
+                        from workbench_agent.runtime.graphs import evidence_authority
+                        original_sanitize = evidence_authority.sanitize_v8_outcome
+                        async def expire_at_projection(backend, uow, claim, outcome):
+                            now = backend.clock.now_ms
+                            calls_to_clock = 0
+                            async def future(tx):
+                                nonlocal calls_to_clock
+                                calls_to_clock += 1
+                                return await now(tx) + (400 * 86400 * 1000 if calls_to_clock > 1 else 0)
+                            monkeypatch.setattr(backend.clock, 'now_ms', future)
+                            try: return await original_sanitize(backend, uow, claim, outcome)
+                            finally: monkeypatch.setattr(backend.clock, 'now_ms', now)
+                        monkeypatch.setattr(evidence_authority, 'sanitize_v8_outcome', expire_at_projection)
                     from workbench_agent.cli.scheduler import run_scheduler
                     scheduler_settings = platform.settings.model_copy(update={'service':
                         platform.settings.service.model_copy(update={'tool_permissions': rules})})
                     report = await run_scheduler(scheduler_settings, once=True)
                     assert report['ready'] and report['recovered'] == 1
+                if scenario == 'summary_recovery':
+                    original_invoke = ModelInvoker.invoke
+                    async def crash_after_summary(self, *args, **kwargs):
+                        result = await original_invoke(self, *args, **kwargs)
+                        if kwargs.get('output_schema') is not None:
+                            raise RuntimeError('crash after model settlement before checkpoint')
+                        return result
+                    monkeypatch.setattr(ModelInvoker, 'invoke', crash_after_summary)
+                    assert await worker.run_once() == 'recovery_scheduled'
+                    monkeypatch.setattr(ModelInvoker, 'invoke', original_invoke)
+                    assert (await registry.reconciler.recover(run_id)).action == 'continue'
                 if scenario == 'recovery':
                     original = PolicyToolExecutor.execute
                     async def crash_after(*args, **kwargs):
@@ -125,7 +150,7 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                     assert await worker.run_once() == 'recovery_scheduled'
                     monkeypatch.setattr(PolicyToolExecutor, 'execute', original)
                     assert (await registry.reconciler.recover(run_id)).action == 'continue'
-                if scenario != 'scheduler_recovery':
+                if scenario not in ('scheduler_recovery', 'scheduler_expired'):
                     assert await worker.run_once() == 'projected'
                 result = (await client.get('/v1/runs/' + run_id)).json()
                 assert result['status'] == ('succeeded' if scenario in ('answer', 'revoked', 'recovery', 'scheduler_recovery') else 'partial')
@@ -143,6 +168,7 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                     if scenario not in ('conflict', 'unanswered'):
                         assert result['outcome']['findings'] == []
                     if scenario == 'empty': assert summaries == []
+                    if scenario == 'summary_recovery': assert len(summaries) == 1
                     if scenario in ('conflict', 'unanswered'):
                         assert 'untrusted text' not in str(result['outcome']['unresolved_items'])
                         assert any(('conflicts' if scenario == 'conflict' else 'unanswered') in item for item in result['outcome']['unresolved_items'])
