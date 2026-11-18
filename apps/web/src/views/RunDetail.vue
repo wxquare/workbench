@@ -1,48 +1,34 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, bearerToken } from '../session'
-import { agentName, ApiError, isRunActive, type RunView, type Agent } from '../api'
+import { agentName, type Agent } from '../api'
+import { openRunStream } from '../sse'
+import { useRunDetail } from '../composables/useRunDetail'
+import StreamingAnswer from '../components/StreamingAnswer.vue'
 
 const route = useRoute()
-const run = ref<RunView | null>(null), error = ref(''), loading = ref(false)
+const runId = computed(() => String(route.params.id))
+const { run, error, loading, connection, draft, refresh } = useRunDetail(runId, bearerToken, { getRun: id => api.run(id), stream: openRunStream })
 const agents = ref<Agent[]>([])
-let timer: ReturnType<typeof setTimeout> | undefined
-let generation = 0
+let agentGeneration = 0
+watch(bearerToken, async () => {
+  const current = ++agentGeneration
+  if (!bearerToken.value) { agents.value = []; return }
+  try { const value = await api.agents(); if (current === agentGeneration) agents.value = value }
+  catch { if (current === agentGeneration) agents.value = [] }
+}, { immediate: true })
 const labels: Record<string, string> = { queued: '排队中', running: '执行中', finalizing: '整理结果中', succeeded: '已完成', failed: '失败', cancelled: '已取消', expired: '已过期', timed_out: '已超时', waiting_input: '等待输入', waiting_approval: '等待审批', cancelling: '取消中', partial: '部分完成' }
-async function refresh(current = generation) {
-  if (!bearerToken.value) { loading.value = false; error.value = '请先提供 Bearer Token。'; return }
-  loading.value = true
-  try {
-    const result = await api.run(String(route.params.id))
-    if (current !== generation) return
-    run.value = result; error.value = ''
-    if (isRunActive(result.status)) timer = setTimeout(() => void refresh(current), 3000)
-  } catch (e) {
-    if (current !== generation) return
-    error.value = e instanceof Error ? e.message : '加载任务失败'
-    if (e instanceof ApiError && (e.status === 401 || e.status === 403 || e.status === 404)) run.value = null
-    if (!(e instanceof ApiError) || e.status >= 500) timer = setTimeout(() => void refresh(current), 5000)
-  } finally { if (current === generation) loading.value = false }
-}
-async function loadAgents(current: number) {
-  try {
-    const result = await api.agents()
-    if (current === generation) agents.value = result
-  } catch { if (current === generation) agents.value = [] }
-}
-function restart() { generation++; clearTimeout(timer); run.value = null; agents.value = []; error.value = ''; if (bearerToken.value) void loadAgents(generation); void refresh(generation) }
-function manualRefresh() { generation++; clearTimeout(timer); void loadAgents(generation); void refresh(generation) }
-watch(() => [route.params.id, bearerToken.value], restart, { immediate: true })
-onUnmounted(() => { generation++; clearTimeout(timer) })
 </script>
 <template>
   <router-link to="/" class="back-link">← 返回问答</router-link>
-  <div class="page-heading detail-heading"><div><div class="eyebrow">RUN DETAIL <span></span> 任务详情</div><h1>问答任务</h1><p>{{ route.params.id }}</p></div><button type="button" :disabled="loading || !bearerToken" @click="manualRefresh">刷新</button></div>
+  <div class="page-heading detail-heading"><div><div class="eyebrow">RUN DETAIL <span></span> 任务详情</div><h1>问答任务</h1><p>{{ route.params.id }}</p></div><button type="button" :disabled="loading || !bearerToken" @click="refresh">刷新</button></div>
   <p v-if="error" class="form-error" role="alert">{{ error }}</p>
   <p v-if="loading && !run" class="form-note">正在加载任务…</p>
   <template v-if="run">
     <div class="detail-grid"><div class="detail-primary"><section class="panel detail-panel"><div class="panel-heading"><div><h2>结果</h2><p>已保存的任务结果</p></div></div>
+      <p v-if="connection === 'polling'" class="form-note">实时连接不可用，正在轮询更新。</p>
+      <StreamingAnswer v-if="draft && !(run.outcome && connection === 'closed')" :text="draft" />
       <template v-if="run.outcome"><div class="summary-box"><p class="result-text">{{ run.outcome.summary }}</p></div>
         <div v-if="run.outcome.findings?.length" class="result-section"><h3>发现</h3><ul><li v-for="(item, index) in run.outcome.findings" :key="index">{{ item.summary }}</li></ul></div>
         <div v-if="run.outcome.unresolved_items?.length" class="result-section"><h3>未完成事项</h3><ul><li v-for="item in run.outcome.unresolved_items" :key="item">{{ item }}</li></ul></div>

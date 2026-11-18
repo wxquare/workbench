@@ -50,3 +50,11 @@ it('stops after the terminal event stream is drained', async () => {
   expect(events).toHaveLength(1)
   expect(calls).toBe(1)
 })
+
+it('reports repeated transport failures so the caller can fall back to polling', async () => {
+  let attempts = 0
+  const fetcher: typeof fetch = async () => { attempts++; throw new TypeError('offline') }
+  const iterator = openRunStream('/v1/runs/r/events', { fetcher, retryMs: 0, maxFailures: 3 })
+  await expect(iterator.next()).rejects.toThrow('SSE transport unavailable')
+  expect(attempts).toBe(3)
+})
