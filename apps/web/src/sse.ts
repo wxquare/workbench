@@ -46,7 +46,7 @@ export async function* parseEventStream(stream: ReadableStream<Uint8Array>): Asy
   }
 }
 
-interface StreamOptions { signal?: AbortSignal; fetcher?: typeof fetch; retryMs?: number; headers?: HeadersInit }
+interface StreamOptions { signal?: AbortSignal; fetcher?: typeof fetch; retryMs?: number; maxFailures?: number; headers?: HeadersInit }
 const terminal = new Set(['run.completed', 'run.failed', 'run.cancelled', 'run.expired'])
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.resolve()
@@ -60,7 +60,8 @@ export async function* openRunStream(path: string, options: StreamOptions = {}):
   if (!path.startsWith('/v1/runs/') || path.startsWith('//')) throw new Error('SSE URL must be a same-origin Run path')
   const fetcher = options.fetcher ?? fetch
   const retryMs = options.retryMs ?? 1000
-  let cursor = '', terminalSeen = false
+  let cursor = '', terminalSeen = false, failures = 0
+  const failed = () => { if (++failures >= (options.maxFailures ?? Infinity)) throw new Error('SSE transport unavailable') }
   while (!options.signal?.aborted) {
     const headers = new Headers(options.headers)
     headers.set('Accept', 'text/event-stream')
@@ -70,6 +71,7 @@ export async function* openRunStream(path: string, options: StreamOptions = {}):
       response = await fetcher(path, { headers, credentials: 'same-origin', signal: options.signal })
     } catch (error) {
       if (options.signal?.aborted) return
+      failed()
       await wait(retryMs, options.signal)
       continue
     }
@@ -85,10 +87,11 @@ export async function* openRunStream(path: string, options: StreamOptions = {}):
       throw new EventCursorExpired(resultLink)
     }
     if (response.status >= 400 && response.status < 500) throw new StreamHttpError(response.status)
-    if (!response.ok || !response.body) { await wait(retryMs, options.signal); continue }
+    if (!response.ok || !response.body) { failed(); await wait(retryMs, options.signal); continue }
     try {
       for await (const item of parseEventStream(response.body)) {
         if (options.signal?.aborted) return
+        failures = 0
         cursor = item.id
         if (terminal.has(item.event)) terminalSeen = true
         yield item
@@ -98,6 +101,7 @@ export async function* openRunStream(path: string, options: StreamOptions = {}):
       // A transport break resumes from the last fully parsed event.
     }
     if (terminalSeen || options.signal?.aborted) return
+    failed()
     await wait(retryMs, options.signal)
   }
 }
