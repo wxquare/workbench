@@ -1,7 +1,7 @@
 ---
 title: 接口参考
 status: stable
-verified_commit: b56962d
+verified_commit: e3ae819
 ---
 
 # 接口参考（HTTP API 与 MCP Server 工具）
@@ -285,7 +285,7 @@ sequenceDiagram
 | 方法路径 | 角色 | 请求 | 响应 | 错误 |
 | --- | --- | --- | --- | --- |
 | `GET /v1/actions/{action_id}` | operator，且仅当前审批人本人（连接器身份→404） | - | 200 动作与回执 | 404 |
-| `POST /v1/approvals/{approval_id}/decision` | operator（细则待核） | `{decision: approve/reject, expected_args_hash: 64 位十六进制}` | 200 | 409 `APPROVAL_CONFLICT`/`APPROVAL_EXPIRED`/`APPROVAL_INVALIDATED`/`ACTION_CONFLICT` |
+| `POST /v1/approvals/{approval_id}/decision` | operator，且须为审批指定 subject；connector 身份不可操作 | `{decision: approve/reject, expected_args_hash: 64 位十六进制}` | 200 | 409 `APPROVAL_CONFLICT`/`APPROVAL_EXPIRED`/`APPROVAL_INVALIDATED`/`ACTION_CONFLICT` |
 | `POST /v1/actions/{action_id}/retry`（幂） | operator | 无体 | 回执状态码 | 409 `ACTION_RETRY_UNAVAILABLE`/`ACTION_NOT_UNKNOWN` |
 | `POST /v1/actions/{action_id}/reapproval`（幂） | operator | `{expected_args_hash}` | 回执状态码 | 409 `REAPPROVAL_UNAVAILABLE` |
 | `GET /v1/incidents` | viewer | Query 必填 `agent_id`；`limit`、`after` | 200 | 404 |

@@ -6,11 +6,14 @@ export interface QueryScope { service: string; environment: string; region: stri
 export interface QaRequest { agent_id: string; text: string; scope?: QueryScope }
 export type QaMode = 'llm' | 'knowledge'
 export interface RunOutcome { summary: string; completed?: boolean; unresolved_items?: string[]; knowledge_gaps?: string[]; findings?: { summary: string }[]; evidence_refs?: string[] }
-export interface RunView { run_id: string; agent_id: string; thread_id: string; status: string; phase: string | null; created_at: string; outcome: RunOutcome | null; waiting: Record<string, unknown> | null }
+export interface WaitingView { name: string; kind: string; actor?: string; interrupt_id: string; revision: number; expires_at_ms: number; created_at_ms: number; schema: Record<string, unknown>; approval_id?: string; args_hash?: string; expected_scope_id?: string }
+export type ResumeResponse = { kind: "user_input"; values: Record<string, string> } | { kind: "approval"; approval_id: string; decision: "approve" | "reject"; expected_args_hash: string }
+export interface ResumeBody { interrupt_id: string; expected_revision: number; response: ResumeResponse }
+export interface RunView { run_id: string; agent_id: string; thread_id: string; status: string; phase: string | null; created_at: string; outcome: RunOutcome | null; revision: number; waiting: WaitingView | null }
 export interface AcceptedRun { run_id: string }
 
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) { super(message) }
+  constructor(public readonly status: number, message: string, public readonly code?: string) { super(message) }
 }
 
 export class ApiClient {
@@ -24,12 +27,13 @@ export class ApiClient {
     const response = await this.fetcher(path, { ...init, headers, credentials: 'same-origin' })
     if (!response.ok) {
       let message = `请求失败 (HTTP ${response.status})`
+      let errorCode: string | undefined
       try {
         const body = await response.json()
         const code = typeof body.error === 'string' ? body.error : body.error?.code ?? body.code ?? body.detail
-        if (typeof code === 'string') message += `: ${code}`
+        if (typeof code === 'string') { errorCode = code; message += `: ${code}` }
       } catch { /* HTTP status is still useful. */ }
-      throw new ApiError(response.status, message)
+      throw new ApiError(response.status, message, errorCode)
     }
     return response.json() as Promise<T>
   }
@@ -52,6 +56,12 @@ export class ApiClient {
     return this.request('/v1/runs', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
       body: JSON.stringify({ agent_id: request.agent_id, mode: 'qa', input: { text: request.text }, business_context: request.scope ? { query_scope: request.scope } : {} }) })
   }
+  cancelRun(id: string, key: string): Promise<RunView> {
+    return this.request(`/v1/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST', headers: { 'Idempotency-Key': key } })
+  }
+  resumeRun(id: string, body: ResumeBody, key: string): Promise<unknown> {
+    return this.request(`/v1/runs/${encodeURIComponent(id)}/resume`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(body) })
+  }
   run(id: string): Promise<RunView> { return this.request(`/v1/runs/${encodeURIComponent(id)}`) }
 }
 
@@ -65,7 +75,7 @@ export function createQaSubmission(client: ApiClient, makeKey = () => crypto.ran
     return accepted
   }
 }
-export const isRunActive = (status: string) => ['queued', 'running', 'cancelling', 'waiting_input', 'waiting_approval'].includes(status)
+export const isRunActive = (status: string) => ['queued', 'running', 'finalizing', 'cancelling', 'waiting_input', 'waiting_approval'].includes(status)
 export function missingQaFields(fields: { agent: string; question: string; service: string; region: string; start: string; end: string }, mode: QaMode = 'knowledge'): string[] {
   const labels = { agent: 'Agent', question: '问题', service: '服务', region: '区域', start: '开始时间', end: '结束时间' }
   const keys: (keyof typeof labels)[] = mode === 'llm' ? ['agent', 'question'] : ['agent', 'question', 'service', 'region', 'start', 'end']
