@@ -14,7 +14,7 @@ from workbench_agent.tools.policy import PolicyToolExecutor
 from workbench_agent.tools.registry import ToolRegistry
 from support.runs import make_run_payload
 
-@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'revoked_during_summary', 'unanswerable', 'missing_age', 'stale', 'empty', 'revoked', 'revoked_before', 'unauthorized_scope', 'recovery', 'scheduler_recovery'])
+@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'conflict', 'unanswered', 'revoked_during_summary', 'unanswerable', 'missing_age', 'stale', 'empty', 'revoked', 'revoked_before', 'unauthorized_scope', 'recovery', 'scheduler_recovery'])
 async def test_public_run_to_independent_worker(platform, client, monkeypatch, scenario):
     import httpx
     from support.mcp import mcp_server_source
@@ -86,7 +86,7 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                         quote = 'Invented instruction' if scenario == 'fabricated' else 'Check the queue before retrying.'
                         if scenario == 'revoked_during_summary':
                             rules['experts']['knowledge'] = []
-                        return AIMessage(content=json.dumps({'answerable': scenario != 'unanswerable', 'claims': [{'text': 'Check the queue before retrying.', 'evidence_ref': ref, 'source_id': 'guide-1', 'quote': quote}], 'unanswered': [], 'conflicts': []}), usage_metadata=usage)
+                        return AIMessage(content=json.dumps({'answerable': scenario != 'unanswerable', 'claims': [{'text': 'Check the queue before retrying.', 'evidence_ref': ref, 'source_id': 'guide-1', 'quote': quote}], 'unanswered': ['untrusted text'] if scenario == 'unanswered' else [], 'conflicts': ['untrusted text'] if scenario == 'conflict' else []}), usage_metadata=usage)
                     if any(isinstance(m, ToolMessage) for m in messages):
                         return AIMessage(content='Check the queue before retrying.', usage_metadata=usage)
                     return AIMessage(content='', tool_calls=[{'name': 'kb_search', 'args': {'query': 'retry', 'scene': 'qa'},
@@ -140,8 +140,12 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                         hidden = (await client.get('/v1/runs/' + run_id)).json()['outcome']
                         assert hidden['findings'] == [] and hidden['evidence_refs'] == []
                 else:
-                    assert result['outcome']['findings'] == []
+                    if scenario not in ('conflict', 'unanswered'):
+                        assert result['outcome']['findings'] == []
                     if scenario == 'empty': assert summaries == []
+                    if scenario in ('conflict', 'unanswered'):
+                        assert 'untrusted text' not in str(result['outcome']['unresolved_items'])
+                        assert any(('conflicts' if scenario == 'conflict' else 'unanswered') in item for item in result['outcome']['unresolved_items'])
                     if scenario in ('unauthorized_scope', 'revoked_before'):
                         assert calls == [] and result['outcome']['evidence_refs'] == []
                     if scenario == 'revoked_during_summary':

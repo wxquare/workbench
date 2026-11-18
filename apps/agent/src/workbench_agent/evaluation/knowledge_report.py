@@ -81,8 +81,9 @@ def evaluate_knowledge_dataset(dataset: dict[str, Any]) -> KnowledgeQualityRepor
     ids: set[str] = set()
     output_refs: set[str] = set()
     case_keys: set[tuple] = set()
-    duplicate_outputs = duplicate_cases = 0
+    duplicate_outputs = duplicate_cases = uncited = 0
     scenarios: set[str] = set()
+    multi_source_usable = False
     reviewed = missing = cited = correct = answerable = usable = unanswerable = false_answers = unauthorized = 0
     reasons: dict[str, int] = {}
     for case in dataset['cases']:
@@ -131,8 +132,13 @@ def evaluate_knowledge_dataset(dataset: dict[str, Any]) -> KnowledgeQualityRepor
                            and type(review.get('unauthorized_access')) is bool
                            and (review.get('degradation_reason') is None
                                 or _text(review.get('degradation_reason'))))
+        if (label_complete and result_complete and case.get('answerable') is True
+                and review.get('answer_usable') is True
+                and len(set(case['expected_source_ids'])) >= 2):
+            multi_source_usable = True
         missing += int(not (label_complete and result_complete))
         if isinstance(claims, list):
+            uncited += sum(isinstance(c, dict) and c.get('cited') is False for c in claims)
             cited += sum(not isinstance(c, dict) or c.get('cited') is not False
                          or c.get('citation_correct') is not None for c in claims)
             correct += sum(isinstance(c, dict) and c.get('citation_correct') is True for c in claims)
@@ -154,6 +160,8 @@ def evaluate_knowledge_dataset(dataset: dict[str, Any]) -> KnowledgeQualityRepor
     if duplicate_cases: failures.append('duplicate_question_scope')
     if not {'answerable', 'no_answer', 'conflict', 'stale'} <= scenarios:
         failures.append('missing_required_scenarios')
+    if not multi_source_usable: failures.append('missing_usable_multi_source_case')
+    if uncited: failures.append('uncited_conclusions')
     if not cited: failures.append('no_cited_claims')
     elif citation_rate < .95: failures.append('citation_accuracy_below_threshold')
     if not answerable: failures.append('no_answerable_cases')

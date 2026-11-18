@@ -100,12 +100,14 @@ async def compose(state, execution):
         if problems: claims, refs = [], []
     completed = bool(claims and state.get('verification_complete') and refs)
     data = (await BudgetService(execution.backend).partial_outcome(auth, state['run_id'])).model_dump(mode='json')
+    safe_reasons = [reason for reason in state.get('verification_reasons', [])
+                    if reason in ('Answer has unanswered questions.', 'Answer has conflicts.')]
     data.update(completed=completed,
         summary=(' '.join(item['text'] for item in claims) + ' Each conclusion has a quoted source; citation does not prove correctness.'
                  if claims else 'The available evidence does not support a verified answer.'),
         findings=[{'summary': f"结论：{item['text']}\n来源 ID：{item['source_id']}\n引用：{item['quote']}",
                    'evidence_refs': [item['evidence_ref']], 'status': 'observed'} for item in claims],
         evidence_refs=refs,
-        unresolved_items=[] if completed else ['Knowledge evidence or answer verification is incomplete.'],
+        unresolved_items=[] if completed else (safe_reasons or ['Knowledge evidence or answer verification is incomplete.']),
         knowledge_gaps=[] if completed else ['One or more parts of the question could not be verified.'])
     return {'phase': 'compose_outcome', 'outcome': data}
