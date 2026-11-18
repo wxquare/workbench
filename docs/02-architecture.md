@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: b56962d
+verified_commit: 8fb6307
 ---
 
 # 架构设计
@@ -859,3 +859,7 @@ API、SSE、产物下载、Resume、Cancel 使用同一资源授权边界。Runn
 ---
 
 > 代码在哪里、怎么改：见 [03 开发指南](03-development.md)。运维动作：见 [04 运维](04-operations.md)。字段、接口、配置：见 [06 参考](06-reference/)。
+
+## 知识问答 v19 的来源验证
+
+`dod.v19` 将每条结论绑定到 evidence ID、source ID 和逐字引用，并在最终投影时重查授权、范围与来源更新时间。阈值缺失或证据不可验证时结果降级为 partial。引用匹配及数字检查只验证有限的来源约束，不能证明结论的语义正确性；真实接入和业务评估仍是启用前置条件。已发布 v16、v17、v18 的行为保持不变。

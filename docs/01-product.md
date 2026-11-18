@@ -1,7 +1,7 @@
 ---
 title: 产品说明
 status: stable
-verified_commit: 76aadc2
+verified_commit: 8fb6307
 ---
 
 # 产品说明
@@ -189,7 +189,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-02.5 | 仓库、工具绑定 | 🟡 | api/repositories、api/tool_bindings；页面为 Placeholder |
 | FR-03.1 | 直接 LLM 单轮问答 | ✅ | runtime/graphs/direct_qa（dod.v17）；DeepSeek 实测验收 |
 | FR-03.2 | 多轮追问 | ✅ | runtime/graphs/conversation_qa（dod.v18）；web 的 Threads 页 |
-| FR-03.3 | 知识问答与引用 | 🟡 | runtime/graphs/qa_v16；结果恒为 partial；无真实知识源 |
+| FR-03.3 | 知识问答与引用 | 🟡 | v16 恒为 partial；v19 已有离线逐来源校验，真实知识源及业务验收待定 |
 | FR-04.1 | 告警范围确认与补充区域 | 🟡 | runtime/graphs/rca；网页支持登记的区域输入 schema，待真实业务验收 |
 | FR-04.2 | 指标/日志/Trace 基线采集 | 🟡 | runtime/graphs/rca_baseline；仅合成上游 |
 | FR-04.3 | 根因结论 | ⏳ | M3 验收：无完整根因；合成结果恒为 partial |
