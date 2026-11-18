@@ -150,7 +150,7 @@ class RunService:
                 query_scope = None
                 if profile.graph_version == 'dod.v17' and (request.mode != 'qa' or 'query_scope' in request.business_context):
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if profile.graph_version == 'dod.v16':
+                if profile.graph_version in ('dod.v16', 'dod.v19'):
                     if request.mode != 'qa':
                         raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                     query_scope = request.business_context.get('query_scope')
