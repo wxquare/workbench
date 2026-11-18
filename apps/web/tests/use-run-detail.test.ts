@@ -62,3 +62,11 @@ it('keeps polling an active Run when an SSE cursor expires', async () => {
   expect(result.connection.value).toBe('polling')
   scope.stop()
 })
+
+it('polls if the final GET after a stream closes fails', async () => {
+  const scope = effectScope(), getRun = vi.fn().mockResolvedValueOnce(view('r', 'running')).mockRejectedValueOnce(new Error('offline'))
+  const result = scope.run(() => useRunDetail(ref('r'), ref('token'), { getRun, stream: async function* () {} }))!
+  await flush(); await flush()
+  expect(result.connection.value).toBe('polling')
+  scope.stop()
+})
