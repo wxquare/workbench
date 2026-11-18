@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 11da62d
+verified_commit: 17d4429
 ---
 
 # 开发指南
@@ -774,6 +774,8 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 `apps/web/src/router.ts` 使用 `/app/` 作为 history base。实际路由：工作台 `/`、任务 `/runs`、任务详情 `/runs/:id`、Agent `/agents`、模型 `/models`、会话 `/threads`、Skill `/skills`。`tools`、`schedules`、`incidents`、`statistics` 映射 `views/Placeholder.vue`，页面路由存在不代表业务功能已交付。`/demo/runs/:id` 是演示页，不能作为真实任务详情验收依据。
 
+任务详情支持取消、区域补充输入和 Run 级审批；外部 Action 审批不在该页面处理。
+
 ### 8.2 API、会话与事件
 
 `api.ts::ApiClient` 统一附加 Bearer Token，并显式处理 HTTP 错误；`session.ts` 管理前端会话输入。资源 API 分布在 `agents-api.ts`、`models-api.ts`、`skills-api.ts`、`threads-api.ts`、`runs-api.ts`。提问入口 `api.ts::createQaSubmission` 对同一未完成提交复用幂等键，成功后清空。SSE 解析和重连见 `sse.ts`，Run 事件投影见 `run-stream.ts::applyEvent`。客户端以递增 `seq` 去重；模型文字的 `attempt` 和 `message_id` 用于标记旧草稿被新尝试覆盖。
@@ -784,7 +786,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 ## 9 测试与验证
 
-详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。路由或身份变化会中止旧连接。
+详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。取消与 resume 使用幂等键，同一请求在网络失败后复用，内容、Run revision 或等待版本变化后换新；恢复请求的 `expected_revision` 使用 Run 的 revision，而非 waiting 的 revision；未知等待 schema 禁止提交。路由或身份变化会中止旧连接。
 
 ### 9.1 测试层次与命令
 
