@@ -1,7 +1,7 @@
 ---
 title: 决策记录
 status: stable
-verified_commit: 76aadc2
+verified_commit: 9a4f458
 ---
 
 # 决策记录
@@ -311,11 +311,11 @@ CI 使用 uv 管理的 Python，打印并断言 SQLite 版本。若版本不满�
 
 **背景**
 
-事件不包含恢复操作所需的完整 waiting revision 和参数哈希，前端不能仅依靠事件重建权威状态。
+事件不包含恢复操作所需的Run revision 和 waiting 参数哈希，前端不能仅依靠事件重建权威状态。
 
 **决策**
 
-页面以 Run GET 渲染状态和操作；SSE 用于展示未验证草稿和触发防抖刷新。提交时使用最近获取的 waiting，冲突后重新读取。
+页面以 Run GET 渲染状态和操作；SSE 用于展示未验证草稿和触发防抖刷新。提交时使用最近获取的 Run revision 与 waiting，冲突后重新读取。
 
 **代价**
 

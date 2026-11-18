@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 5b239ec
+verified_commit: 41e306a
 ---
 
 # 开发指南
@@ -786,7 +786,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 ## 9 测试与验证
 
-详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。取消与 resume 使用幂等键，同一请求在网络失败后复用，内容或等待版本变化后换新；未知等待 schema 禁止提交。路由或身份变化会中止旧连接。
+详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。取消与 resume 使用幂等键，同一请求在网络失败后复用，内容、Run revision 或等待版本变化后换新；恢复请求的 `expected_revision` 使用 Run 的 revision，而非 waiting 的 revision；未知等待 schema 禁止提交。路由或身份变化会中止旧连接。
 
 ### 9.1 测试层次与命令
 

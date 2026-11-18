@@ -1,5 +1,6 @@
 import { effectScope, nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
+import { EventCursorExpired } from '../src/sse'
 import { useRunDetail } from '../src/composables/useRunDetail'
 import type { RunView } from '../src/api'
 const view = (id: string, status: string): RunView => ({ run_id: id, agent_id: 'a', thread_id: 't', status, phase: null, created_at: '2026-01-01T00:00:00Z', revision: 1, waiting: null, outcome: null })
@@ -51,5 +52,13 @@ it('does not let an earlier GET overwrite an accepted cancellation', async () =>
   result.applyRunView(view('r', 'cancelling'))
   resolve(view('r', 'running')); await stale; await flush()
   expect(result.run.value?.status).toBe('cancelling')
+  scope.stop()
+})
+
+it('keeps polling an active Run when an SSE cursor expires', async () => {
+  const scope = effectScope()
+  const result = scope.run(() => useRunDetail(ref('r'), ref('token'), { getRun: async () => view('r', 'running'), stream: async function* () { throw new EventCursorExpired() } }))!
+  await flush(); await flush()
+  expect(result.connection.value).toBe('polling')
   scope.stop()
 })
