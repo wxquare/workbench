@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 76aadc2
+verified_commit: 5b239ec
 ---
 
 # 开发指南
@@ -913,7 +913,18 @@ cd apps/agent
 
 两者都使用临时数据库、随机合成凭据、模拟模型（知识问答另有合成 MCP 源）与独立 Worker，打印本地 `/app` 地址和测试令牌；退出后删除临时库，不接触真实模型或数据源。
 
-### 10.5 提交前文档核对
+### 10.5 任务详情手工验收
+
+使用隔离的开发环境、正在运行的 API 与 Worker，以及使用 `dod.v3` 的测试 Agent。通过 `POST /v1/runs` 创建独立测试任务：`business_context` 使用 `{"region_candidates":["sg","id"]}` 触发输入等待，使用 `{"confirm_recording":true}` 触发 Run 级审批等待。使用开发凭据，不要把令牌写进日志或 PR。
+
+1. 等待态任务点击取消并确认；检查最终取消及刷新后状态。
+2. 区域等待填写 `sg` 并提交；检查任务继续并在结果中记录区域。
+3. 分别创建两个审批等待，测试批准与拒绝，检查对应结果；确认批准需要二次确认。
+4. 复核并发标签页导致的冲突、无权限、网络中断及恢复、等待过期，均应有明确提示；中断时检查轮询提示，恢复后检查状态一致。
+
+该合成图只验证人机交互，不代表真实 RCA 或外部 Action 审批验收。上述场景由验收人确认通过后，才能调整产品能力状态。
+
+### 10.6 提交前文档核对
 
 运行 `python3 scripts/check_docs.py`，并更新改动文档的 `verified_commit`。
 
@@ -931,4 +942,4 @@ cd apps/agent
 | MCP `check` 证明业务数据源可用 | `interfaces/cli.py` 输出 `business_query: not_checked` | 真实业务源需要独立验收 |
 | 旧草稿只覆盖到一次请求路径 | 本次补齐工作流、存储、Skill、MCP、Web、测试与开发指引 | 章节目录见文首 |
 
-本次核对以仓库当前工作树为准；存在未提交的 `scripts/tests/test_local_workflow.py` 改动，与本次文档内容无关。字段、接口和配置的逐项核对以 [06 参考](06-reference/) 与源文件为准。
+字段、接口和配置的逐项核对以 [06 参考](06-reference/) 与源文件为准。
