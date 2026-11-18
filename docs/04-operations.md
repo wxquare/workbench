@@ -1,7 +1,7 @@
 ---
 title: 运维手册
 status: stable
-verified_commit: b56962d
+verified_commit: 11da62d
 ---
 
 # 运维手册
@@ -519,7 +519,7 @@ export WORKBENCH_MODEL_SECRET_MASTER_KEY="$(<"$HOME/.config/my-workbench/model-m
 | 产物不可下载 | 上传 Job 状态、对象存储回读 | 校验失败、租约过期、签名器未装配 |
 | `runner check` 非零 | daemon 身份 / 镜像 | ID 与 daemon 不匹配、镜像不存在、资源低于 2 核 2 GiB |
 | 技能发布 `OBJECT_STORAGE_UNAVAILABLE` | `WORKBENCH_SKILL_OBJECT_ROOT` | 未设置、非绝对路径、API 与 Worker 不可共同访问 |
-| SSE 无事件 | `/health/ready`、浏览器网络面板 | API 未就绪、Redis 不可用（应降级为最多 1 秒轮询） |
+| SSE 无事件 | `/health/ready`、浏览器网络面板和代理缓冲 | API 未就绪、代理缓冲或 Redis 不可用；页面在连接反复失败后以 3 秒轮询降级 |
 | MCP `check` 通过但查询失败 | 上游数据源与凭据 | `check` 只验证配置，输出 `business_query: not_checked` |
 | 日志缺模型正文 | `content_mode` | `metadata_only` 默认不采集；托管密钥模式始终不导出正文 |
 

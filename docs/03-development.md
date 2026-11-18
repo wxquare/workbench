@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 1b0f7b3
+verified_commit: 11da62d
 ---
 
 # 开发指南
@@ -783,6 +783,8 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 页面报 401 先检查 Token 是否在请求中注入；页面报 503 先检查构建产物与 `WORKBENCH_FRONTEND_DIST_ROOT`。列表为空先核对 Agent 选择和团队权限，再查看网络响应。任务详情状态滞后时比较 `GET /v1/runs/{id}` 与 SSE `seq`，确认是服务端投影还是浏览器事件处理问题。前端不会直接读数据库或 LangGraph 检查点。
 
 ## 9 测试与验证
+
+详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。路由或身份变化会中止旧连接。
 
 ### 9.1 测试层次与命令
 
