@@ -10,3 +10,11 @@ async def list_visible(uow, team_id, agent_id, limit, after=None):
     if after:
         query = query.where(table.c.profile_id > after)
     return list((await uow.execute(query.order_by(table.c.profile_id).limit(limit + 1))).mappings())
+
+
+async def list_team(uow, team_id, limit, after=None):
+    table = schema.model_profiles
+    query = select(table).where(table.c.team_id == team_id, table.c.agent_id.is_(None))
+    if after:
+        query = query.where(table.c.profile_id > after)
+    return list((await uow.execute(query.order_by(table.c.profile_id).limit(limit + 1))).mappings())

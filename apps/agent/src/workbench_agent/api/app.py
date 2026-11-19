@@ -9,7 +9,7 @@ from workbench_agent.application.profiles import ProfileService
 from workbench_agent.application.context import ContextResolver
 from workbench_agent.application.teams import TeamService
 from workbench_agent.api.auth import OIDCVerifier, DevelopmentVerifier, IdentityResolver
-from workbench_agent.api import teams, agents, runs, threads, model_profiles, admin_jobs
+from workbench_agent.api import teams, agents, runs, threads, model_profiles, team_model_profiles, admin_jobs
 from workbench_agent.application.runs import RunService
 from workbench_agent.api.errors import install_error_handlers
 
@@ -116,6 +116,7 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     app.include_router(graphs.router)
     app.include_router(agents.router)
     app.include_router(model_profiles.router)
+    app.include_router(team_model_profiles.router)
     app.include_router(admin_jobs.router)
 
     from workbench_agent.api.frontend import router as web_router

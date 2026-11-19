@@ -52,8 +52,8 @@ describe('Agent API', () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ items: [{ name: 'first', active_ref: active }], next_cursor: 'cursor' }))
       .mockResolvedValueOnce(Response.json({ items: [{ name: 'unpublished', active_ref: null }], next_cursor: null }))
     const client = new AgentApi(new ApiClient(() => 'token', fetcher))
-    expect(await client.models('ws')).toEqual([{ name: 'first', active_ref: active }])
-    expect(fetcher.mock.calls[1][0]).toBe('/v1/agents/ws/model-profiles?limit=100&after=cursor')
+    expect(await client.models()).toEqual([{ name: 'first', active_ref: active }])
+    expect(fetcher.mock.calls[1][0]).toBe('/v1/model-profiles?limit=100&after=cursor')
   })
 
   it('rejects invalid draft JSON before any request', () => {

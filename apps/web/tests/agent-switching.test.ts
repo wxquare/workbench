@@ -95,54 +95,56 @@ const profile = (name: string, model: string): ModelProfile => ({
 })
 function mockProfiles() {
   vi.mocked(api.request).mockImplementation(async path => {
-    if (path.startsWith('/v1/agents/dod-agent/model-profiles?'))
-      return { items: [profile('dod-model', 'dod-base')], next_cursor: null } as never
-    if (path.startsWith('/v1/agents/writing-agent/model-profiles?'))
-      return { items: [profile('writing-model', 'writing-base')], next_cursor: null } as never
+    if (path.startsWith('/v1/model-profiles?'))
+      return { items: [profile('dod-model', 'dod-base'), profile('writing-model', 'writing-base')], next_cursor: null } as never
     throw new Error(`Unexpected path: ${path}`)
   })
 }
 
-it.each(['existing', 'new'])('preserves an unsaved %s model when an Agent switch is canceled', async kind => {
+it.each(['existing', 'new'])('preserves an unsaved %s model when opening another model is canceled', async kind => {
   mockProfiles()
   const confirm = vi.fn().mockReturnValue(false)
   vi.stubGlobal('window', { confirm })
   const root = mount(Models, modelsSource)
   await flush()
-  const select = find(root, 'select')
-  await switchAgent(select, 'dod-agent')
   find(root, 'button', kind === 'existing' ? 'dod-model' : '新建模型').props.onClick()
   await flush()
   find(find(root, 'label', '模型 ID'), 'input').props['onUpdate:modelValue']('unsaved-model')
   await flush()
-  await switchAgent(select, 'writing-agent')
+  find(root, 'button', 'writing-model').props.onClick(); await flush()
   expect(confirm).toHaveBeenCalledOnce()
-  expect(select.value).toBe('dod-agent')
   expect(find(find(root, 'label', '模型 ID'), 'input').value).toBe('unsaved-model')
-  expect(contents(root)).not.toContain('writing-model')
   expect(api.request).toHaveBeenCalledTimes(1)
 
   confirm.mockReturnValue(true)
-  await switchAgent(select, 'writing-agent')
-  expect(select.value).toBe('writing-agent')
-  expect(contents(root)).not.toContain('dod-model')
   find(root, 'button', 'writing-model').props.onClick(); await flush()
   expect(find(find(root, 'label', '模型 ID'), 'input').value).toBe('writing-base')
 })
 
-it('switches clean model configurations without a discard prompt', async () => {
+it('opens another clean model without a discard prompt', async () => {
   mockProfiles()
   const confirm = vi.fn()
   vi.stubGlobal('window', { confirm })
   const root = mount(Models, modelsSource)
   await flush()
-  const select = find(root, 'select')
-  await switchAgent(select, 'dod-agent')
   find(root, 'button', 'dod-model').props.onClick(); await flush()
-  await switchAgent(select, 'writing-agent')
+  find(root, 'button', 'writing-model').props.onClick(); await flush()
   expect(confirm).not.toHaveBeenCalled()
-  expect(contents(root)).toContain('writing-model')
-  expect(contents(root)).not.toContain('dod-model')
+  expect(find(find(root, 'label', '模型 ID'), 'input').value).toBe('writing-base')
+})
+
+it('keeps an unsaved model when refresh is canceled', async () => {
+  mockProfiles()
+  const confirm = vi.fn(() => false)
+  vi.stubGlobal('window', { confirm })
+  const root = mount(Models, modelsSource)
+  await flush()
+  find(root, 'button', 'dod-model').props.onClick(); await flush()
+  find(find(root, 'label', '模型 ID'), 'input').props['onUpdate:modelValue']('unsaved-model'); await flush()
+  all(root).find(el => el.type === 'button' && el.props['aria-label'] === '刷新模型')!.props.onClick(); await flush()
+  expect(confirm).toHaveBeenCalledOnce()
+  expect(find(find(root, 'label', '模型 ID'), 'input').value).toBe('unsaved-model')
+  expect(api.request).toHaveBeenCalledTimes(1)
 })
 
 it('saves a masked model key without displaying it', async () => {
@@ -150,7 +152,7 @@ it('saves a masked model key without displaying it', async () => {
   saved.revision = 2
   saved.draft.secret_ref = 'secret://managed-model/0123456789abcdef0123456789abcdef'
   vi.mocked(api.request).mockImplementation(async (path, init) => {
-    if (path.startsWith('/v1/agents/dod-agent/model-profiles?'))
+    if (path.startsWith('/v1/model-profiles?'))
       return { items: [profile('dod-model', 'dod-base')], next_cursor: null } as never
     if (path.endsWith('/credential')) {
       expect(init?.method).toBe('PUT')
@@ -161,7 +163,6 @@ it('saves a masked model key without displaying it', async () => {
   })
   const root = mount(Models, modelsSource)
   await flush()
-  await switchAgent(find(root, 'select'), 'dod-agent')
   find(root, 'button', 'dod-model').props.onClick(); await flush()
   const input = find(find(root, 'label', 'API Key'), 'input')
   expect(input.props.type).toBe('password')
@@ -171,6 +172,25 @@ it('saves a masked model key without displaying it', async () => {
   expect(contents(root)).not.toContain('fictional-key')
   expect(contents(root)).toContain('密钥已保存至草稿')
 })
+
+it.each([[true, '模型可访问'], [false, '模型不可访问']] as const)(
+  'uses the text capability, not job completion, to report model access (%s)', async (text, verdict) => {
+    const published = profile('shared-model', 'deepseek-flash')
+    published.active_version = 1
+    vi.mocked(api.request).mockImplementation(async path => {
+      if (path.startsWith('/v1/model-profiles?')) return { items: [published], next_cursor: null } as never
+      if (path.endsWith('/probe')) return { job_id: 'probe-job', agent_id: 'dod-agent', status: 'succeeded',
+        result_ref: JSON.stringify({ configuration: 'valid', capabilities: { text, tool: false } }) } as never
+      throw new Error(`Unexpected path: ${path}`)
+    })
+    const root = mount(Models, modelsSource)
+    await flush()
+    find(root, 'button', 'shared-model').props.onClick(); await flush()
+    find(root, 'button', '开始验证').props.onClick(); await flush()
+    expect(contents(root)).toContain(verdict)
+    expect(contents(root)).toContain(`基础对话：${text ? '通过' : '未通过'}`)
+    expect(contents(root)).toContain('工具调用：未通过')
+  })
 
 it.each(['accepted', 'failed'])('locks Agent selection and refresh until QA submission is %s', async result => {
   const pending = deferred<{ run_id: string }>()

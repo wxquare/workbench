@@ -49,14 +49,14 @@ export class AgentApi {
 
   list() { return this.client.agents() }
   get(id: string) { return this.client.request<AgentDetail>(`/v1/agents/${encodeURIComponent(id)}`) }
-  async models(id: string): Promise<AvailableModel[]> {
+  async models(): Promise<AvailableModel[]> {
     const models: AvailableModel[] = [], seen = new Set<string>()
     let cursor: string | null = null
     do {
       const query = new URLSearchParams({ limit: '100' })
       if (cursor) query.set('after', cursor)
       const page: { items: { name: string; active_ref?: ModelRef | null }[]; next_cursor: string | null } =
-        await this.client.request(`/v1/agents/${encodeURIComponent(id)}/model-profiles?${query}`)
+        await this.client.request(`/v1/model-profiles?${query}`)
       for (const item of page.items) {
         const ref = item.active_ref
         if (ref && typeof ref.resource_id === 'string' && ref.resource_id && typeof ref.version === 'string' && ref.version &&

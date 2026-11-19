@@ -19,7 +19,7 @@ export interface ModelDraft {
   provider_options: { thinking: { type: 'disabled' } }
 }
 export interface ModelProfile { profile_id: string; name: string; revision: number; active_version: number | null; draft: ModelDraft }
-export interface ProbeJob { job_id: string; status: string; result_ref: string | null }
+export interface ProbeJob { job_id: string; agent_id: string; status: string; result_ref: string | null }
 interface RequestClient { request<T>(path: string, init?: RequestInit): Promise<T> }
 
 export function copyModelDraft(draft: ModelDraft): ModelDraft {
@@ -29,8 +29,8 @@ export function copyModelDraft(draft: ModelDraft): ModelDraft {
 export function createModelsApi(client: ApiClient, makeKey = () => crypto.randomUUID()) {
   const request = client as unknown as RequestClient
   const pending = new Map<string, string>()
-  const root = (agent: string) => `/v1/agents/${encodeURIComponent(agent)}/model-profiles`
-  const path = (agent: string, name: string) => `${root(agent)}/${encodeURIComponent(name)}`
+  const root = '/v1/model-profiles'
+  const path = (name: string) => `${root}/${encodeURIComponent(name)}`
   const validateSecret = (data: Partial<ModelDraft>) => {
     if (data.secret_ref !== undefined) {
       try {
@@ -58,13 +58,13 @@ export function createModelsApi(client: ApiClient, makeKey = () => crypto.random
     return result
   }
   return {
-    async list(agent: string): Promise<ModelProfile[]> {
+    async list(): Promise<ModelProfile[]> {
       const items: ModelProfile[] = [], seen = new Set<string>()
       let cursor: string | null = null
       do {
         const query = new URLSearchParams({ limit: '100' })
         if (cursor) query.set('after', cursor)
-        const page: { items: ModelProfile[]; next_cursor: string | null } = await request.request(`${root(agent)}?${query}`)
+        const page: { items: ModelProfile[]; next_cursor: string | null } = await request.request(`${root}?${query}`)
         items.push(...page.items)
         cursor = page.next_cursor
         if (cursor && seen.has(cursor)) throw new Error('模型分页游标重复。')
@@ -72,14 +72,14 @@ export function createModelsApi(client: ApiClient, makeKey = () => crypto.random
       } while (cursor)
       return items
     },
-    get: (agent: string, name: string) => request.request<ModelProfile>(path(agent, name)),
-    create: (agent: string, draft: Partial<ModelDraft>) => mutate<ModelProfile>(root(agent), 'POST', draft),
-    patch: (agent: string, name: string, draft: Partial<ModelDraft>, revision: number) => mutate<ModelProfile>(path(agent, name), 'PATCH', draft, revision),
-    setCredential: (agent: string, name: string, apiKey: string, revision: number) => request.request<ModelProfile>(`${path(agent, name)}/credential`, {
+    get: (name: string) => request.request<ModelProfile>(path(name)),
+    create: (draft: Partial<ModelDraft>) => mutate<ModelProfile>(root, 'POST', draft),
+    patch: (name: string, draft: Partial<ModelDraft>, revision: number) => mutate<ModelProfile>(path(name), 'PATCH', draft, revision),
+    setCredential: (name: string, apiKey: string, revision: number) => request.request<ModelProfile>(`${path(name)}/credential`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json', 'If-Match': String(revision) }, body: JSON.stringify({ api_key: apiKey }),
     }),
-    publish: (agent: string, name: string, revision: number) => mutate<unknown>(`${path(agent, name)}/publish`, 'POST', undefined, revision),
-    probe: (agent: string, name: string) => mutate<ProbeJob>(`${path(agent, name)}/probe`, 'POST'),
+    publish: (name: string, revision: number) => mutate<unknown>(`${path(name)}/publish`, 'POST', undefined, revision),
+    probe: (name: string) => mutate<ProbeJob>(`${path(name)}/probe`, 'POST'),
     job: (agent: string, id: string) => request.request<ProbeJob>(`/v1/agents/${encodeURIComponent(agent)}/admin-jobs/${encodeURIComponent(id)}`),
   }
 }

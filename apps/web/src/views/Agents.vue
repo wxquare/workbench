@@ -138,7 +138,7 @@ async function openAgent(id: string, force = false) {
     const detail = await service.get(id)
     if (current === generation) {
       showDetail(detail)
-      await loadModels(id, current)
+      await loadModels(current)
       await loadSkills(current)
     }
   } catch (e) { if (current === generation) error.value = agentError(e) }
@@ -216,10 +216,10 @@ function removeUnknownSkill(ref: ModelRef) {
   editor.value = JSON.stringify({ ...currentDraft.value, skills: skillRefs.value.filter(item => refKey(item) !== refKey(ref)) }, null, 2)
 }
 
-async function loadModels(id: string, current = generation) {
+async function loadModels(current = generation) {
   modelsLoading.value = true; modelError.value = ''
   try {
-    const result = await service.models(id)
+    const result = await service.models()
     if (current === generation) models.value = result
   } catch (e) {
     if (current === generation) { models.value = []; modelError.value = `加载模型版本失败：${agentError(e)}` }
@@ -419,15 +419,15 @@ async function publish() {
             </div>
             <label v-if="workflow === 'knowledge.citation_review'">知识来源有效期（秒）<input type="number" min="1" step="1" :value="invalidNumbers.knowledge_max_age_seconds ?? currentDraft?.knowledge_max_age_seconds ?? ''" :disabled="busy || !currentDraft" @input="updateKnowledgeAge(eventValue($event))" /></label>
             <p v-if="workflow === 'knowledge.citation_review'" class="form-note">未设置有效期或来源时间不可验证时，知识问答不会标记为完成。</p>
-            <label>默认模型<select :value="modelKey" :disabled="busy || modelsLoading || !!modelError || !models.length" @change="changeModel">
+            <label>绑定模型<select :value="modelKey" :disabled="busy || modelsLoading || !!modelError || !models.length" @change="changeModel">
               <option v-if="!modelKey || !models.some(model => refKey(model.active_ref) === modelKey)" :value="modelKey">当前模型{{ modelKey ? ` (${JSON.parse(modelKey)[0]} · ${JSON.parse(modelKey)[1]})` : '' }}</option>
               <option v-for="model in models" :key="refKey(model.active_ref)" :value="refKey(model.active_ref)">{{ model.name }} · 版本 {{ model.active_ref.version }}</option>
             </select></label>
             <p v-if="modelsLoading" class="form-note">加载模型版本中…</p>
             <p v-else-if="modelError" class="form-error" role="alert">{{ modelError }}</p>
             <p v-else-if="!models.length" class="form-note">没有可选择的已发布模型版本，当前 ref 保持不变。</p>
-            <div v-if="modelError" class="form-actions"><button type="button" :disabled="busy || modelsLoading" @click="loadModels(selected.agent_id)">重试加载模型</button></div>
-            <p class="form-note">模型参数在 <a href="/app/models" @click="confirmNavigation">模型管理</a> 中配置。</p>
+            <div v-if="modelError" class="form-actions"><button type="button" :disabled="busy || modelsLoading" @click="loadModels()">重试加载模型</button></div>
+            <p class="form-note">从团队已发布模型中选择。模型参数在 <a href="/app/models" @click="confirmNavigation">模型配置</a> 中维护。</p>
             <div class="settings-group">
               <div class="skill-heading"><h2>技能配置 <span class="skill-count">{{ skillRefs.length }}</span></h2><div class="skill-actions"><a href="/app/skills" @click="confirmNavigation">管理 Skills</a><button ref="skillAddButton" type="button" class="primary-button add-skill" :disabled="busy || !currentDraft" @click="openSkillDialog"><Plus class="skill-icon" />添加 Skill</button></div></div>
               <p class="form-note">保存并发布 Agent 后，新任务使用所选技能版本。</p>
