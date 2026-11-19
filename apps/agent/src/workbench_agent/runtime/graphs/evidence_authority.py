@@ -130,13 +130,34 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
 
 async def sanitize_v8_outcome(backend, uow, claim, outcome):
     """Discard inaccessible evidence and text atomically before projection."""
-    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16', 'dod.v19') or not outcome.evidence_refs:
+    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16', 'dod.v19'):
+        return outcome
+    if not outcome.evidence_refs and not (claim.context.graph_version == 'dod.v19' and outcome.completed):
         return outcome
     await backend.jobs.lock_scope(uow, claim.guard)
     await backend.lease_guard.require(uow, claim.guard, {'running', 'finalizing'})
     refs = {str(ref) for ref in outcome.evidence_refs}
-    allowed, _ = await authorized_sources(backend, uow, claim.guard, claim.context, refs)
-    if set(allowed) == refs:
+    allowed, scope_id = await authorized_sources(backend, uow, claim.guard, claim.context, refs)
+    safe = bool(refs) and set(allowed) == refs
+    if safe and claim.context.graph_version == 'dod.v19' and outcome.completed:
+        from datetime import datetime, timezone
+        from workbench_agent.domain.knowledge_answers import AnswerDraft, KnowledgeAnswer, SupportReview
+        from workbench_agent.knowledge.answer_validation import collect_passages, validate_answer, validate_freshness
+        try:
+            saved = await backend.runs.checkpoint(uow, claim.guard.team_id, claim.guard.run_id)
+            state = saved['values']
+            draft = AnswerDraft.model_validate(state['draft'])
+            sources = collect_passages(allowed)
+            verified = validate_answer(draft, sources)
+            review = SupportReview.model_validate(state['support_review'])
+            now = datetime.fromtimestamp((await backend.clock.now_ms(uow)) / 1000, timezone.utc)
+            validate_freshness(draft, sources, now=now, max_age_seconds=claim.context.knowledge_max_age_seconds)
+            expected = KnowledgeAnswer.model_validate({**verified.model_dump(mode='json'), 'verification': 'passed'})
+            safe = (bool(scope_id) and scope_id == state.get('scope_id') and review.approves(len(verified.claims))
+                    and outcome.knowledge_answer == expected and state.get('validated_answer') == verified.model_dump(mode='json'))
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            safe = False
+    if safe:
         return outcome
     from workbench_agent.domain.outcomes import RunOutcome
     value = outcome.model_dump(mode='json')

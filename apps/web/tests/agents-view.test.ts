@@ -474,3 +474,22 @@ describe('Agent management', () => {
     app.unmount()
   })
 })
+
+it('allows configuring a knowledge freshness threshold', async () => {
+  bearerToken.value = 'token'
+  vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
+  vi.mocked(api.request).mockImplementation(async (path, init) => {
+    if (path.startsWith('/v1/skills?') || path.includes('/model-profiles')) return { items: [], next_cursor: null } as never
+    if (init?.method === 'PATCH') return { revision: 4, draft: JSON.parse(init.body as string) } as never
+    return { ...detail, draft: { ...draft, graph_version: 'dod.v19' } } as never
+  })
+  vi.stubGlobal('crypto', { randomUUID: () => 'test-key' })
+  const root = node('root'), app = renderer.createApp(clientComponent())
+  app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
+  await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
+  field(root, '知识来源有效期（秒）', 'input').props.onInput({ target: { value: '3600' } })
+  await flush(); find(root, 'button', '保存草稿').props.onClick(); await flush()
+  const patch = vi.mocked(api.request).mock.calls.find(([, init]) => init?.method === 'PATCH')!
+  expect(JSON.parse(patch[1]!.body as string).knowledge_max_age_seconds).toBe(3600)
+  app.unmount()
+})

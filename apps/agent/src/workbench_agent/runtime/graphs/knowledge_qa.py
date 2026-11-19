@@ -12,7 +12,7 @@ from workbench_agent.application.idempotency import digest
 from workbench_agent.domain.identity import AuthContext
 from workbench_agent.domain.knowledge_answers import AnswerDraft, SupportReview, KnowledgeAnswer
 from workbench_agent.jobs.worker import CapabilityBlocked
-from workbench_agent.knowledge.answer_validation import collect_passages, validate_answer, CitationValidationError
+from workbench_agent.knowledge.answer_validation import collect_passages, validate_answer, validate_freshness, CitationValidationError
 from workbench_agent.runtime.budgets.service import BudgetService
 from workbench_agent.runtime.graphs.evidence_authority import authorized_sources
 
@@ -147,9 +147,20 @@ def build_knowledge_qa(saver):
         payloads, _ = await _sources(runtime.context, state)
         if set(payloads) != set(state['evidence_refs']):
             return {'phase': 'validate_citations', 'unresolved': ['Knowledge sources are no longer authorized.']}
-        try: validated = validate_answer(AnswerDraft.model_validate(state['draft']), collect_passages(payloads))
+        try:
+            from datetime import datetime, timezone
+            async with runtime.context.backend.create_uow().begin_read() as uow:
+                now = await runtime.context.backend.clock.now_ms(uow)
+            draft = AnswerDraft.model_validate(state['draft'])
+            sources = collect_passages(payloads)
+            validated = validate_answer(draft, sources)
         except CitationValidationError:
             return {'phase': 'validate_citations', 'gap_reason': 'kb.invalid_citation', 'unresolved': ['Answer citations could not be verified.']}
+        try:
+            validate_freshness(draft, sources, now=datetime.fromtimestamp(now / 1000, timezone.utc),
+                max_age_seconds=runtime.context.claim.context.knowledge_max_age_seconds)
+        except CitationValidationError:
+            return {'phase': 'validate_citations', 'unresolved': ['Knowledge source freshness could not be verified.']}
         return {'phase': 'validate_citations', 'validated_answer': validated.model_dump(mode='json')}
 
     async def review_support(state, runtime: Runtime):

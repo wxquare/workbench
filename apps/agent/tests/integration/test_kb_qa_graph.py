@@ -21,7 +21,7 @@ async def publish_qa(platform, tools=()):
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=context.default_model, graph_version='dod.v19', tools=tools),
+        ProfileDraft(default_model=context.default_model, graph_version='dod.v19', tools=tools, knowledge_max_age_seconds=3153600000),
         agent['revision'], key='qa-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='qa-publish')
 
@@ -98,7 +98,7 @@ async def test_invalid_scope_rolls_back_admission(platform, client, scope):
     assert await platform.count_rows('run_jobs') == 0
 
 
-@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'rejected', 'revoked', 'recovery', 'empty', 'unavailable', 'tamper', 'gap_recovery', 'model_recovery', 'unanswerable', 'budget', 'model_error', 'revoked_tool', 'revoked_checkpoint', 'changed_scope', 'grant_removed', 'grant_source', 'grant_scope', 'grant_removed_dispatch', 'grant_source_dispatch', 'grant_scope_dispatch', 'empty_source_swap', 'empty_source_recovery', 'legacy_empty_recovery'])
+@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'rejected', 'revoked', 'recovery', 'empty', 'unavailable', 'tamper', 'gap_recovery', 'model_recovery', 'unanswerable', 'budget', 'model_error', 'revoked_tool', 'revoked_checkpoint', 'changed_scope', 'grant_removed', 'grant_source', 'grant_scope', 'grant_removed_dispatch', 'grant_source_dispatch', 'grant_scope_dispatch', 'empty_source_swap', 'empty_source_recovery', 'legacy_empty_recovery', 'expired_source', 'missing_source_time'])
 async def test_public_run_to_independent_worker(platform, client, monkeypatch, scenario):
     import httpx
     from support.mcp import mcp_server_source
@@ -123,7 +123,7 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
             if scenario in ('empty', 'gap_recovery', 'empty_source_swap', 'empty_source_recovery', 'legacy_empty_recovery'): return {'matches': []}
             if scenario == 'unavailable': raise RuntimeError('unavailable')
             return {'matches': [{'source_id': 'guide-1', 'title': 'Guide',
-                'content': 'Check the queue before retrying.', 'source_uri': None}]}
+                'content': 'Check the queue before retrying.', 'source_uri': None, 'updated_at': (None if scenario == 'missing_source_time' else '1900-01-01T00:00:00Z' if scenario == 'expired_source' else '2020-01-01T00:00:00Z')}]}
     runtime.executor.gateways['kb'] = Gateway()
     app = create_http_app(runtime)
     try:

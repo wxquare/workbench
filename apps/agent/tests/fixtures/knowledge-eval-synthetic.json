@@ -1,0 +1,195 @@
+{
+  "description": "Synthetic test data only; not business acceptance evidence.",
+  "cases": [
+    {
+      "id": "synthetic-1",
+      "question": "Synthetic example question",
+      "query_scope": {
+        "service": "example",
+        "environment": "test",
+        "region": "sg",
+        "start_at": "2026-11-18T00:00:00Z",
+        "end_at": "2026-11-18T01:00:00Z"
+      },
+      "expected_source_ids": [
+        "synthetic-doc-1"
+      ],
+      "must_include": [
+        "synthetic fact"
+      ],
+      "answerable": true,
+      "scenario": "answerable",
+      "review_status": "reviewed",
+      "reviewer": "synthetic-test-reviewer",
+      "result_review": {
+        "reviewer": "synthetic-test-reviewer",
+        "output_present": true,
+        "output_ref": "synthetic-run-1",
+        "claims": [
+          {
+            "citation_correct": true
+          }
+        ],
+        "answer_usable": true,
+        "unauthorized_access": false,
+        "degradation_reason": null
+      }
+    },
+    {
+      "id": "synthetic-2",
+      "question": "Synthetic example question",
+      "query_scope": {
+        "service": "example",
+        "environment": "test",
+        "region": "sg",
+        "start_at": "2026-11-18T00:00:00Z",
+        "end_at": "2026-11-18T01:00:00Z"
+      },
+      "expected_source_ids": [
+        "synthetic-doc-1"
+      ],
+      "must_include": [
+        "synthetic fact"
+      ],
+      "answerable": false,
+      "scenario": "no_answer",
+      "review_status": "reviewed",
+      "reviewer": "synthetic-test-reviewer",
+      "result_review": {
+        "reviewer": "synthetic-test-reviewer",
+        "output_present": true,
+        "output_ref": "synthetic-run-2",
+        "claims": [],
+        "answer_usable": false,
+        "unauthorized_access": false,
+        "degradation_reason": "no_answer"
+      }
+    },
+    {
+      "id": "synthetic-3",
+      "question": "Synthetic example question",
+      "query_scope": {
+        "service": "example",
+        "environment": "test",
+        "region": "sg",
+        "start_at": "2026-11-18T00:00:00Z",
+        "end_at": "2026-11-18T01:00:00Z"
+      },
+      "expected_source_ids": [
+        "synthetic-doc-1"
+      ],
+      "must_include": [
+        "synthetic fact"
+      ],
+      "answerable": false,
+      "scenario": "conflict",
+      "review_status": "reviewed",
+      "reviewer": "synthetic-test-reviewer",
+      "result_review": {
+        "reviewer": "synthetic-test-reviewer",
+        "output_present": true,
+        "output_ref": "synthetic-run-3",
+        "claims": [],
+        "answer_usable": false,
+        "unauthorized_access": false,
+        "degradation_reason": "conflict"
+      }
+    },
+    {
+      "id": "synthetic-4",
+      "question": "Synthetic example question",
+      "query_scope": {
+        "service": "example",
+        "environment": "test",
+        "region": "sg",
+        "start_at": "2026-11-18T00:00:00Z",
+        "end_at": "2026-11-18T01:00:00Z"
+      },
+      "expected_source_ids": [
+        "synthetic-doc-1"
+      ],
+      "must_include": [
+        "synthetic fact"
+      ],
+      "answerable": false,
+      "scenario": "stale",
+      "review_status": "reviewed",
+      "reviewer": "synthetic-test-reviewer",
+      "result_review": {
+        "reviewer": "synthetic-test-reviewer",
+        "output_present": true,
+        "output_ref": "synthetic-run-4",
+        "claims": [],
+        "answer_usable": false,
+        "unauthorized_access": false,
+        "degradation_reason": "stale"
+      }
+    },
+    {
+      "id": "synthetic-5",
+      "question": "Synthetic example question",
+      "query_scope": {
+        "service": "example",
+        "environment": "test",
+        "region": "sg",
+        "start_at": "2026-11-18T00:00:00Z",
+        "end_at": "2026-11-18T01:00:00Z"
+      },
+      "expected_source_ids": [
+        "synthetic-doc-1",
+        "synthetic-doc-2"
+      ],
+      "must_include": [
+        "synthetic fact"
+      ],
+      "answerable": true,
+      "scenario": "multiple_sources",
+      "review_status": "reviewed",
+      "reviewer": "synthetic-test-reviewer",
+      "result_review": {
+        "reviewer": "synthetic-test-reviewer",
+        "output_present": true,
+        "output_ref": "synthetic-run-5",
+        "claims": [
+          {
+            "citation_correct": true
+          }
+        ],
+        "answer_usable": true,
+        "unauthorized_access": false,
+        "degradation_reason": null
+      }
+    },
+    {
+      "id": "synthetic-6",
+      "question": "Synthetic example question",
+      "query_scope": {
+        "service": "example",
+        "environment": "test",
+        "region": "sg",
+        "start_at": "2026-11-18T00:00:00Z",
+        "end_at": "2026-11-18T01:00:00Z"
+      },
+      "expected_source_ids": [
+        "synthetic-doc-1"
+      ],
+      "must_include": [
+        "synthetic fact"
+      ],
+      "answerable": false,
+      "scenario": "unauthorized",
+      "review_status": "reviewed",
+      "reviewer": "synthetic-test-reviewer",
+      "result_review": {
+        "reviewer": "synthetic-test-reviewer",
+        "output_present": true,
+        "output_ref": "synthetic-run-6",
+        "claims": [],
+        "answer_usable": false,
+        "unauthorized_access": true,
+        "degradation_reason": "unauthorized"
+      }
+    }
+  ],
+  "dataset_kind": "synthetic"
+}

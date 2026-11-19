@@ -1,7 +1,7 @@
 ---
 title: 产品说明
 status: stable
-verified_commit: 2115cf7
+verified_commit: f932036
 ---
 
 # 产品说明

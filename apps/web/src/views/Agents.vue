@@ -32,7 +32,9 @@ const budgetFields = [
 const validationError = computed(() => {
   const draft = currentDraft.value
   if (!draft) return '请先修正配置 JSON。'
-  if (Object.keys(invalidNumbers.value).length) return '预算上限须为正整数，对话历史轮数须为 0 至 8 的整数。'
+  if (Object.keys(invalidNumbers.value).length) return '预算和知识有效期须为正整数，对话历史轮数须为 0 至 8 的整数。'
+  const age = draft.knowledge_max_age_seconds
+  if (age != null && (!Number.isSafeInteger(age) || (age as number) <= 0)) return '知识来源有效期须为正整数。'
   for (const [key, max] of [['description', 1000], ['system_prompt', 12000]] as const) {
     const value = draft[key]
     if (value !== undefined && (typeof value !== 'string' || Array.from(value).length > max)) return `${key} 须为不超过 ${max} 个字符的字符串。`
@@ -298,6 +300,17 @@ function updateNumber(key: string, value: string, budget = false) {
   editor.value = JSON.stringify(draft, null, 2)
 }
 
+function updateKnowledgeAge(value: string) {
+  if (!currentDraft.value) return
+  const number = Number(value), pending = { ...invalidNumbers.value }
+  if (value !== '' && (!/^\d+$/.test(value) || !Number.isSafeInteger(number) || number <= 0)) {
+    pending.knowledge_max_age_seconds = value; invalidNumbers.value = pending; return
+  }
+  delete pending.knowledge_max_age_seconds
+  invalidNumbers.value = pending
+  editor.value = JSON.stringify({ ...currentDraft.value, knowledge_max_age_seconds: value === '' ? null : number }, null, 2)
+}
+
 async function save() {
   const detail = selected.value
   if (!detail || !detail.draft || stale.value || validationError.value) return
@@ -367,6 +380,8 @@ async function publish() {
             <p v-if="workflow === 'dod.v17'" class="form-note">dod.v17 不执行工具、技能或知识库。</p>
             <p v-if="workflow === 'dod.v18'" class="form-note">dod.v18 使用绑定的技能指令，不执行技能脚本、工具或知识库。</p>
             <p v-if="workflow === 'dod.v19'" class="form-note">dod.v19 需要已发布的 knowledge_search 工具绑定和对应授权。</p>
+            <label v-if="workflow === 'dod.v19'">知识来源有效期（秒）<input type="number" min="1" step="1" :value="invalidNumbers.knowledge_max_age_seconds ?? currentDraft?.knowledge_max_age_seconds ?? ''" :disabled="busy || !currentDraft" @input="updateKnowledgeAge(eventValue($event))" /></label>
+            <p v-if="workflow === 'dod.v19'" class="form-note">未设置有效期或来源时间不可验证时，知识问答不会标记为完成。</p>
             <label>默认模型<select :value="modelKey" :disabled="busy || modelsLoading || !!modelError || !models.length" @change="changeModel">
               <option v-if="!modelKey || !models.some(model => refKey(model.active_ref) === modelKey)" :value="modelKey">当前模型{{ modelKey ? ` (${JSON.parse(modelKey)[0]} · ${JSON.parse(modelKey)[1]})` : '' }}</option>
               <option v-for="model in models" :key="refKey(model.active_ref)" :value="refKey(model.active_ref)">{{ model.name }} · 版本 {{ model.active_ref.version }}</option>

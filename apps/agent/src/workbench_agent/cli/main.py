@@ -64,11 +64,13 @@ def main() -> None:
     kb_rebuild.add_argument('--team-id', required=True)
     kb_rebuild.add_argument('--entry-id', required=True)
     kb_rebuild.add_argument('--expected-revision', type=int, required=True)
+
+    evaluate.add_argument("--dataset-type", choices=("rca", "knowledge"), default="rca")
     args = parser.parse_args()
     if args.command == "evaluate":
         from workbench_agent.cli.evaluate import run_evaluate
         try:
-            passed = run_evaluate(args.dataset, args.output)
+            passed = run_evaluate(args.dataset, args.output, args.dataset_type)
         except (ValueError, OSError):
             print(json.dumps({"error": "invalid or unreadable evaluation dataset or output"}))
             sys.exit(1)

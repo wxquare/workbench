@@ -18,6 +18,7 @@ class RunContext(FrozenModel):
     response_language: Literal['auto', 'zh', 'en'] = Field(default='auto', exclude_if=lambda v: v == 'auto')
     response_format: Literal['default', 'markdown', 'json'] = Field(default='default', exclude_if=lambda v: v == 'default')
     conversation_history_turns: int = Field(default=8, ge=0, le=8, strict=True, exclude_if=lambda v: v == 8)
+    knowledge_max_age_seconds: int | None = Field(default=None, gt=0, strict=True, exclude_if=lambda value: value is None)
     default_model: VersionRef
     role_models: tuple[RoleModelBinding, ...] = ()
     skills: tuple[VersionRef, ...] = ()
