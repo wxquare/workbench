@@ -29,7 +29,7 @@ async def test_signed_alert_worker_proposes_and_human_approves_local_delivery(pl
         permission='ticket.propose',read_only=False,input_schema={'type':'object','properties':{k:{'type':'string'} for k in scope},'required':list(scope),'additionalProperties':False})
     ref=await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,binding,key='journey-tool')
     context=await platform.contexts.resolve(platform.auth,platform.agent_id);agent=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_version='dod.v14',tools=(ref,)),agent['revision'],key='v14-draft')
+    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_id='rca.proposal',tools=(ref,)),agent['revision'],key='v14-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='v14-publish')
     async with platform.backend.create_uow().begin_write() as uow:
         clock=await platform.backend.clock.now_ms(uow)

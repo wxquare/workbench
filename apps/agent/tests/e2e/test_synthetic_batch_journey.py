@@ -31,7 +31,7 @@ async def test_signed_alert_two_independent_approvals_and_local_receipts(platfor
             permission='ticket.propose',read_only=False,input_schema={'type':'object','properties':{**{k:{'type':'string'} for k in scope},'extra':{'type':'string'}},'required':list(scope),'additionalProperties':False})
         refs.append(await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,binding,key='tool-'+kind))
     context=await platform.contexts.resolve(platform.auth,platform.agent_id);agent=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_version='dod.v15',tools=tuple(refs)),agent['revision'],key='v15-draft')
+    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_id='rca.batch_proposal',tools=tuple(refs)),agent['revision'],key='v15-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='v15-publish')
     async with platform.backend.create_uow().begin_write() as uow:
         clock=await platform.backend.clock.now_ms(uow)

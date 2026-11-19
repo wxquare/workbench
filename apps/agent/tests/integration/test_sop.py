@@ -102,7 +102,7 @@ async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
     context=await platform.contexts.resolve(platform.auth,platform.agent_id)
     ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
     draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,
-        ProfileDraft(default_model=context.default_model,graph_version='dod.v11',tools=(ref,) if other_ref is None else (ref,other_ref)),ws['revision'],key='sop-draft')
+        ProfileDraft(default_model=context.default_model,graph_id='sop.conditional',tools=(ref,) if other_ref is None else (ref,other_ref)),ws['revision'],key='sop-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='sop-profile')
     steps=[{'step_id':'metrics','tool':'metrics.read','required':True,'timeout_seconds':1 if scenario=='step_timeout' else 20,'arguments':{'service':'checkout'}}]
     if scenario in ('scope_change','revoked','revoked_at_dispatch'):
@@ -174,12 +174,12 @@ async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
     assert transport.calls == (1 if scenario in ('step_timeout','success_crash','scope_change','revoked','revoked_at_dispatch') else 3)
 
 @pytest.mark.asyncio
-async def test_v11_rejects_non_workflow_modes_at_admission(platform,client):
+async def test_sop_rejects_non_workflow_modes_at_admission(platform,client):
     from workbench_agent.domain.profiles import ProfileDraft
     ctx=await platform.contexts.resolve(platform.auth,platform.agent_id)
     ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
     draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,
-        ProfileDraft(default_model=ctx.default_model,graph_version='dod.v11'),ws['revision'],key='v11-draft')
+        ProfileDraft(default_model=ctx.default_model,graph_id='sop.conditional'),ws['revision'],key='v11-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='v11-publish')
     result=await client.post('/v1/runs',json={'agent_id':platform.agent_id,'mode':'qa','input':{'text':'question'}},headers={'Idempotency-Key':'v11-qa'})
     assert result.status_code == 409
@@ -212,7 +212,7 @@ async def test_v12_worker_enforces_conditions_and_output_schema(platform,scenari
         input_schema={'type':'object','properties':{'service':{'type':'string'}},'required':['service'],'additionalProperties':False})
     ref=await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,binding,key='v12-tool')
     ctx=await platform.contexts.resolve(platform.auth,platform.agent_id); ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_version='dod.v12',tools=(ref,)),ws['revision'],key='v12-draft')
+    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_id='sop.conditional',tools=(ref,)),ws['revision'],key='v12-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='v12-profile')
     first={'step_id':'metrics','tool':'read','arguments':{'service':'checkout'},'output_schema':{'type':'object',
         'properties':{'service':{'type':'string'}},'required':['service'],'additionalProperties':False}}
@@ -268,18 +268,17 @@ async def test_bootstrap_workflow_seed_is_create_if_missing(platform):
     assert len(rows)==1 and rows[0]['hash']==original
 
 @pytest.mark.asyncio
-async def test_v11_rejects_advanced_workflows_without_mutating_its_graph(platform):
+async def test_conditional_sop_accepts_advanced_workflows(platform):
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.domain.runs import CreateRun
     from workbench_agent.application.runs import RunService
     ctx=await platform.contexts.resolve(platform.auth,platform.agent_id); ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_version='dod.v11'),ws['revision'],key='old-draft')
+    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_id='sop.conditional'),ws['revision'],key='old-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='old-publish')
     wf=await WorkflowService(platform.backend).publish(platform.auth,platform.agent_id,definition(steps=[{'step_id':'a','tool':'read','output_schema':{'type':'object'}}]),key='advanced')
     request=CreateRun.model_validate({'agent_id':platform.agent_id,'mode':'sop','workflow_version_id':wf.workflow_version_id,'input':{'text':'check'}})
-    with pytest.raises(DomainError,match='WORKFLOW_UNAVAILABLE'):
-        await RunService(platform.backend).create(platform.auth,request,'old-run')
-    assert await platform.count_rows('runs')==0
+    accepted = await RunService(platform.backend).create(platform.auth,request,'old-run')
+    assert accepted.run_id and await platform.count_rows('runs') == 1
 
 @pytest.mark.asyncio
 async def test_bootstrap_rejects_symlink_seed_without_partial_publication(platform):

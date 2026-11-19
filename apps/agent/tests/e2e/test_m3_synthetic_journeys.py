@@ -20,8 +20,8 @@ from workbench_agent.settings import SyntheticIngressBinding
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("graph_version", ["dod.v14", "dod.v15"])
-async def test_local_signed_alert_to_approved_jira_receipt(platform, monkeypatch, tmp_path, graph_version):
+@pytest.mark.parametrize("graph_id", ["rca.proposal", "rca.batch_proposal"])
+async def test_local_signed_alert_to_approved_jira_receipt(platform, monkeypatch, tmp_path, graph_id):
     import httpx
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.tools.registry import ToolRegistry
@@ -86,14 +86,14 @@ async def test_local_signed_alert_to_approved_jira_receipt(platform, monkeypatch
         write_ref=await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,write_binding,key='journey-jira')
         refs.append(write_ref)
         chat_ref = None
-        if graph_version == 'dod.v15':
+        if graph_id == 'rca.batch_proposal':
             chat_binding = write_binding.model_copy(update={'alias':'journey.seatalk','tool_name':'SendNotification','server':'local.mock.seatalk'})
             chat_ref = await ToolRegistry(platform.backend).publish(platform.auth, platform.agent_id, chat_binding, key='journey-seatalk')
             refs.append(chat_ref)
         context = await platform.contexts.resolve(platform.auth, platform.agent_id)
         agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
         draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-            ProfileDraft(default_model=context.default_model, graph_version=graph_version,tools=tuple(refs)), agent['revision'], key='journey-draft')
+            ProfileDraft(default_model=context.default_model, graph_id=graph_id,tools=tuple(refs)), agent['revision'], key='journey-draft')
         await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='journey-publish')
         monkeypatch.setenv('JOURNEY_ALERT_KEY', 'fictional-test-only')
         identities = {'journey-identity': {'subject': platform.auth.subject, 'team_id': platform.auth.team_id,
@@ -257,31 +257,14 @@ async def test_local_signed_alert_to_approved_jira_receipt(platform, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_local_conflicting_alert_requires_named_input_and_resumes_same_run(platform, client):
-    from workbench_agent.cli.worker import run_worker
-    from support.runs import make_run_payload
-    context=await platform.contexts.resolve(platform.auth,platform.agent_id)
-    agent=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,
-        ProfileDraft(default_model=context.default_model,graph_version='dod.v9'),agent['revision'],key='conflict-draft')
-    await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='conflict-publish')
-    payload=make_run_payload(platform.agent_id,mode='rca')
-    payload['business_context']={'body_region':'ID','link_region':'PH','service':'checkout','environment':'test',
-        'anchor':'2026-11-14T02:00:00Z','window_seconds':1800}
-    accepted=await client.post('/v1/runs',json=payload,headers={'Idempotency-Key':'conflict-journey'})
-    assert accepted.status_code==202, accepted.text
-    run_id=accepted.json()['run_id']
-    assert (await run_worker(platform.settings,once=True))['status']=='projected'
-    waiting=(await client.get('/v1/runs/'+run_id)).json()
-    assert waiting['status']=='waiting_input' and waiting['waiting']['name']=='foundation.input'
-    response={'interrupt_id':waiting['waiting']['interrupt_id'],'expected_revision':waiting['revision'],
-        'response':{'kind':'user_input','values':{'region':'ID'},'text':None}}
-    resumed=await client.post('/v1/runs/'+run_id+'/resume',json=response,headers={'Idempotency-Key':'conflict-answer'})
-    assert resumed.status_code==202 and resumed.json()['run_id']==run_id
-    assert (await run_worker(platform.settings,once=True))['status']=='projected'
-    final=(await client.get('/v1/runs/'+run_id)).json()
-    assert final['status']=='partial'
-    async with platform.backend.create_uow().begin_read() as uow:
-        scope=await platform.backend.runs.current_scope(uow,platform.auth.team_id,run_id)
-    assert json.loads(scope['scope_json'])=={'region':'ID','service':'checkout','environment':'test',
-        'start_at':'2026-11-14T01:30:00+00:00','end_at':'2026-11-14T02:00:00+00:00'}
+async def test_synthetic_alert_rejects_unrecognized_link_region(platform):
+    from integration.test_synthetic_alert_v2 import event, ingress, publish_v13, signed
+    from workbench_agent.application.errors import DomainError
+
+    await publish_v13(platform)
+    alert = event()
+    alert['link_region'] = 'PH'
+    with pytest.raises(DomainError) as error:
+        await ingress(platform).accept(*signed(alert))
+    assert error.value.code == 'INVALID_INGRESS'
+    assert await platform.count_rows('runs') == 0

@@ -12,8 +12,8 @@ async def test_resume_protocol_is_submitted_applying_applied_consumed(platform):
     p=InterruptPlatform(platform); run,w=await p.waiting_run()
     await p.resume(run,w,key='canonical')
     assert await p.resume_status(run)=='submitted'
-    executor=p.worker.registry._executors['dod.v2']
-    graph=executor.registry.resolve('dod.v2','dod-state-v2'); original=graph.ainvoke
+    executor=p.worker.registry._executors['conversation.multi_turn']
+    graph=executor.registry.resolve('conversation.multi_turn','dod-state-v2'); original=graph.ainvoke
     async def invoke(*args,**kwargs):
         assert await p.resume_status(run)=='applying'
         return await original(*args,**kwargs)

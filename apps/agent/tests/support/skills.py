@@ -14,7 +14,7 @@ async def execution_for_run(platform, run):
 async def pinned_execution(platform, refs):
     current = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
-    draft = ProfileDraft(default_model=current.default_model, graph_version='dod.v1', skills=tuple(refs))
+    draft = ProfileDraft(default_model=current.default_model, graph_id='conversation.multi_turn', skills=tuple(refs))
     changed = await platform.profiles.save_draft(platform.auth, platform.agent_id, draft, agent['revision'], key=str(uuid4()))
     await platform.profiles.publish(platform.auth, platform.agent_id, changed['revision'], key=str(uuid4()))
     run = await platform.create_run(key=str(uuid4()))

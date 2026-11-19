@@ -39,10 +39,11 @@ async def test_actual_api_worker_scheduler_cli_demo_and_readonly_doctor(platform
             assert (await command('worker','--once'))['ready']
             assert (await command('scheduler','--once'))['ready']
             view=(await client.get('/v1/runs/'+run)).json()
-            assert view['status']=='succeeded'
-            assert view['outcome']['kind']=='foundation.recorded.v1'
+            assert view['status']=='partial'
+            assert view['outcome']['kind']=='analysis.v1'
+            assert 'MODEL_CAPABILITY_UNAVAILABLE' in str(view['outcome']['unresolved_items'])
             assert (await command('doctor'))['ready']
-            print('CLI_DEMO api=ready worker=projected scheduler=ready doctor=ready foundation=succeeded')
+            print('CLI_DEMO api=ready worker=projected scheduler=ready doctor=ready model=unavailable')
             queued=await client.post('/v1/runs',json=make_run_payload(platform.agent_id),headers={'Idempotency-Key':'shutdown-stream'})
             pending=queued.json()['run_id']
             async with client.stream('GET','/v1/runs/'+pending+'/events',timeout=20) as stream:

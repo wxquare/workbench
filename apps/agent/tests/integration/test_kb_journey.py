@@ -61,7 +61,7 @@ async def test_missing_knowledge_to_published_replay_and_human_confirmation(plat
                     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
                     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
                     changed = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-                        ProfileDraft(default_model=context.default_model, graph_version='dod.v19', tools=(tool,), knowledge_max_age_seconds=31536000),
+                        ProfileDraft(default_model=context.default_model, graph_id='knowledge.citation_review', tools=(tool,), knowledge_max_age_seconds=31536000),
                         agent['revision'], key='journey-profile')
                     await platform.profiles.publish(platform.auth, platform.agent_id, changed['revision'], key='journey-profile-publish')
                     rules = {'users': {platform.auth.subject: ['knowledge.read']}, 'teams': {platform.auth.team_id: ['knowledge.read']},

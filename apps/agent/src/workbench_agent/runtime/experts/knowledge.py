@@ -2,6 +2,7 @@
 
 Knowledge authority is issued only by the Worker for a pinned QA Run.
 """
+from workbench_agent.runtime.graphs.ids import GraphId
 from contextvars import ContextVar
 from dataclasses import dataclass
 import json
@@ -63,7 +64,7 @@ class KnowledgeChatModel(BaseChatModel):
         logical_id = str(uuid5(UUID(self._subtask_id), 'model:' + digest(messages_to_dict(messages))))
         dispatch_check = None
         execution = self._invoker.execution
-        if execution.claim.context.graph_version == 'dod.v19':
+        if execution.claim.context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW:
             # Tool messages survive checkpoint replay. Their content may be sent
             # only if the current guarded transaction still authorizes the exact
             # persisted evidence represented in every successful message.

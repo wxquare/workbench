@@ -18,13 +18,13 @@ async def test_published_profile_freezes_freshness_in_run_context(platform):
     before = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=before.default_model, graph_version='dod.v16', knowledge_max_age_seconds=3600),
+        ProfileDraft(default_model=before.default_model, graph_id='knowledge.scoped_excerpt', knowledge_max_age_seconds=3600),
         agent['revision'], key='freshness-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='freshness-publish')
     accepted = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=before.default_model, graph_version='dod.v16', knowledge_max_age_seconds=7200),
+        ProfileDraft(default_model=before.default_model, graph_id='knowledge.scoped_excerpt', knowledge_max_age_seconds=7200),
         agent['revision'], key='freshness-draft-2')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='freshness-publish-2')
     after = await platform.contexts.resolve(platform.auth, platform.agent_id)

@@ -14,11 +14,11 @@ class ExecutionGuard:
 
 @dataclass(frozen=True)
 class WorkerCapabilities:
-    graph_versions: tuple[str, ...] = ()
+    graph_ids: tuple[str, ...] = ()
     features: frozenset[str] = frozenset()
     admin_kinds: frozenset[str] = frozenset()
     can_reconcile: bool = False
-    projection_graph_versions: tuple[str, ...] = ()
+    projection_graph_ids: tuple[str, ...] = ()
 
 @dataclass(frozen=True)
 class ClaimedJob:

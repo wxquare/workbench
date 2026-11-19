@@ -3,13 +3,22 @@ from support.interrupts import InterruptPlatform
 
 @pytest.mark.asyncio
 async def test_resume_marker_survives_crash_before_business_mark(platform):
-    p=InterruptPlatform(platform); run,w=await p.waiting_run()
-    await p.resume(run,w,key='once')
-    await p.apply_then_crash(run)
-    assert await p.saved_value(run,'last_applied_resume_id')
-    await p.recover_applied(run)
-    assert await p.resume_status(run)=='applied'
-    assert await p.saved_value(run,'input_text')=='ID'
+    from support.rca_recovery import RcaRecovery
+    from support.jobs import claim, expire_lease, row
+    from workbench_agent.jobs.worker import Execution
+    from workbench_agent.persistence import schema
+    p=RcaRecovery(platform); run,w=await p.waiting_run()
+    await p.resume(run,w)
+    owned=await claim(platform)
+    await p.executor.apply_resume(Execution(platform.backend,owned,p.policy),mark=False)
+    await expire_lease(platform,owned.guard)
+    assert (await p.registry.reconciler.recover(run.run_id)).action=='continue'
+    assert await p.worker.run_once()=='projected'
+    assert (await row(platform,schema.resume_requests,run_id=run.run_id))['status']=='applied'
+    async with platform.backend.create_uow().begin_read() as uow:
+        saved=await platform.backend.runs.checkpoint(uow,platform.auth.team_id,run.run_id)
+    assert saved['values']['last_applied_resume_id']
+    assert saved['values']['region']=='id'
 
 @pytest.mark.asyncio
 async def test_marker_commits_before_downstream_operation_and_resume_command_is_once(platform):
@@ -18,8 +27,8 @@ async def test_marker_commits_before_downstream_operation_and_resume_command_is_
     from support.jobs import claim,expire_lease
     p=InterruptPlatform(platform);run,w=await p.waiting_run()
     await p.resume(run,w,key='once')
-    executor=p.worker.registry._executors['dod.v2']
-    graph=executor.registry.resolve('dod.v2','dod-state-v2')
+    executor=p.worker.registry._executors['conversation.multi_turn']
+    graph=executor.registry.resolve('conversation.multi_turn','dod-state-v2')
     original=graph.ainvoke;commands=[]
     async def observe(value,*args,**kwargs):
         if isinstance(value,Command): commands.append(value)

@@ -16,14 +16,14 @@ async def test_projection_intent_survives_reconciler_crash_without_graph_replay(
     class Reconciler:
         async def reconcile(self,uow,claim):
             raise AssertionError('test crashes owner before invoking reconciliation')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend))
     run=await platform.create_run()
     await Worker(platform.backend,'executor',registry).run_once()
     registry.reconciler=Reconciler()
     recovery=await JobService(platform.backend).claim(registry.capabilities(),'crashed-reconciler')
     assert recovery.projection_only and recovery.segment_attempt==1
     await expire_lease(platform,recovery.guard)
-    normal=ExecutorRegistry();normal.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend))
+    normal=ExecutorRegistry();normal.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend))
     assert await JobService(platform.backend).claim(normal.capabilities(),'normal-worker') is None
     takeover=await JobService(platform.backend).claim(registry.capabilities(),'reconciler-2')
     assert takeover.projection_only and takeover.segment_attempt==1
@@ -99,7 +99,7 @@ async def test_requeue_cannot_clear_projection_intent_and_safe_waiting_projectio
     projecting=await claim(platform)
     assert projecting.projection_only
     await leases.release(projecting.guard,status='queued',job_status='capability_blocked')
-    normal=WorkerCapabilities(graph_versions=CAPS.graph_versions)
+    normal=WorkerCapabilities(graph_ids=CAPS.graph_ids)
     assert await JobService(platform.backend).claim(normal,'normal') is None
     assert (await row(platform,s.runs,run_id=run.run_id))['recovery_phase']=='projection'
     assert (await row(platform,s.runs,run_id=run.run_id))['error_code']=='PROJECTION_FAILED'
@@ -119,7 +119,7 @@ async def test_finalizing_takeover_uses_projection_preflight_and_never_executor(
             calls.append('projection')
             assert (await platform.backend.runs.one(uow,'runs',run_id=owned.guard.run_id))['status']=='finalizing'
             await platform.backend.jobs.release(uow,owned.guard,status='partial')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor());registry.reconciler=Reconciler()
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor());registry.reconciler=Reconciler()
     run=await platform.create_run();owned=await claim(platform)
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(update(s.runs).where(s.runs.c.run_id==run.run_id).values(status='finalizing'))
@@ -151,7 +151,7 @@ async def test_finalizing_requeue_preserves_projection_intent_without_caller_hin
     await LeaseService(platform.backend).release(owned.guard,status='queued',job_status='retry_wait',recovery_phase=caller_phase)
     durable=await row(platform,s.runs,run_id=run.run_id)
     assert durable['status']=='queued' and durable['recovery_phase']=='finalizing'
-    assert await JobService(platform.backend).claim(WorkerCapabilities(graph_versions=CAPS.graph_versions),'normal') is None
+    assert await JobService(platform.backend).claim(WorkerCapabilities(graph_ids=CAPS.graph_ids),'normal') is None
     reconciler=await claim(platform,'reconciler')
     assert reconciler.projection_only and reconciler.segment_attempt==1
     assert (await platform.get_run(run.run_id)).attempt==1
@@ -173,7 +173,7 @@ async def test_cancel_after_durable_finalizing_before_executor_return_never_repl
             calls.append('reconcile')
             assert owned.projection_only and owned.segment_attempt==1
             await platform.backend.jobs.release(uow,owned.guard,status='succeeded')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend))
     run=await platform.create_run();worker=Worker(platform.backend,'worker',registry)
     task=asyncio.create_task(worker.run_once())
     await asyncio.wait_for(finalizing.wait(),2)

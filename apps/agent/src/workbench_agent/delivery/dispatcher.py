@@ -3,6 +3,7 @@
 A committed sending marker precedes every I/O. Expired sending leases and
 ambiguous exceptions are unknown, never automatically retried.
 """
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 import asyncio
 from uuid import uuid4
@@ -44,7 +45,7 @@ class Dispatcher:
             if not action or action['state']!='authorized': return None
             approval=await self.backend.actions.current_approval(uow,row['team_id'],row['action_id'])
             run=await self.backend.runs.one(uow,'runs',team_id=row['team_id'],run_id=action['run_id'])
-            if run and RunContext.model_validate_json(run['versions']).graph_version in ('dod.v14','dod.v15'):
+            if run and RunContext.model_validate_json(run['versions']).graph_id in (GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 from workbench_agent.domain.guards import TERMINAL_RUN_STATUSES
                 if run['status'] not in TERMINAL_RUN_STATUSES: return None
                 from sqlalchemy import select

@@ -5,6 +5,7 @@ operation and propagate cancellation. It must not add retries around invokers.
 A successful return is not a durable Run outcome: only a registered projector
 may apply checkpoint-derived waiting/result state in the same fenced UoW.
 """
+from workbench_agent.runtime.graphs.ids import GraphId
 import asyncio
 import random
 import logging
@@ -106,7 +107,7 @@ class Execution:
         async with self.backend.create_uow().begin_write() as uow:
             await self.backend.lease_guard.require(uow,self.guard,allowed_statuses)
             await ContextResolver(self.backend).revalidate(self.claim.context,uow=uow)
-            if self.claim.context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+            if self.claim.context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 from workbench_agent.application.synthetic_source_policy import require_bound_source
                 try:
                     source_identity=await require_bound_source(uow,self.claim.context,self.guard.run_id)
@@ -115,7 +116,7 @@ class Execution:
         if self.claim.context.identity_kind=='connector':
             if self.connector_policy is None:
                 raise CapabilityBlocked('current connector deployment policy unavailable')
-            if self.claim.context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+            if self.claim.context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 require_source=getattr(self.connector_policy,'require_source_current',None)
                 if not callable(require_source): raise CapabilityBlocked('source identity policy unavailable')
                 await require_source(self.claim.context,source_identity)
@@ -132,12 +133,12 @@ class ExecutorRegistry:
         self.admin: dict[str,Callable[[ClaimedAdminJob],Awaitable[str]]]={}
         self.reconciler: Reconciler | None = None
 
-    def register(self,graph_version:str,executor:Executor,projector:LifecycleProjector | None=None):
-        if graph_version in self._executors:
+    def register(self,graph_id:str,executor:Executor,projector:LifecycleProjector | None=None):
+        if graph_id in self._executors:
             raise ValueError('pinned graph implementation already registered')
-        self._executors[graph_version]=executor
+        self._executors[graph_id]=executor
         if projector:
-            self._projectors[graph_version]=projector
+            self._projectors[graph_id]=projector
 
     def register_admin(self,kind,executor):
         if kind not in ADMIN_JOB_KINDS or kind in self.admin:
@@ -146,8 +147,8 @@ class ExecutorRegistry:
 
     def capabilities(self):
         return WorkerCapabilities(
-            graph_versions=tuple(key for key in self._executors if key in self._projectors),
-            projection_graph_versions=tuple(self._executors) if self.reconciler is not None else (),
+            graph_ids=tuple(key for key in self._executors if key in self._projectors),
+            projection_graph_ids=tuple(self._executors) if self.reconciler is not None else (),
             features=self.features,admin_kinds=frozenset(self.admin) & ADMIN_JOB_KINDS,
             can_reconcile=self.reconciler is not None)
 
@@ -170,11 +171,7 @@ class Worker:
         if self._active_tool_claims.get(id(claim)) is not claim or claim.guard.worker_id!=self.worker_id:
             raise PermissionError('Worker does not own active claim')
         execution=Execution(self.backend,claim,self.connector_policy,self.tool_permissions)
-        if claim.context.graph_version == 'dod.v5':
-            execution._expert_name = 'knowledge'
-        elif claim.context.graph_version == 'dod.v6':
-            execution._expert_name = 'code'
-        elif claim.context.graph_version in ('dod.v7', 'dod.v8', 'dod.v16', 'dod.v19'):
+        if claim.context.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW):
             execution._expert_name = 'coordinator'
         execution._tool_owner=self
         self._tool_executions[id(execution)]=(execution,execution.tool_permissions,execution._expert_name,execution.claim)
@@ -188,8 +185,8 @@ class Worker:
     def expert_execution(self, parent, name):
         """Issue narrowly scoped child authority only for a live pinned coordinator Run."""
         if (not self._owns_tool_execution(parent) or parent._expert_name != 'coordinator'
-                or parent.claim.context.graph_version not in ('dod.v7', 'dod.v8', 'dod.v16', 'dod.v19') or name not in {'knowledge', 'code'}
-                or parent.claim.context.graph_version in ('dod.v16', 'dod.v19') and name != 'knowledge'):
+                or parent.claim.context.graph_id not in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW) or name not in {'knowledge', 'code'}
+                or parent.claim.context.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW) and name != 'knowledge'):
             raise PermissionError('trusted coordinator required')
         child = Execution(self.backend, parent.claim, self.connector_policy, self.tool_permissions,
                           cancelled=parent.cancelled)
@@ -225,7 +222,7 @@ class Worker:
         return False
 
     async def _project(self,claim,result):
-        projector=self.registry._projectors.get(claim.context.graph_version)
+        projector=self.registry._projectors.get(claim.context.graph_id)
         if projector is None:
             raise CapabilityBlocked('guarded lifecycle projector unavailable')
         async with self.backend.create_uow().begin_write() as uow:
@@ -254,11 +251,11 @@ class Worker:
             except Exception:
                 raise ProjectionFailure() from None
             return
-        if claim.context.graph_version not in self.registry._projectors:
+        if claim.context.graph_id not in self.registry._projectors:
             raise CapabilityBlocked('guarded lifecycle projector unavailable')
         execution.executor_started=True
-        with span_or_none(self.backend, 'graph.execute', attributes={'workbench.graph_version': claim.context.graph_version}):
-            result=await self.registry._executors[claim.context.graph_version].execute(execution)
+        with span_or_none(self.backend, 'graph.execute', attributes={'workbench.graph_id': claim.context.graph_id}):
+            result=await self.registry._executors[claim.context.graph_id].execute(execution)
         execution.executor_completed=True
         try:
             await execution.check_projection()
@@ -271,7 +268,7 @@ class Worker:
     async def run_once(self):
         claim=await self.jobs.claim(self.registry.capabilities(),self.worker_id)
         if claim is None:
-            return 'idle' if self.registry.capabilities().graph_versions else 'capability_blocked'
+            return 'idle' if self.registry.capabilities().graph_ids else 'capability_blocked'
         telemetry = current_telemetry(self.backend)
         parent = None
         if telemetry is not None and telemetry.tracer is not None:
@@ -284,7 +281,7 @@ class Worker:
         guard = claim.guard
         with bind_context(team_id=guard.team_id, agent_id=claim.context.agent_id, thread_id=guard.thread_id,
                           run_id=guard.run_id, job_id=guard.job_id, run_epoch=guard.run_epoch,
-                          attempt=claim.attempt, graph_version=claim.context.graph_version):
+                          attempt=claim.attempt, graph_id=claim.context.graph_id):
             with span_or_none(self.backend, 'job.execute', traceparent=parent, attributes={
                     'langfuse.observation.type': 'span', 'session.id': guard.thread_id,
                     'workbench.team_id': guard.team_id, 'workbench.agent_id': claim.context.agent_id,
@@ -372,7 +369,7 @@ class Worker:
 
     async def run_admin_once(self):
         if not self.registry.admin or self._admin_lock.locked():
-            return 'capability_blocked' if not self.registry.capabilities().graph_versions else 'idle'
+            return 'capability_blocked' if not self.registry.capabilities().graph_ids else 'idle'
         async with self._admin_lock:
             async with self.backend.create_uow().begin_write() as uow:
                 if await self.backend.jobs.has_priority_work(uow,self.registry.capabilities()):

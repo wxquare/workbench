@@ -55,7 +55,7 @@ async def test_podman_pinned_snapshot_worker_and_timeout(platform, tmp_path, mon
             row=dict(await platform.backend.configuration.one(uow,'repo_snapshots',team_id=platform.auth.team_id,agent_id=platform.agent_id,repo_id='app',commit_sha=commit))
         ref=VersionRef(resource_id=row['snapshot_id'],version=commit,content_hash=snapshot_identity_hash(row))
         current=await platform.contexts.resolve(platform.auth,platform.agent_id);agent=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-        updated=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=current.default_model,graph_version='dod.v1',repositories=(ref,)),agent['revision'],key=str(uuid4()))
+        updated=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=current.default_model,graph_id='conversation.multi_turn',repositories=(ref,)),agent['revision'],key=str(uuid4()))
         await platform.profiles.publish(platform.auth,platform.agent_id,updated['revision'],key=str(uuid4()))
         rules={'users':{platform.auth.subject:['runner.execute']},'teams':{platform.auth.team_id:['runner.execute']},'agents':{platform.agent_id:['runner.execute']},'experts':{'diagnosis':['runner.execute']},'skills':{'__none__':['runner.execute']}}
         platform.backend._tool_permissions=DeploymentToolPermissions(lambda:rules)

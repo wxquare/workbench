@@ -60,11 +60,13 @@ async def test_summary_is_budgeted_and_extractive(platform, tmp_path, scenario, 
     tool_ref=await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,binding,key='tool')
     context=await platform.contexts.resolve(platform.auth,platform.agent_id)
     ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_version='dod.v8',tools=(tool_ref,),repositories=(repo_ref,)),ws['revision'],key='draft')
+    draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_id='knowledge.scoped_excerpt',tools=(tool_ref,),repositories=(repo_ref,)),ws['revision'],key='draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='profile')
-    run=await platform.create_run(mode='code',summary_token_reserve=8000,model_call_limit=1 if scenario=='budget' else None)
-    async with platform.backend.create_uow().begin_write() as uow:
-        await platform.contexts.query_scope(uow,platform.auth,run.run_id,SCOPE)
+    from workbench_agent.application.runs import RunService
+    from workbench_agent.domain.runs import CreateRun
+    request={'agent_id':platform.agent_id,'mode':'qa','input':{'text':'test'},'business_context':{'query_scope':SCOPE},'summary_token_reserve':8000}
+    if scenario=='budget': request['budgets']={'model_calls':1}
+    run=await RunService(platform.backend).create(platform.auth,CreateRun.model_validate(request),'summary-run')
     perms=['knowledge.read','repository.read']
     rules={'users':{platform.auth.subject:perms},'teams':{platform.auth.team_id:perms},'agents':{platform.agent_id:perms},'skills':{'__none__':perms},'experts':{'knowledge': [] if scenario=='knowledge_revoked' else perms,'code':perms}}
     platform.backend._tool_permissions=DeploymentToolPermissions(lambda:rules); platform.backend._snapshot_objects=objects
@@ -288,20 +290,18 @@ async def test_summary_is_budgeted_and_extractive(platform, tmp_path, scenario, 
         assert usage.model_attempts==0
         assert not view.outcome['findings']
     elif scenario in ('invalid', 'summary_crash', 'scope_change', 'pre_summary_scope', 'permission_revoke', 'projection_revoke', 'projection_scope', 'recovery_revoke', 'recovery_scope', 'deadline_revoke', 'dispatch_revoke', 'dispatch_scope', 'alias_revoke', 'http_revoke', 'http_scope', 'http_legacy', 'http_reader', 'http_truncated', 'provider_error'):
-        assert usage.model_attempts == (4 if scenario in ('pre_summary_scope','dispatch_revoke','dispatch_scope','alias_revoke') else 5)
+        assert usage.model_attempts == (2 if scenario in ('pre_summary_scope','dispatch_revoke','dispatch_scope','alias_revoke') else 3)
         assert not view.outcome['findings']
         if scenario in ('scope_change','pre_summary_scope','permission_revoke','projection_revoke','projection_scope','dispatch_revoke','dispatch_scope'): assert not view.outcome['evidence_refs']
         if scenario in ('projection_revoke','projection_scope'): assert 'scope or permissions changed' in view.outcome['summary']
         if scenario=='alias_revoke':
-            assert len(view.outcome['evidence_refs'])==1
-            import json
-            async with platform.backend.create_uow().begin_read() as uow:
-                evidence=await platform.backend.tools.evidence_payload(uow, platform.auth.team_id, run.run_id, view.outcome['evidence_refs'][0])
-            assert json.loads(evidence['payload'])['path']=='main.py'
+            # A repository-like alias must not keep knowledge evidence visible
+            # after the actual knowledge permission is revoked.
+            assert not view.outcome['evidence_refs']
     else:
-        assert usage.model_attempts==5
+        assert usage.model_attempts==3
         assert view.outcome['findings']
-        assert view.outcome['findings'][0]['summary'] in ('Source excerpt: Check the queue', 'Source excerpt: answer = 42')
+        assert view.outcome['findings'][0]['summary'] == 'Source excerpt: Check the queue'
 
     await lifespan.__aexit__(None,None,None)
     await runtime.close()

@@ -5,10 +5,11 @@ from sqlalchemy import select, update, func
 from workbench_agent.domain.runs import AcceptedRun, ResumeRun
 from workbench_agent.application.runs import RunService
 from workbench_agent.application.context import ContextResolver
-from workbench_agent.runtime.graphs.registry import foundation_worker_registry
+from workbench_agent.runtime.graphs.registry import (foundation_worker_registry, GraphRegistry,
+    InterruptExecutor, InterruptProgressProjector)
 from workbench_agent.runtime.checkpoints.portable import InvocationGuard, PortableCheckpointSaver
 from workbench_agent.persistence.checkpoints.codec import CheckpointCodec
-from workbench_agent.runtime.graphs.interrupts import build_interrupt_graph
+from support.interrupt_graph import build_interrupt_graph
 from workbench_agent.jobs.worker import Worker, Execution, ExecutorRegistry
 from workbench_agent.jobs.deadlines import DeadlineService
 from support.jobs import claim, row, expire_lease
@@ -17,7 +18,13 @@ from workbench_agent.persistence import schema as s
 class InterruptPlatform:
     def __init__(self,p):
         self.p=p; self.service=RunService(p.backend)
-        self.worker=Worker(p.backend,'interrupt-worker',foundation_worker_registry(p.backend),renew_interval=.02)
+        registry=foundation_worker_registry(p.backend)
+        provider=InvocationGuard(); saver=PortableCheckpointSaver(p.backend,provider,CheckpointCodec())
+        graphs=GraphRegistry(); graphs.register('conversation.multi_turn','dod-state-v2',build_interrupt_graph(saver))
+        from workbench_agent.runtime.results import ResultProjector
+        registry._executors['conversation.multi_turn']=InterruptExecutor(graphs,saver,provider)
+        registry._projectors['conversation.multi_turn']=ResultProjector(p.backend,InterruptProgressProjector(p.backend,saver))
+        self.worker=Worker(p.backend,'interrupt-worker',registry,renew_interval=.02)
 
     async def publish_v2(self):
         from workbench_agent.domain.profiles import ProfileDraft
@@ -26,7 +33,7 @@ class InterruptPlatform:
             published=await self.p.profiles.published(uow,self.p.auth,self.p.agent_id)
         current=await self.p.profiles.get_agent(self.p.auth,self.p.agent_id)
         changed=await self.p.profiles.save_draft(self.p.auth,self.p.agent_id,
-            ProfileDraft(default_model=published.default_model,graph_version='dod.v2'),expected_revision=current['revision'],key=str(uuid4()))
+            ProfileDraft(default_model=published.default_model,graph_id='conversation.multi_turn'),expected_revision=current['revision'],key=str(uuid4()))
         await self.p.profiles.publish(self.p.auth,self.p.agent_id,expected_revision=changed['revision'],key=str(uuid4()))
 
     async def waiting_run(self,approval=False):
@@ -39,7 +46,7 @@ class InterruptPlatform:
             await graph.ainvoke({'run_id':run.run_id,'input_text':'question','requires_input':not approval,
                 'requires_approval':approval,'actor':self.p.auth.subject,'args_hash':'a'*64,'messages':[]},
                 {'configurable':{'thread_id':run.run_id}},context=Execution(self.p.backend,owned),durability='sync')
-        projector=self.worker.registry._projectors['dod.v2']
+        projector=self.worker.registry._projectors['conversation.multi_turn']
         async with self.p.backend.create_uow().begin_write() as uow:
             await projector.project(uow,owned,None)
         view=await self.p.get_run(run.run_id)
@@ -76,7 +83,7 @@ class InterruptPlatform:
 
     async def apply_then_crash(self,run):
         owned=await claim(self.p)
-        executor=self.worker.registry._executors['dod.v2']
+        executor=self.worker.registry._executors['conversation.multi_turn']
         await executor.apply_resume(Execution(self.p.backend,owned),mark=False)
         await expire_lease(self.p,owned.guard)
 
@@ -93,7 +100,6 @@ class InterruptPlatform:
         await DeadlineService(self.p.backend).scan()
 
     async def running_cancel_race(self):
-        await self.publish_v2()
         run=await self.p.create_run()
         started=asyncio.Event(); stopped=asyncio.Event(); captured=[]
         class Blocking:
@@ -101,7 +107,8 @@ class InterruptPlatform:
                 captured.append(execution.guard); started.set()
                 try: await asyncio.Event().wait()
                 finally: stopped.set()
-        registry=ExecutorRegistry(); registry.register('dod.v2',Blocking(),self.worker.registry._projectors['dod.v2'])
+        graph_id='conversation.multi_turn'
+        registry=ExecutorRegistry(); registry.register(graph_id,Blocking(),self.worker.registry._projectors[graph_id])
         worker=Worker(self.p.backend,'cancel-worker',registry,renew_interval=.01)
         task=asyncio.create_task(worker.run_once()); await asyncio.wait_for(started.wait(),2)
         await self.service.cancel(self.p.auth,run.run_id,'cancel')

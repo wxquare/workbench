@@ -25,7 +25,9 @@ async def test_thread_inventory_is_scoped_and_paginates(platform, client):
     assert (await client.get('/v1/threads', params=params, headers={'Authorization': other})).status_code in (403, 404)
 
 
-async def test_conversation_request_rejects_record_only_graph(platform, client):
+async def test_conversation_request_rejects_single_turn_graph(platform, client):
+    from integration.test_graph_catalog_api import publish_graph
+    await publish_graph(platform, platform.auth, platform.agent_id, 'conversation.single_turn')
     payload = make_run_payload(platform.agent_id)
     payload['business_context'] = {'conversation': True}
     response = await client.post('/v1/runs', json=payload, headers={'Idempotency-Key': 'conversation'})
@@ -33,6 +35,9 @@ async def test_conversation_request_rejects_record_only_graph(platform, client):
 
 
 async def test_conversation_rejects_unsupported_completed_history(platform, client):
+    import json
+    from sqlalchemy import update
+    from workbench_agent.persistence import schema
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.jobs.worker import Worker
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
@@ -41,10 +46,17 @@ async def test_conversation_rejects_unsupported_completed_history(platform, clie
         headers={'Idempotency-Key': 'legacy-record'})
     assert response.status_code == 202
     assert await Worker(platform.backend, 'inventory-worker', foundation_worker_registry(platform.backend)).run_once() == 'projected'
+    # Simulate an imported completed non-conversation run in this thread.
+    async with platform.backend.create_uow().begin_write() as uow:
+        run = await platform.backend.runs.one(uow, 'runs', run_id=response.json()['run_id'])
+        versions = json.loads(run['versions'])
+        versions['graph_id'] = 'knowledge.citation_review'
+        await uow.execute(update(schema.runs).where(schema.runs.c.run_id == run['run_id']).values(
+            status='succeeded', versions=json.dumps(versions)))
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=context.default_model, graph_version='dod.v18', allowed_modes=('qa',)),
+        ProfileDraft(default_model=context.default_model, graph_id='conversation.multi_turn', allowed_modes=('qa',)),
         agent['revision'], key='v18-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='v18-publish')
     payload = make_run_payload(platform.agent_id, thread_id=response.json()['thread_id'])

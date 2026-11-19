@@ -980,7 +980,7 @@ async def test_v13_action_cannot_use_another_connector_identity(platform,operati
     async with platform.backend.create_uow().begin_write() as uow:
         row=(await uow.execute(select(schema.actions).where(schema.actions.c.action_id==action['action_id']))).mappings().one()
         run=await platform.backend.runs.one(uow,'runs',team_id=platform.auth.team_id,run_id=row['run_id'])
-        versions=json.loads(run['versions']);versions.update(graph_version='dod.v13',identity_kind='connector',agent_scope=[platform.agent_id])
+        versions=json.loads(run['versions']);versions.update(graph_id='rca.synthetic',identity_kind='connector',agent_scope=[platform.agent_id])
         await uow.execute(update(schema.runs).where(schema.runs.c.run_id==run['run_id']).values(versions=json.dumps(versions)))
         await uow.execute(insert(schema.synthetic_alert_sources).values(team_id=platform.auth.team_id,run_id=run['run_id'],
             connector_id='source',identity_id='revoked-source',payload=json.dumps({'service':'checkout','environment':'test','region':'id','rule':'error-rate'}),

@@ -102,7 +102,7 @@ async def test_verified_receipt_links_same_run_incident_atomically(platform,tmp_
     async with platform.backend.create_uow().begin_write() as uow:
         row=(await uow.execute(select(schema.actions).where(schema.actions.c.action_id==action['action_id']))).mappings().one()
         run=await platform.backend.runs.one(uow,'runs',team_id=platform.auth.team_id,run_id=row['run_id'])
-        versions=json.loads(run['versions']);versions.update(graph_version='dod.v13',identity_kind='connector',agent_scope=[platform.agent_id])
+        versions=json.loads(run['versions']);versions.update(graph_id='rca.synthetic',identity_kind='connector',agent_scope=[platform.agent_id])
         await uow.execute(update(schema.runs).where(schema.runs.c.run_id==run['run_id']).values(versions=json.dumps(versions)))
         event={'event_id':'mock-alert','text':'fictional','occurred_at':int(anchor.timestamp()),'region':'id','service':'payment-api',
             'environment':'test','rule':'error-rate','anchor':anchor.isoformat(),'window_seconds':600}
@@ -173,8 +173,8 @@ async def test_verified_receipt_links_same_run_incident_atomically(platform,tmp_
     assert (await IncidentService(platform.backend,settings).get(platform.auth,incident_id))['delivery_links']==[]
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('graph_version',['dod.v14','dod.v15'])
-async def test_pending_unfinished_v14_does_not_starve_another_team(platform,tmp_path,graph_version):
+@pytest.mark.parametrize('graph_id',['rca.proposal','rca.batch_proposal'])
+async def test_pending_unfinished_v14_does_not_starve_another_team(platform,tmp_path,graph_id):
     import asyncio,json
     from dataclasses import replace
     from sqlalchemy import select,update,insert
@@ -195,7 +195,7 @@ async def test_pending_unfinished_v14_does_not_starve_another_team(platform,tmp_
     second_service,second=await setup_action(other,server='local.mock.jira',credential_scope='local-mock')
     await second_service.authorize(other.auth,second['approval_id'],'approve',second['payload_hash'])
     async with platform.backend.create_uow().begin_write() as uow:
-        version=json.loads(run['versions']);version['graph_version']=graph_version
+        version=json.loads(run['versions']);version['graph_id']=graph_id
         await uow.execute(update(schema.runs).where(schema.runs.c.run_id==run['run_id']).values(versions=json.dumps(version)))
         original=(await uow.execute(select(schema.outbox).where(schema.outbox.c.action_id==first['action_id']))).mappings().one()
         # More than one batch of blocked rows must not starve the other tenant.
@@ -209,8 +209,8 @@ async def test_pending_unfinished_v14_does_not_starve_another_team(platform,tmp_
     assert len(rows)==151 and all(row['status']=='pending' and row['attempt']==0 for row in rows)
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('graph_version',['dod.v14','dod.v15'])
-async def test_terminal_v14_without_incident_is_audited_and_dead(platform,tmp_path,graph_version):
+@pytest.mark.parametrize('graph_id',['rca.proposal','rca.batch_proposal'])
+async def test_terminal_v14_without_incident_is_audited_and_dead(platform,tmp_path,graph_id):
     import asyncio,json
     from sqlalchemy import select,update
     from test_action_contract import setup_action
@@ -222,7 +222,7 @@ async def test_terminal_v14_without_incident_is_audited_and_dead(platform,tmp_pa
     async with platform.backend.create_uow().begin_write() as uow:
         row=(await uow.execute(select(schema.actions).where(schema.actions.c.action_id==action['action_id']))).mappings().one()
         run=await platform.backend.runs.one(uow,'runs',team_id=platform.auth.team_id,run_id=row['run_id'])
-        versions=json.loads(run['versions']);versions['graph_version']=graph_version
+        versions=json.loads(run['versions']);versions['graph_id']=graph_id
         await uow.execute(update(schema.runs).where(schema.runs.c.run_id==run['run_id']).values(versions=json.dumps(versions),status='partial'))
     platform.backend._delivery_senders={'local.mock.jira':LocalSimulator(tmp_path/'mock.sqlite3','jira')}
     results=await asyncio.gather(Dispatcher(platform.backend,'fair-a').dispatch_one(),Dispatcher(platform.backend,'fair-b').dispatch_one())

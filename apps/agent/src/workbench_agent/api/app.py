@@ -112,6 +112,8 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     app.include_router(runs.router)
     app.include_router(threads.router)
     app.include_router(teams.router)
+    from workbench_agent.api import graphs
+    app.include_router(graphs.router)
     app.include_router(agents.router)
     app.include_router(model_profiles.router)
     app.include_router(admin_jobs.router)

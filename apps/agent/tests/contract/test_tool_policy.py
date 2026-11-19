@@ -62,9 +62,17 @@ async def test_success_records_scoped_evidence_and_never_replays_dispatch(platfo
     ref=await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,binding,key='publish')
     context=await platform.contexts.resolve(platform.auth,platform.agent_id)
     ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    updated=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_version='dod.v4',tools=(ref,)),ws['revision'],key='draft')
+    updated=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_id='sop.conditional',tools=(ref,)),ws['revision'],key='draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,updated['revision'],key='profile')
-    run=await platform.create_run(summary_token_reserve=8000)
+    from workbench_agent.application.workflows import WorkflowService
+    from workbench_agent.domain.workflows import WorkflowDefinition
+    from workbench_agent.domain.runs import CreateRun
+    from workbench_agent.application.runs import RunService
+    workflow = await WorkflowService(platform.backend).publish(platform.auth, platform.agent_id,
+        WorkflowDefinition.model_validate({'name': 'check', 'steps': [{'step_id': 'logs', 'tool': 'logs.search'}]}), key='workflow')
+    run = await RunService(platform.backend).create(platform.auth, CreateRun.model_validate({
+        'agent_id': platform.agent_id, 'mode': 'sop', 'workflow_version_id': workflow.workflow_version_id,
+        'input': {'text': 'check'}, 'summary_token_reserve': 8000}), 'run')
     async with platform.backend.create_uow().begin_write() as uow:
         scope=await platform.contexts.query_scope(uow,platform.auth,run.run_id,{'service':'payment-api'})
     claimed=await claim(platform)
@@ -558,7 +566,7 @@ async def test_real_worker_claim_lifecycle_issues_and_revokes_tool_authority(pla
             executor=PolicyToolExecutor(platform.backend,Transport(),execution=execution)
             result=await executor.execute(execution.claim.context,execution.guard,'logical',ref,{'service':'svc'})
             assert result.status=='ok';retained.append(execution);return 'done'
-    registry=ExecutorRegistry();registry.register('dod.v3',Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register('conversation.multi_turn',Executor(),ReleasingProjector(platform.backend))
     worker=Worker(platform.backend,'worker',registry)
     assert await worker.run_once()=='projected'
     with pytest.raises(ValueError): PolicyToolExecutor(platform.backend,Transport(),execution=retained[0])
@@ -579,7 +587,7 @@ async def test_worker_keeps_other_claim_authority_when_one_slot_finishes(platfor
                 waiting.set();await release.wait()
                 PolicyToolExecutor(platform.backend,object(),execution=execution)
             return 'done'
-    registry=ExecutorRegistry();registry.register('dod.v1',Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register('conversation.multi_turn',Executor(),ReleasingProjector(platform.backend))
     worker=Worker(platform.backend,'worker',registry)
     one=asyncio.create_task(worker.run_once());await asyncio.wait_for(waiting.wait(),5)
     assert await worker.run_once()=='projected'

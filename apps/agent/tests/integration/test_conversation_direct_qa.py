@@ -30,7 +30,7 @@ async def test_run_trace_survives_admission_replay_and_worker_execution(platform
     api_backend._telemetry = api
     worker.backend._telemetry = worker_telemetry
     try:
-        await publish(platform, 'dod.v18')
+        await publish(platform, 'conversation.multi_turn')
         run, payload = await create(client, platform.agent_id, 'trace-replay', 'sensitive question')
         replay = await client.post('/v1/runs', json=payload, headers={'Idempotency-Key': 'trace-replay'})
         assert replay.json()['run_id'] == run['run_id']
@@ -73,7 +73,7 @@ async def test_skill_and_redacted_model_content_share_worker_trace(platform, cli
             json={'name': 'trace-focus', 'description': 'Focus', 'content': 'Prioritize cash flow.'})
         ref = (await client.post(f"/v1/skills/{created.json()['skill_id']}/publish",
             headers={'If-Match': '0', 'Idempotency-Key': str(uuid4())})).json()
-        await publish(platform, 'dod.v18', skills=(ref,))
+        await publish(platform, 'conversation.multi_turn', skills=(ref,))
         run, _ = await create(client, platform.agent_id, 'trace-skill', 'test-"secret\\value')
         assert await worker.run_once() == 'projected'
         spans = exporter.get_finished_spans()
@@ -105,7 +105,7 @@ async def test_managed_credentials_disable_content_export(platform, client, conv
     model.managed_secrets = object()
     worker.backend._telemetry = telemetry
     try:
-        await publish(platform, 'dod.v18')
+        await publish(platform, 'conversation.multi_turn')
         await create(client, platform.agent_id, 'managed-trace', 'fictional-managed-key')
         assert await worker.run_once() == 'projected'
         generation = next(s for s in exporter.get_finished_spans() if s.name == 'model.generate')
@@ -133,7 +133,7 @@ async def test_export_failure_does_not_fail_question(platform, client, conversat
     worker, model, _ = conversation_worker
     worker.backend._telemetry = telemetry
     try:
-        await publish(platform, 'dod.v18')
+        await publish(platform, 'conversation.multi_turn')
         run, _ = await create(client, platform.agent_id, 'trace-export-failure', 'Question')
         assert await worker.run_once() == 'projected'
         telemetry.provider.force_flush(timeout_millis=5000)
@@ -149,12 +149,12 @@ async def publish(platform, version, **config):
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=context.default_model, graph_version=version, allowed_modes=('qa',), **config),
+        ProfileDraft(default_model=context.default_model, graph_id=version, allowed_modes=('qa',), **config),
         agent['revision'], key=f'draft-{version}')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key=f'publish-{version}')
 
 
-@pytest.mark.parametrize('version', ['dod.v17', 'dod.v18'])
+@pytest.mark.parametrize('version', ['conversation.single_turn', 'conversation.multi_turn'])
 async def test_published_agent_instructions_are_pinned_to_run(platform, client, conversation_worker, version):
     worker, model, _ = conversation_worker
     await publish(platform, version, description='A math tutor', system_prompt='Explain as a math tutor.',
@@ -184,7 +184,7 @@ async def test_conversation_injects_pinned_shared_skill(platform, client, conver
     skill = created.json()
     first = await client.post(f"/v1/skills/{skill['skill_id']}/publish", headers={'If-Match': '0', 'Idempotency-Key': str(uuid4())})
     ref = first.json()
-    await publish(platform, 'dod.v18', skills=(ref,))
+    await publish(platform, 'conversation.multi_turn', skills=(ref,))
     run, _ = await create(client, platform.agent_id, 'skill-run', 'Analyse the company')
     await client.patch(f"/v1/skills/{skill['skill_id']}", headers={'If-Match': '1', 'Idempotency-Key': str(uuid4())},
                        json={'description': 'Focus', 'content': 'Prioritize debt.'})
@@ -203,7 +203,7 @@ async def test_missing_skill_object_does_not_invoke_model(platform, client, conv
     created = await client.post('/v1/skills', headers={'Idempotency-Key': str(uuid4())},
         json={'name': 'missing', 'description': 'Missing', 'content': 'Important instruction.'})
     ref = (await client.post(f"/v1/skills/{created.json()['skill_id']}/publish", headers={'If-Match': '0', 'Idempotency-Key': str(uuid4())})).json()
-    await publish(platform, 'dod.v18', skills=(ref,))
+    await publish(platform, 'conversation.multi_turn', skills=(ref,))
     run, _ = await create(client, platform.agent_id, 'missing-skill', 'Question')
     for obj in (tmp_path / 'skill-objects').iterdir():
         obj.unlink()
@@ -217,7 +217,7 @@ async def test_missing_skill_object_does_not_invoke_model(platform, client, conv
 @pytest.mark.parametrize('history_limit', [0, 1])
 async def test_conversation_history_limit_is_applied(platform, client, conversation_worker, history_limit):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18', conversation_history_turns=history_limit)
+    await publish(platform, 'conversation.multi_turn', conversation_history_turns=history_limit)
     first, _ = await create(client, platform.agent_id, 'h1', 'first')
     assert await worker.run_once() == 'projected'
     second, _ = await create(client, platform.agent_id, 'h2', 'second', first['thread_id'])
@@ -283,7 +283,7 @@ async def conversation_worker(platform):
 
 async def test_two_turn_history_is_scoped_and_admission_replay_does_not_call_model(platform, client, conversation_worker):
     worker, model, registry = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'first', 'first question')
     assert await worker.run_once() == 'projected'
     second, payload = await create(client, platform.agent_id, 'second', 'follow up', first['thread_id'])
@@ -301,7 +301,7 @@ async def test_two_turn_history_is_scoped_and_admission_replay_does_not_call_mod
 
 async def test_failed_and_other_thread_turns_are_not_history(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     failed, _ = await create(client, platform.agent_id, 'failed', 'failed question')
     model.fail = True
     assert await worker.run_once() == 'projected'
@@ -319,7 +319,7 @@ async def test_model_checkpoint_gap_recovery_does_not_resend(platform, client, c
     from workbench_agent.runtime.budgets.service import BudgetService
 
     worker, model, registry = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     run, _ = await create(client, platform.agent_id, 'gap', 'question')
     original = BudgetService.partial_outcome
 
@@ -339,7 +339,7 @@ async def test_model_checkpoint_gap_recovery_does_not_resend(platform, client, c
 
 async def test_turn_finished_after_admission_is_not_history(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'pending-first', 'pending question')
     second, _ = await create(client, platform.agent_id, 'already-queued', 'queued question', first['thread_id'])
     assert await worker.run_once() == 'projected'
@@ -350,10 +350,10 @@ async def test_turn_finished_after_admission_is_not_history(platform, client, co
 
 async def test_previous_direct_qa_is_available_after_upgrade(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v17')
+    await publish(platform, 'conversation.single_turn')
     first, _ = await create(client, platform.agent_id, 'legacy', 'legacy secret')
     assert await worker.run_once() == 'projected'
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     payload = make_run_payload(platform.agent_id, thread_id=first['thread_id'])
     payload['input']['text'] = 'new question'
     payload['business_context'] = {'conversation': True}
@@ -365,7 +365,7 @@ async def test_previous_direct_qa_is_available_after_upgrade(platform, client, c
 
 async def test_conversation_waits_for_previous_turn(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'busy-first', 'first question')
     payload = make_run_payload(platform.agent_id, thread_id=first['thread_id'])
     payload['input']['text'] = 'follow up'
@@ -384,7 +384,7 @@ async def test_conversation_waits_for_previous_turn(platform, client, conversati
 @pytest.mark.parametrize('corruption', ['digest', 'answer_message', 'future', 'wrong_agent', 'wrong_team'])
 async def test_invalid_or_out_of_scope_prior_result_is_not_history(platform, client, conversation_worker, corruption):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'prior', 'private question')
     assert await worker.run_once() == 'projected'
     current, _ = await create(client, platform.agent_id, 'current', 'current question', first['thread_id'])
@@ -410,7 +410,7 @@ async def test_invalid_or_out_of_scope_prior_result_is_not_history(platform, cli
 @pytest.mark.parametrize('history_limit', [0, 8])
 async def test_revocation_blocks_execution_and_replay(platform, client, conversation_worker, history_limit):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18', conversation_history_turns=history_limit)
+    await publish(platform, 'conversation.multi_turn', conversation_history_turns=history_limit)
     run, payload = await create(client, platform.agent_id, 'revoked', 'private question')
     await platform.teams.set_member(platform.auth, platform.auth.subject, 'admin', 'revoked', expected_revision=0, key='revoke')
     assert await worker.run_once() == 'capability_blocked'
@@ -421,7 +421,7 @@ async def test_revocation_blocks_execution_and_replay(platform, client, conversa
 
 async def test_history_is_bounded_to_recent_complete_turns(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     thread = None
     for index in range(10):
         run, _ = await create(client, platform.agent_id, f'turn-{index}', f'question-{index}', thread)
@@ -435,7 +435,7 @@ async def test_history_is_bounded_to_recent_complete_turns(platform, client, con
 
 async def test_checkpointed_answer_reconciles_without_model_replay(platform, client, conversation_worker, monkeypatch):
     worker, model, registry = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     run, _ = await create(client, platform.agent_id, 'projection', 'question')
     original = worker._project
 
@@ -454,7 +454,7 @@ async def test_checkpointed_answer_reconciles_without_model_replay(platform, cli
 
 async def test_cross_team_and_agent_cannot_join_thread(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'owner', 'owner secret')
     assert await worker.run_once() == 'projected'
     agent = await platform.profiles.create_agent(platform.auth, 'other', key='other-agent')
@@ -472,7 +472,7 @@ async def test_cross_team_and_agent_cannot_join_thread(platform, client, convers
 
 async def test_large_history_does_not_exceed_byte_limit(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'large', 'x' * 17000)
     assert await worker.run_once() == 'projected'
     _, _ = await create(client, platform.agent_id, 'after-large', 'small question', first['thread_id'])
@@ -483,7 +483,7 @@ async def test_large_history_does_not_exceed_byte_limit(platform, client, conver
 @pytest.mark.parametrize('output', ['   ', 'x' * 65501])
 async def test_invalid_model_output_is_partial_and_not_reused(platform, client, conversation_worker, monkeypatch, output):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'invalid', 'invalid question')
     original = model.ainvoke
 
@@ -503,7 +503,7 @@ async def test_invalid_model_output_is_partial_and_not_reused(platform, client, 
 
 async def test_evidence_bearing_result_is_never_history(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'evidence', 'evidence question')
     assert await worker.run_once() == 'projected'
     async with platform.backend.create_uow().begin_write() as uow:
@@ -523,7 +523,7 @@ async def test_evidence_bearing_result_is_never_history(platform, client, conver
 
 async def test_history_respects_frozen_model_context_budget(platform, client, conversation_worker):
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     first, _ = await create(client, platform.agent_id, 'history-sized', 'x' * 14000)
     assert await worker.run_once() == 'projected'
     question = 'y' * 46000
@@ -537,7 +537,7 @@ async def test_unavailable_model_configuration_returns_partial(platform, client,
     from workbench_agent.application.profiles import ProfileService
 
     worker, model, _ = conversation_worker
-    await publish(platform, 'dod.v18')
+    await publish(platform, 'conversation.multi_turn')
     run, _ = await create(client, platform.agent_id, 'unavailable-model', 'question')
 
     async def unavailable(*args, **kwargs):

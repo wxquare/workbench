@@ -125,7 +125,7 @@ async def test_cost_and_tokens_reconcile_independently_and_overage_is_recorded(p
 async def test_frozen_model_context_limit_is_independent_of_parent_budget(platform):
     from workbench_agent.runtime.budgets.service import BudgetService
     from workbench_agent.domain.usage import ReservationRequest
-    await platform.create_run(mode='code');guard=(await claim(platform)).guard
+    await platform.create_run();guard=(await claim(platform)).guard
     with pytest.raises(DomainError,match='MAX_CONTEXT_EXCEEDED'):
         async with platform.backend.create_uow().begin_write() as uow:
             await BudgetService(platform.backend,summary_tokens=1).reserve(guard,

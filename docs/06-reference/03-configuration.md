@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 status: stable
-verified_commit: f932036
+verified_commit: c5f93fb
 ---
 
 # 配置参考（Agent 与 MCP Server）
@@ -230,7 +230,7 @@ flowchart TD
 | `jobs.lease_scan_seconds` | 固定 | `5` | 原文样例未列 |
 | `jobs.max_segment_attempts` | 固定 | `3` | - |
 | `worker.concurrency` | 固定 | `2` | - |
-| `worker.supported_graph_versions` | `list[str]` | `["dod.v1","dod.v2","dod.v3"]` | **唯一可调项**；样例同默认 |
+| `worker.supported_graph_ids` | `list[str]` | `["conversation.single_turn","conversation.multi_turn"]` | **唯一可调项**；样例同默认 |
 | `worker.expert_concurrency_per_run` | 固定 | `2` | - |
 | `worker.tool_concurrency_per_run` | 固定 | `4` | - |
 | `stream.flush_interval_ms` | 固定 | `250` | - |
@@ -428,10 +428,10 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 
 | # | 原文 | 代码/样例实际 | 处理 |
 | --- | --- | --- | --- |
-| 1 | `worker.supported_graph_versions: [dod.v1]` | 默认与样例均为 `[dod.v1, dod.v2, dod.v3]` | 以代码为准 |
+| 1 | 旧配置使用编号图 | 默认与样例为 `[conversation.single_turn, conversation.multi_turn]` | 以代码为准 |
 | 2 | 样例 `service.auth_mode: oidc` | `agent.example.yaml` 为 `development`，并含 `environment: development`、`model_credential_bindings: []`；`oidc` 是生产强制值 | 以样例为准并说明 |
 | 3 | 未列 `environment`、`asset_root`、`frontend_dist_root`、`bootstrap`、`observability`、`jobs.lease_scan_seconds`、`storage` 下 S3/Runner/仓库/Docker 等字段 | 代码均存在 | 本文补全 |
-| 4 | 暗示 jobs/stream/runner/worker 数值可调 | 除 `supported_graph_versions`、`image_profile` 外均为 `Literal` 固定值，改值即校验失败 | 已标「固定」 |
+| 4 | 暗示 jobs/stream/runner/worker 数值可调 | 除 `supported_graph_ids`、`image_profile` 外均为 `Literal` 固定值，改值即校验失败 | 已标「固定」 |
 | 5 | 未说明加载/覆盖机制 | 三个环境变量覆盖 YAML；`asset_root` 回落到 `WORKBENCH_ASSET_ROOT`；`*_ref` 按需解析 | 本文第 1 节 |
 | 6 | 未涉及 MCP Server 配置 | 样例 `scope_enforced: false` 无法通过校验（要求为 true）；`audit.redact_fields` 样例会替换默认 | 本文第 5 节，建议修正样例注释 |
 | 7 | 原文称 `agent_scope` 用于身份限制 | settings.py 中未出现 `agent_scope` | 待核 |
@@ -443,8 +443,10 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 
 `public_base_url` 默认 null；可配置无凭据、query、fragment 的 HTTP(S) URL，用于生成来源地址。部署时还需设置 MCP 的 `allowed_source_hosts` 和匹配的 source/principal 范围。示例配置里的 UUID、范围和令牌引用均需按实际环境替换；启用配置本身不证明业务查询或模型质量通过验收。
 
-启用 `dod.v19` 时，还需将它加入 worker 支持的图版本，在 Agent 的 `service.mcp_connections` 配置 MCP 连接与对应工具权限和范围，并配置可用的模型凭据。MCP Server 的 knowledge source 指向 Agent 内部查询端点，source ID、业务团队和具体范围须与 Agent grant 及 MCP principal 的授权一致；源出站令牌须匹配 grant，MCP 入站令牌使用独立凭据。配置文件变更后需重启相关进程，当前不支持在线重载。
+启用 `knowledge.citation_review` 时，还需将它加入 worker 支持的图版本，在 Agent 的 `service.mcp_connections` 配置 MCP 连接与对应工具权限和范围，并配置可用的模型凭据。MCP Server 的 knowledge source 指向 Agent 内部查询端点，source ID、业务团队和具体范围须与 Agent grant 及 MCP principal 的授权一致；源出站令牌须匹配 grant，MCP 入站令牌使用独立凭据。配置文件变更后需重启相关进程，当前不支持在线重载。
 
-## 知识问答 v19 配置
+## 知识问答引用审查配置
 
-发布 Agent profile 时可配置 `knowledge_max_age_seconds`，必须是正整数，单位为秒，受理时冻结到 Run；缺省无阈值，不能判定来源新鲜。部署需要显式将 `dod.v19` 加入 `worker.supported_graph_versions` 并设置知识工具及完整范围授权。真实上游的协议、范围隔离、允许域名与阈值必须先经确认，不应直接启用示例来源。
+发布 Agent profile 时可配置 `knowledge_max_age_seconds`，必须是正整数，单位为秒，受理时冻结到 Run；缺省无阈值，不能判定来源新鲜。部署需要显式将 `knowledge.citation_review` 加入 `worker.supported_graph_ids` 并设置知识工具及完整范围授权。真实上游的协议、范围隔离、允许域名与阈值必须先经确认，不应直接启用示例来源。
+
+实验图须显式加入 `worker.supported_graph_ids` 并重启 Worker 与 Scheduler。三张 RCA 图仅通过合成告警入口运行，当前适配器供本地集成测试；真实知识源启用前须完成来源和范围隔离验收。

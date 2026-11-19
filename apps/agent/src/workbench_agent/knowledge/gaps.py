@@ -1,4 +1,5 @@
 """Guarded and team-authorized knowledge gap records."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from uuid import uuid4
 
@@ -48,7 +49,7 @@ class KnowledgeGaps:
         if reason not in REASONS:
             raise DomainError('KB_INVALID_GAP_REASON', 422)
         context, guard = execution.claim.context, execution.guard
-        if context.graph_version != 'dod.v19' or not expected_scope_id:
+        if context.graph_id != GraphId.KNOWLEDGE_CITATION_REVIEW or not expected_scope_id:
             raise DomainError('FORBIDDEN', 403)
         auth = AuthContext(team_id=context.team_id, subject=context.subject, roles=context.roles,
                            identity_kind=context.identity_kind, agent_scope=context.agent_scope)
@@ -58,7 +59,7 @@ class KnowledgeGaps:
             scope = await self.backend.runs.current_scope(uow, guard.team_id, guard.run_id)
             if not scope or scope['scope_id'] != expected_scope_id:
                 raise DomainError('STALE_QUERY_SCOPE', 409)
-            identity = digest({'run_id': guard.run_id, 'scope_id': scope['scope_id'], 'reason': reason, 'graph': 'dod.v19'})
+            identity = digest({'run_id': guard.run_id, 'scope_id': scope['scope_id'], 'reason': reason, 'graph': GraphId.KNOWLEDGE_CITATION_REVIEW})
             existing = await self.store.gap_by_digest(uow, guard.team_id, identity)
             if existing:
                 return self._view(existing)
@@ -75,7 +76,7 @@ class KnowledgeGaps:
                 raise DomainError('KB_INVALID_GAP', 422) from None
             now, gap_id = await self.backend.clock.now_ms(uow), str(uuid4())
             await self.store.insert_gap(uow, {'gap_id': gap_id, 'team_id': guard.team_id, 'run_id': guard.run_id,
-                'source_trace': canonical({'scope_id': scope['scope_id'], 'graph': 'dod.v19'}),
+                'source_trace': canonical({'scope_id': scope['scope_id'], 'graph': GraphId.KNOWLEDGE_CITATION_REVIEW}),
                 'problem_type': reason, 'review_status': 'open', 'summary': summary,
                 'query_scope': canonical(visible_scope), 'dedup_digest': identity, 'gap_revision': 0,
                 'created_at': now, 'updated_at': now})

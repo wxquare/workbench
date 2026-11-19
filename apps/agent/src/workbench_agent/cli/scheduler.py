@@ -19,7 +19,7 @@ async def run_scheduler(settings,*,once=False):
         from workbench_agent.observability import Telemetry
         telemetry = Telemetry(settings.observability, 'scheduler', settings.environment)
         backend._telemetry = telemetry
-    scheduler=Scheduler(backend,foundation_worker_registry(backend),connector_policy=DeploymentConnectorPolicy(lambda:settings.service.connector_identities))
+    scheduler=Scheduler(backend,foundation_worker_registry(backend, supported_graph_ids=settings.worker.supported_graph_ids),connector_policy=DeploymentConnectorPolicy(lambda:settings.service.connector_identities))
     loop=asyncio.get_running_loop();signals=[]
     try:
         if not await storage_ready(settings,backend): return {'ready':False,'status':'storage_unavailable'}

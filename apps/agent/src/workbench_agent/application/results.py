@@ -1,4 +1,5 @@
 """Same-UoW result, final event, message and guarded terminal release."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from uuid import UUID,uuid5
 from workbench_agent.domain.context import RunContext
@@ -48,12 +49,12 @@ class ResultService:
         outcome=RunOutcome.model_validate(outcome.model_dump(mode='json') if isinstance(outcome,RunOutcome) else outcome)
         if outcome.digest()!=digest: raise DomainError('RESULT_DIGEST_MISMATCH',409)
         candidate_digest=digest
-        if context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+        if context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
             from workbench_agent.application.synthetic_source_policy import require_bound_source
             await require_bound_source(uow,context,guard.run_id)
         saved=await self.backend.results.get(uow,guard.team_id,guard.run_id)
         if saved:
-            if context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+            if context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 from sqlalchemy import select
                 from workbench_agent.persistence import schema
                 table=schema.synthetic_result_bindings
@@ -67,12 +68,12 @@ class ResultService:
         if run['status'] in TERMINAL_RUN_STATUSES: raise DomainError('RESULT_CONFLICT',409)
         await self.backend.jobs.lock_scope(uow,guard)
         await self.backend.lease_guard.require(uow,guard)
-        if context.graph_version == 'dod.v19':
+        if context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW:
             from types import SimpleNamespace
             from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome
             outcome=await sanitize_v8_outcome(self.backend,uow,SimpleNamespace(guard=guard,context=context),outcome)
             digest=outcome.digest()
-        if context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+        if context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
             from types import SimpleNamespace
             from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome
             from workbench_agent.incidents.synthetic import source_scope
@@ -93,7 +94,7 @@ class ResultService:
             run_id=guard.run_id,role='assistant',content_ref=canonical({'outcome':outcome.model_dump(mode='json')}),created_at=now,updated_at=now))
         await self.backend.results.insert(uow,dict(team_id=guard.team_id,run_id=guard.run_id,result_id=result_id,
             digest=digest,payload=outcome.canonical(),message_id=message_id,created_at=now))
-        if context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+        if context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
             from sqlalchemy import insert
             from workbench_agent.persistence import schema
             await uow.execute(insert(schema.synthetic_result_bindings).values(team_id=guard.team_id,run_id=guard.run_id,

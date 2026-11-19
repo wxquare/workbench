@@ -68,7 +68,7 @@ async def test_shared_version_can_be_bound_to_two_agents_and_not_other_team(clie
     second = await platform.profiles.create_agent(platform.auth, 'Second', key=str(uuid4()))
     for agent_id in (platform.agent_id, second['agent_id']):
         agent = await platform.profiles.get_agent(platform.auth, agent_id)
-        draft = ProfileDraft.model_validate({**agent['draft'], 'graph_version': 'dod.v18', 'skills': [ref]})
+        draft = ProfileDraft.model_validate({**agent['draft'], 'graph_id': 'conversation.multi_turn', 'skills': [ref]})
         saved = await platform.profiles.save_draft(platform.auth, agent_id, draft, agent['revision'], key=str(uuid4()))
         await platform.profiles.publish(platform.auth, agent_id, saved['revision'], key=str(uuid4()))
         assert (await platform.contexts.resolve(platform.auth, agent_id)).skills[0].resource_id == ref['resource_id']

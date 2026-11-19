@@ -81,13 +81,13 @@ async def test_delta_merger_char_timer_flush_and_stale_cancel(platform):
         assert len([e for e in await p.read_events(run.run_id) if e.type=='assistant.delta'])==1
         await merger.add('timer')
         await asyncio.sleep(.3)
-        assert [e.payload['text'] for e in await p.read_events(run.run_id) if e.type=='assistant.delta']==['a'*255+'b','timer']
+        assert await p.persisted_delta_texts(run.run_id)==['a'*255+'b','timer']
     assert (await platform.get_run(run.run_id)).revision==revision
     merger=DeltaMerger(p.events,guard)
     await merger.__aenter__();await merger.add('must not persist')
     await expire_lease(platform,guard);await claim(platform,'replacement')
     await merger.__aexit__(asyncio.CancelledError,asyncio.CancelledError(),None)
-    assert not any(e.payload.get('text')=='must not persist' for e in await p.read_events(run.run_id))
+    assert 'must not persist' not in await p.persisted_delta_texts(run.run_id)
 
 @pytest.mark.asyncio
 async def test_slow_client_buffer_overflow_closes_transport_without_cancelling_run(platform):
@@ -270,16 +270,14 @@ async def test_delta_timer_exit_settles_committed_append_before_flushing_remaind
     task=asyncio.create_task(produce())
     try:
         await asyncio.wait_for(committed.wait(),2)
-        deltas=[e for e in await p.read_events(run.run_id) if e.type=='assistant.delta']
-        assert [e.payload['text'] for e in deltas]==['committed timer text']
+        assert await p.persisted_delta_texts(run.run_id)==['committed timer text']
         if takeover:
             await expire_lease(platform,guard)
             await claim(platform,'replacement-after-commit')
         leave.set();await asyncio.wait_for(closing.wait(),1)
         release_hint.set()
         await asyncio.wait_for(task,2)
-        deltas=[e for e in await p.read_events(run.run_id) if e.type=='assistant.delta']
-        assert [e.payload['text'] for e in deltas]==['committed timer text']
+        assert await p.persisted_delta_texts(run.run_id)==['committed timer text']
     finally:
         release_hint.set();task.cancel()
         await asyncio.gather(task,return_exceptions=True)
@@ -303,14 +301,14 @@ async def test_delta_size_flush_cancellation_preserves_exactly_one_committed_del
     task=asyncio.create_task(produce())
     try:
         await asyncio.wait_for(committed.wait(),2)
-        assert [e.payload['text'] for e in await p.read_events(run.run_id) if e.type=='assistant.delta']==['x'*256]
+        assert await p.persisted_delta_texts(run.run_id)==['x'*256]
         if takeover:
             await expire_lease(platform,guard)
             await claim(platform,'replacement-after-size-commit')
         task.cancel();await asyncio.wait_for(closing.wait(),1)
         release_hint.set()
         with pytest.raises(asyncio.CancelledError): await asyncio.wait_for(task,2)
-        assert [e.payload['text'] for e in await p.read_events(run.run_id) if e.type=='assistant.delta']==['x'*256]
+        assert await p.persisted_delta_texts(run.run_id)==['x'*256]
     finally:
         release_hint.set();task.cancel()
         await asyncio.gather(task,return_exceptions=True)

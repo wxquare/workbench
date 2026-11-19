@@ -1,7 +1,7 @@
 ---
 title: 接口参考
 status: stable
-verified_commit: 2115cf7
+verified_commit: c5f93fb
 ---
 
 # 接口参考（HTTP API 与 MCP Server 工具）
@@ -17,6 +17,7 @@ verified_commit: 2115cf7
 
 | 分组 | 数量 | 路径前缀 |
 | --- | --- | --- |
+| 图目录 | 2 | `/v1/graphs` |
 | Agent | 5 | `/v1/agents` |
 | Thread | 4 | `/v1/threads` |
 | Run | 5 | `/v1/runs` |
@@ -202,7 +203,7 @@ data: {"attempt":0,"message_id":null,"occurred_at":"...","payload":{...},"run_id
 | 等待 | `input.required`、`approval.required` |
 | 外部动作 | `action.updated`、`delivery.updated` |
 
-存储层对旧事件做线上投影：`run.waiting` 内部别名按新词表输出，`run.cancel_requested` 以 `run.status_changed`(status=cancel_requested) 输出，`run.resume_accepted` 输出为 `run.resumed`。图版本非 `dod.v1/v2/v3` 且调用者无权读取全部证据时，`assistant.delta` 被替换为 `[Content unavailable]`，`tool.*`/`evidence.added` 载荷为 `{"redacted":true}`。
+存储层对旧事件做线上投影：`run.waiting` 内部别名按新词表输出，`run.cancel_requested` 以 `run.status_changed`(status=cancel_requested) 输出，`run.resume_accepted` 输出为 `run.resumed`。调用者无权读取全部证据时，`assistant.delta` 被替换为 `[Content unavailable]`，`tool.*`/`evidence.added` 载荷为 `{"redacted":true}`。
 
 ### 3.3 传输行为
 
@@ -245,7 +246,7 @@ sequenceDiagram
 | `GET /v1/agents` | viewer | - | `limit`、`after` | 200 `{items,next_cursor}` | 404 |
 | `POST /v1/agents` | maintainer（且非 agent_scope） | 幂 | `{name: 1–128}` | 200（receipt 原状态码；非 201，待核） | 409 `AGENT_NAME_CONFLICT`、403 |
 | `GET /v1/agents/{agent_id}` | viewer | - | - | 200 Agent + `draft` | 404 |
-| `PATCH /v1/agents/{agent_id}` | maintainer | 幂+版 | `ProfileDraft`：default_model、description≤1000、system_prompt≤12000、response_language(auto/zh/en)、response_format(default/markdown/json)、conversation_history_turns 0–8、allowed_modes、budget_limits、role_models、graph_version、skills/tools/repositories(VersionRef) | 200 草稿 | 409 `REVISION_CONFLICT`、422 |
+| `PATCH /v1/agents/{agent_id}` | maintainer | 幂+版 | `ProfileDraft`：default_model、description≤1000、system_prompt≤12000、response_language(auto/zh/en)、response_format(default/markdown/json)、conversation_history_turns 0–8、allowed_modes、budget_limits、role_models、graph_id、skills/tools/repositories(VersionRef) | 200 草稿 | 409 `REVISION_CONFLICT`、422 |
 | `POST /v1/agents/{agent_id}/profiles/publish` | maintainer | 幂+版 | 无体 | 发布版本（状态码由服务回执决定，待核是否 201） | 409 `DRAFT_REQUIRED`、`REVISION_CONFLICT` |
 
 ### 4.2 Thread（`/v1/threads`）
@@ -434,3 +435,9 @@ flowchart LR
 | `PATCH /v1/kb/gaps/{gap_id}` | 人工标记 resolved 或 dismissed，附说明 |
 
 `POST /internal/kb/query` 是服务间只读接口，使用独立 Bearer 令牌及具体范围授权，默认关闭；它接收 normalized-query-v1 并返回 KnowledgeData，不能用普通用户身份替代服务授权。
+
+## 图目录接口
+
+`GET /v1/graphs` 返回本团队可见的八张内置图，包含 `graph_id`、中文标题、摘要、推荐或实验状态、能力和当前团队正在使用的 Agent 数。`GET /v1/graphs/{graph_id}` 返回适用场景、执行步骤、备注，以及从编译图提取的节点和条件边。需当前团队 viewer 或以上权限；连接器的使用量按其 Agent 范围统计。未知或退役 ID 返回 404。
+
+Agent 草稿的 `graph_id` 在保存和发布时校验，未知或退役 ID 返回 422 `GRAPH_UNAVAILABLE`。Run 快照和 `run.started` 事件使用 `graph_id`。

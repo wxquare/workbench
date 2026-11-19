@@ -1,4 +1,5 @@
 """Pinned, tool-free QA with bounded, authorized prior conversation turns."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from typing import TypedDict
 from uuid import UUID, uuid5
@@ -45,7 +46,7 @@ async def conversation_history(execution, question, instruction=None):
         auth = await ContextResolver(backend).revalidate(context, uow=uow)
         run = await backend.runs.one(uow, 'runs', team_id=guard.team_id, run_id=guard.run_id)
         thread = await backend.runs.one(uow, 'threads', team_id=guard.team_id, thread_id=guard.thread_id)
-        if (not run or not thread or context.graph_version != 'dod.v18'
+        if (not run or not thread or context.graph_id != GraphId.CONVERSATION_MULTI_TURN
                 or context.team_id != guard.team_id or context.agent_id != run['agent_id']
                 or run['thread_id'] != guard.thread_id or thread['agent_id'] != context.agent_id
                 or RunContext.model_validate_json(run['versions']) != context):
@@ -78,7 +79,7 @@ async def conversation_history(execution, question, instruction=None):
         for row in rows:
             try:
                 prior = RunContext.model_validate_json(row['versions'])
-                if (prior.graph_version not in ('dod.v17', 'dod.v18') or prior.team_id != guard.team_id
+                if (prior.graph_id not in (GraphId.CONVERSATION_SINGLE_TURN, GraphId.CONVERSATION_MULTI_TURN) or prior.team_id != guard.team_id
                         or prior.agent_id != context.agent_id):
                     continue
                 outcome = RunOutcome.model_validate_json(row['result_payload'])
@@ -162,7 +163,7 @@ def build_conversation_qa(saver):
                     prompt.extend((HumanMessage(content=question), AIMessage(content=answer_text)))
                 prompt.append(HumanMessage(content=state['input_text']))
                 result = await factory(execution).invoke(execution.guard, 'summary', prompt,
-                    logical_call_id=str(uuid5(UUID(state['run_id']), 'dod.v18:answer')))
+                    logical_call_id=str(uuid5(UUID(state['run_id']), f'{GraphId.CONVERSATION_MULTI_TURN}:answer')))
                 if result.status == 'ok' and isinstance(result.text, str) and result.text.strip() and len(result.text) <= 65500:
                     text = result.text
                 else:

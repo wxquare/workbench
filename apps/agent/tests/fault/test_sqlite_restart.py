@@ -22,7 +22,7 @@ async def test_checkpoint_restores_pending_writes_after_reopen(platform):
         assert runtime.calls['right']==2
 
 @pytest.mark.asyncio
-async def test_foundation_registry_worker_persists_real_outcome(platform):
+async def test_worker_persists_partial_outcome_without_model(platform):
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     from workbench_agent.jobs.worker import Worker
     from workbench_agent.persistence import schema as s
@@ -32,15 +32,15 @@ async def test_foundation_registry_worker_persists_real_outcome(platform):
     from workbench_agent.cli.worker import run_worker
     assert await run_worker(platform.settings,once=True)=={'ready':True,'status':'projected'}
     stored=await row(platform,s.runs,run_id=run.run_id)
-    assert stored['status']=='succeeded'
+    assert stored['status']=='partial'
     assert stored['recovery_phase'] is None
     assert stored['outcome_ref'] is not None
-    assert (await platform.get_run(run.run_id)).outcome['kind']=='foundation.recorded.v1'
-    assert await platform.count_rows('graph_checkpoints')>=3
+    assert (await platform.get_run(run.run_id)).outcome['kind']=='analysis.v1'
+    assert await platform.count_rows('graph_checkpoints')>=1
     assert await Worker(platform.backend,'foundation-worker',registry).run_once()=='idle'
 
 @pytest.mark.asyncio
-async def test_worker_recovers_persisted_foundation_after_takeover(platform):
+async def test_worker_recovers_persisted_conversation_after_takeover(platform):
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     from workbench_agent.jobs.worker import Execution, Worker
     from support.jobs import claim, expire_lease
@@ -48,24 +48,26 @@ async def test_worker_recovers_persisted_foundation_after_takeover(platform):
     run=await platform.create_run()
     owned=await claim(platform)
     registry=foundation_worker_registry(platform.backend)
-    executor=registry._executors['dod.v1']
-    graph=executor.registry.resolve('dod.v1','dod-state-v1')
+    executor=registry._executors['conversation.multi_turn']
+    graph=executor.registry.resolve('conversation.multi_turn','dod-state-v18')
     config={'configurable':{'thread_id':run.run_id}}
     with executor.guard_provider.bind(owned.guard):
-        await graph.ainvoke({'run_id':run.run_id,'input_text':'preserved original','messages':[]},config,
-            context=Execution(platform.backend,owned),interrupt_before=['compose'])
+        await graph.ainvoke({'run_id':run.run_id,'input_text':'preserved original','mode':'qa'},config,
+            context=Execution(platform.backend,owned),interrupt_before=['answer'])
         snapshot=await graph.aget_state(config)
-        assert snapshot.next==('compose',)
+        assert snapshot.next==('answer',)
     await platform.backend.close()
     platform.backend=SQLiteBackend(platform.settings.storage.database_url.get_secret_value())
+    from support.model import install_test_model
+    install_test_model(platform.backend)
     await expire_lease(platform,owned.guard)
     recovered_registry=foundation_worker_registry(platform.backend)
     worker=Worker(platform.backend,'replacement',recovered_registry)
     assert await worker.run_once()=='projected'  # fenced safe-continuation decision
     assert await worker.run_once()=='projected'  # actual graph continuation outside UoW
-    provider=recovered_registry._executors['dod.v1'].guard_provider
+    provider=recovered_registry._executors['conversation.multi_turn'].guard_provider
     with provider.bind(owned.guard):
-        saved=await recovered_registry._executors['dod.v1'].saver.aget_tuple(config)
-    messages=saved.checkpoint['channel_values']['messages']
-    assert [(message.id,message.content) for message in messages]==[
-        (run.run_id+':input','preserved original'),(run.run_id+':foundation','Foundation input recorded.')]
+        saved=await recovered_registry._executors['conversation.multi_turn'].saver.aget_tuple(config)
+    values=saved.checkpoint['channel_values']
+    assert values['input_text']=='preserved original'
+    assert values['outcome']['completed'] is True

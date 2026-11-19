@@ -27,7 +27,7 @@ async def test_unsupported_backlog_progresses_and_changed_capability_reconsiders
     assert owned is not None and owned.guard.run_id==online.run_id
     assert (await row(platform,s.runs,run_id=unsupported.run_id))['run_epoch']==0
     await LeaseService(platform.backend).release(owned.guard,status='succeeded')
-    restored=await service.claim(WorkerCapabilities(graph_versions=CAPS.graph_versions,features=frozenset({'gpu'})),'worker')
+    restored=await service.claim(WorkerCapabilities(graph_ids=CAPS.graph_ids,features=frozenset({'gpu'})),'worker')
     assert restored is not None and restored.guard.run_id==unsupported.run_id
     assert restored.guard.run_epoch==1
 
@@ -37,7 +37,7 @@ async def test_unexpected_executor_failure_is_not_automatic_external_replay(plat
         async def execute(self,execution):
             calls.append('external-effect-started')
             raise ValueError('unexpected execution failure')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],BrokenExecutor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],BrokenExecutor(),ReleasingProjector(platform.backend))
     run=await platform.create_run()
     worker=Worker(platform.backend,'worker',registry)
     for _ in range(4):
@@ -67,7 +67,7 @@ async def test_projection_failure_reconciles_without_rerunning_executor(platform
             assert claim.projection_only
             assert claim.reconciliation_reason=='PROJECTION_FAILED'
             await platform.backend.jobs.release(uow,claim.guard,status='waiting_input')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),BrokenProjector())
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),BrokenProjector())
     run=await platform.create_run()
     worker=Worker(platform.backend,'worker',registry)
     await worker.run_once()
@@ -115,7 +115,7 @@ async def test_long_admin_work_does_not_consume_either_run_slot(platform):
         admin_started.set()
         await admin_release.wait()
         return 'durable-probe-result'
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend));registry.register_admin('model_probe',admin)
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend));registry.register_admin('model_probe',admin)
     auth=AdminAuth(platform.auth.team_id,platform.agent_id,platform.auth.subject,True)
     admin_job=await AdminJobService(platform.backend).submit(auth,'model_probe',{},'probe')
     worker=Worker(platform.backend,'worker',registry,scan_interval=.01)
@@ -143,7 +143,7 @@ async def test_admin_admission_yields_to_ready_run_without_claiming_it(platform)
     async def admin(claim):
         calls.append('admin')
         return 'result'
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend));registry.register_admin('model_probe',admin)
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend));registry.register_admin('model_probe',admin)
     run=await platform.create_run()
     auth=AdminAuth(platform.auth.team_id,platform.agent_id,platform.auth.subject,True)
     await AdminJobService(platform.backend).submit(auth,'model_probe',{},'probe')
@@ -165,7 +165,7 @@ async def test_cancel_after_executor_return_parks_projection_without_graph_repla
         async def project(self,uow,claim,result):
             entered.set()
             await asyncio.Event().wait()
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),Projector())
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),Projector())
     run=await platform.create_run()
     worker=Worker(platform.backend,'worker',registry)
     task=asyncio.create_task(worker.run_once())
@@ -185,7 +185,7 @@ async def test_cooperative_shutdown_never_resets_explicit_user_cancellation(plat
         async def execute(self,execution):
             entered.set()
             await asyncio.Event().wait()
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend))
     run=await platform.create_run()
     worker=Worker(platform.backend,'worker',registry)
     task=asyncio.create_task(worker.run_once())
@@ -223,7 +223,7 @@ async def test_missing_graph_capability_never_erases_projection_only_recovery(pl
     job=await row(platform,s.run_jobs,job_id=owned.guard.job_id)
     assert job['status']=='capability_blocked'
     assert (await row(platform,s.runs,run_id=owned.guard.run_id))['recovery_phase']=='projection'
-    restored=await service.claim(WorkerCapabilities(graph_versions=CAPS.graph_versions,projection_graph_versions=CAPS.graph_versions,can_reconcile=True),'reconciler')
+    restored=await service.claim(WorkerCapabilities(graph_ids=CAPS.graph_ids,projection_graph_ids=CAPS.graph_ids,can_reconcile=True),'reconciler')
     assert restored.projection_only and restored.reconciliation_reason=='PROJECTION_FAILED'
     assert restored.segment_attempt==1
     assert (await platform.get_run(owned.guard.run_id)).attempt==1
@@ -237,7 +237,7 @@ async def test_reconciler_capability_does_not_admit_fresh_execution_without_proj
         async def reconcile(self,uow,claim):
             calls.append('reconcile')
             await platform.backend.jobs.release(uow,claim.guard,status='waiting_input')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor());registry.reconciler=Reconciler()
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor());registry.reconciler=Reconciler()
     fresh=await platform.create_run('fresh')
     worker=Worker(platform.backend,'worker',registry)
     assert await worker.run_once()=='capability_blocked'

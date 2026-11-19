@@ -4,6 +4,7 @@ This is not a SeaTalk or production alert signature implementation. A deployment
 must not expose this adapter as a real connector without a separately verified
 protocol and binding. Authentication happens before parsing or admission.
 """
+from workbench_agent.runtime.graphs.ids import GraphId
 from dataclasses import dataclass, field
 import hashlib
 import hmac
@@ -154,7 +155,7 @@ class SyntheticAlertV2Ingress:
                 'service':event.service,'environment':event.environment,'region':event.region,'rule':event.rule})
             accepted=await self.runs.create(auth,request,'ingress:'+source_id,source_connector=binding.connector_id,_uow=uow,_ingress_capability=_SYNTHETIC_ALERT_V2)
             run=await self.backend.runs.one(uow,'runs',team_id=binding.team_id,run_id=str(accepted.run_id))
-            if json.loads(run['versions'])['graph_version'] not in ('dod.v13','dod.v14','dod.v15'): raise DomainError('WORKFLOW_UNAVAILABLE',409)
+            if json.loads(run['versions'])['graph_id'] not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL): raise DomainError('WORKFLOW_UNAVAILABLE',409)
             table=schema.synthetic_alert_sources
             row=(await uow.execute(select(table).where(table.c.team_id==binding.team_id,table.c.run_id==str(accepted.run_id)))).mappings().first()
             if row:

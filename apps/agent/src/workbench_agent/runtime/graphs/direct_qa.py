@@ -10,6 +10,7 @@ from workbench_agent.application.errors import DomainError
 from workbench_agent.domain.identity import AuthContext
 from workbench_agent.jobs.worker import CapabilityBlocked
 from workbench_agent.runtime.budgets.service import BudgetService
+from workbench_agent.runtime.graphs.ids import GraphId
 from workbench_agent.runtime.graphs.agent_instructions import system_instruction
 
 STATE_SCHEMA_VERSION = 'dod-state-v17'
@@ -35,7 +36,7 @@ def build_direct_qa(saver):
                 result = await factory(execution).invoke(execution.guard, 'summary', [
                     SystemMessage(content=system_instruction(execution.claim.context)),
                     HumanMessage(content=state['input_text']),
-                ], logical_call_id=str(uuid5(UUID(state['run_id']), 'dod.v17:answer')))
+                ], logical_call_id=str(uuid5(UUID(state['run_id']), f'{GraphId.CONVERSATION_SINGLE_TURN}:answer')))
                 if result.status == 'ok' and result.text and len(result.text) <= 65500:
                     text = result.text
                 else:

@@ -13,7 +13,7 @@ async def publish_direct(platform):
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=context.default_model, graph_version='dod.v17', allowed_modes=('qa',)),
+        ProfileDraft(default_model=context.default_model, graph_id='conversation.single_turn', allowed_modes=('qa',)),
         agent['revision'], key='direct-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='direct-publish')
 

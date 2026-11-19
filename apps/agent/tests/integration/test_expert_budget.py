@@ -136,7 +136,7 @@ async def test_admission_uses_frozen_summary_role_model_before_first_claim(platf
         published=await platform.profiles.published(uow,platform.auth,platform.agent_id)
     current=await platform.profiles.get_agent(platform.auth,platform.agent_id)
     changed=await platform.profiles.save_draft(platform.auth,platform.agent_id,
-        ProfileDraft(default_model=published.default_model,graph_version='dod.v1',role_models=(RoleModelBinding(role='summary',ref=model.ref),)),
+        ProfileDraft(default_model=published.default_model,graph_id='conversation.multi_turn',role_models=(RoleModelBinding(role='summary',ref=model.ref),)),
         expected_revision=current['revision'],key=str(uuid4()))
     await platform.profiles.publish(platform.auth,platform.agent_id,expected_revision=changed['revision'],key=str(uuid4()))
     run=await platform.create_run()

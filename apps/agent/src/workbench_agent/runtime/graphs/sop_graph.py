@@ -1,4 +1,5 @@
 """Pinned workflow execution with a guarded, checkpointed step boundary."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import asyncio
 import json
 from graphlib import TopologicalSorter
@@ -72,7 +73,7 @@ async def _business_authority(execution, wf, scope, executor, uow):
     if len(identities) != 1: raise PermissionError('SOP business scope mismatch')
     return next(iter(identities))
 
-def build_sop(saver, *, version='dod.v11'):
+def build_sop(saver, *, version=GraphId.SOP_CONDITIONAL):
     async def prepare(state, config, runtime: Runtime):
         await runtime.context.check_operation()
         if state['run_id'] != config['configurable']['thread_id'] or state.get('mode') not in ('sop','inspection'):
@@ -110,9 +111,9 @@ def build_sop(saver, *, version='dod.v11'):
             allowed, current_scope=await authorized_sources(execution.backend,uow,execution.guard,execution.claim.context,refs,expected_scope=state['scope_ref'])
         authority_lost = current_scope != state['scope_ref'] or set(allowed) != refs
         status, output, evidence = 'blocked', {}, None
-        allowed_statuses = ('ok','skipped') if version == 'dod.v12' else ('ok',)
+        allowed_statuses = ('ok','skipped') if version == GraphId.SOP_CONDITIONAL else ('ok',)
         if not authority_lost and not state.get('stopped') and all(results[dep]['status'] in allowed_statuses for dep in item.depends_on):
-            if version == 'dod.v12' and item.condition is not None:
+            if version == GraphId.SOP_CONDITIONAL and item.condition is not None:
                 parent, field = item.condition.source.split('.')
                 prior = results[parent]['output']
                 if field not in prior:
@@ -169,7 +170,7 @@ def build_sop(saver, *, version='dod.v11'):
                         status = result.status.value
                         output = result.data if status == 'ok' and isinstance(result.data, dict) else {}
                         evidence = result.evidence_ref
-                        if version == 'dod.v12' and status == 'ok' and item.output_schema is not None:
+                        if version == GraphId.SOP_CONDITIONAL and status == 'ok' and item.output_schema is not None:
                             from jsonschema import Draft202012Validator
                             if not Draft202012Validator(item.output_schema).is_valid(output):
                                 status, output, evidence = 'invalid_output', {}, None
@@ -202,7 +203,7 @@ def build_sop(saver, *, version='dod.v11'):
         if wf:
             for item in wf.steps:
                 result=state.get('results',{}).get(item.step_id,{'status':'blocked'})
-                if item.required and result['status'] not in (('ok','skipped') if version == 'dod.v12' else ('ok',)): data['unresolved_items'].append(item.step_id+': '+result['status'])
+                if item.required and result['status'] not in (('ok','skipped') if version == GraphId.SOP_CONDITIONAL else ('ok',)): data['unresolved_items'].append(item.step_id+': '+result['status'])
         return {'outcome':data}
 
     graph=StateGraph(SopState)

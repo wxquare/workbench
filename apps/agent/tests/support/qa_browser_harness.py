@@ -178,7 +178,7 @@ async def serve(root, port, frontend, mode):
         context = await ContextResolver(backend).resolve(auth, agent)
         current = await profiles.get_agent(auth, agent)
         draft = await profiles.save_draft(auth, agent,
-            ProfileDraft(default_model=context.default_model, graph_version='dod.v16' if mode == 'knowledge' else 'dod.v17', tools=refs),
+            ProfileDraft(default_model=context.default_model, graph_id='knowledge.scoped_excerpt' if mode == 'knowledge' else 'conversation.single_turn', tools=refs),
             current['revision'], key='fixture-draft')
         await profiles.publish(auth, agent, draft['revision'], key='fixture-publish')
         app = create_app(settings, backend=backend)

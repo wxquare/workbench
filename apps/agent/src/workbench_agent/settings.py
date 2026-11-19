@@ -1,5 +1,6 @@
 """Shared deployment configuration. Secret references remain references except DB URL."""
 from __future__ import annotations
+from workbench_agent.runtime.graphs.ids import GraphId
 
 import os
 from pathlib import Path
@@ -462,7 +463,7 @@ class JobSettings(ConfigModel):
 
 class WorkerSettings(ConfigModel):
     concurrency: Literal[2] = 2
-    supported_graph_versions: list[str] = Field(default_factory=lambda: ["dod.v1", "dod.v2", "dod.v3"])
+    supported_graph_ids: list[str] = Field(default_factory=lambda: [GraphId.CONVERSATION_SINGLE_TURN, GraphId.CONVERSATION_MULTI_TURN])
     expert_concurrency_per_run: Literal[2] = 2
     tool_concurrency_per_run: Literal[4] = 4
 

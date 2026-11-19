@@ -55,6 +55,9 @@ class ProfileService:
         return int(ref.version)
 
     async def validate_refs(self, uow, auth, agent_id, draft):
+        from workbench_agent.runtime.graphs.ids import ALL_GRAPH_IDS
+        if draft.graph_id not in ALL_GRAPH_IDS:
+            raise DomainError('GRAPH_UNAVAILABLE', 422)
         for ref in (draft.default_model, *(binding.ref for binding in draft.role_models)):
             row = await self.store.one(uow, 'model_profile_versions', team_id=auth.team_id,
                 model_version_id=ref.resource_id, version=self._model_version_number(ref), hash=ref.content_hash)
@@ -112,7 +115,7 @@ class ProfileService:
                 existing = await self.store.one(uow, 'runtime_profiles', team_id=auth.team_id,
                     agent_id=agent_id, status='draft')
                 now = await self.backend.clock.now_ms(uow)
-                values = dict(updated_at=now, graph_version=draft.graph_version, profile_json=canonical(draft.model_dump(mode='json')),
+                values = dict(updated_at=now, graph_id=draft.graph_id, profile_json=canonical(draft.model_dump(mode='json')),
                     hash=digest(draft.model_dump(mode='json')))
                 if existing:
                     await self.store.change(uow, 'runtime_profiles', {'profile_id': existing['profile_id']}, values)
@@ -141,7 +144,7 @@ class ProfileService:
                 profile = RuntimeProfile(**draft.model_dump(), profile_id=str(uuid4()), agent_id=agent_id,
                     team_id=auth.team_id, version=str(version), content_hash=row['hash'])
                 await self.store.insert(uow, 'runtime_profiles', dict(team_id=auth.team_id, profile_id=profile.profile_id,
-                    agent_id=agent_id, version=version, graph_version=draft.graph_version,
+                    agent_id=agent_id, version=version, graph_id=draft.graph_id,
                     profile_json=canonical(draft.model_dump(mode='json')), hash=profile.content_hash, status='published',
                     created_at=now, updated_at=now,
                     model_versions=canonical([draft.default_model.model_dump(mode='json'),
@@ -245,9 +248,9 @@ class ProfileService:
                 agent_id = str(uuid4())
                 now = await self.backend.clock.now_ms(uow)
                 await self.store.insert(uow, 'agents', dict(team_id=auth.team_id, agent_id=agent_id, name=name, created_at=now, updated_at=now))
-                draft = ProfileDraft(default_model=default_model)
+                draft = ProfileDraft(default_model=default_model, allowed_modes=('qa',))
                 await self.store.insert(uow, 'runtime_profiles', dict(team_id=auth.team_id, profile_id=str(uuid4()),
-                    agent_id=agent_id, version=0, graph_version=draft.graph_version,
+                    agent_id=agent_id, version=0, graph_id=draft.graph_id,
                     profile_json=canonical(draft.model_dump(mode='json')), hash=digest(draft.model_dump(mode='json')), status='draft', created_at=now, updated_at=now))
                 return {'agent_id': agent_id, 'name': name, 'revision': 0}
             result = await self.idempotency.execute_team(uow, auth, 'agent.create', key, {'name': name}, operation, status=201)

@@ -11,7 +11,7 @@ async def create_published_agent(client, name, prompt):
     agent_id = created.json()['agent_id']
     url = '/v1/agents/' + agent_id
     detail = (await client.get(url)).json()
-    draft = {**detail['draft'], 'graph_version': 'dod.v18',
+    draft = {**detail['draft'], 'graph_id': 'conversation.multi_turn',
         'allowed_modes': ['qa'], 'system_prompt': prompt}
     saved = await client.patch(url, json=draft,
         headers={'Idempotency-Key': str(uuid4()), 'If-Match': str(detail['revision'])})

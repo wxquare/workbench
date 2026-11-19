@@ -21,7 +21,7 @@ async def publish_qa(platform, tools=()):
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=context.default_model, graph_version='dod.v16', tools=tools),
+        ProfileDraft(default_model=context.default_model, graph_id='knowledge.scoped_excerpt', tools=tools),
         agent['revision'], key='qa-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='qa-publish')
 
@@ -190,7 +190,8 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                     monkeypatch.setattr(ResultProjector, 'project', original_project)
                     from workbench_agent.cli.scheduler import run_scheduler
                     scheduler_settings = platform.settings.model_copy(update={'service':
-                        platform.settings.service.model_copy(update={'tool_permissions': rules})})
+                        platform.settings.service.model_copy(update={'tool_permissions': rules}), 'worker':
+                        platform.settings.worker.model_copy(update={'supported_graph_ids': ['knowledge.scoped_excerpt']})})
                     report = await run_scheduler(scheduler_settings, once=True)
                     assert report['ready'] and report['recovered'] == 1
                 if scenario == 'recovery':

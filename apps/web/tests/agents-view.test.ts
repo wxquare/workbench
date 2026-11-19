@@ -9,6 +9,18 @@ import Agents from '../src/views/Agents.vue'
 import source from '../src/views/Agents.vue?raw'
 import { api, bearerToken } from '../src/session'
 
+const graphList = vi.hoisted(() => vi.fn())
+vi.mock('../src/graphs-api', () => ({ GraphApi: class { list = graphList } }))
+const catalog = [
+  ['conversation.single_turn', '对话（单轮）'], ['conversation.multi_turn', '对话（多轮）'],
+  ['sop.conditional', 'SOP 巡检'], ['knowledge.scoped_excerpt', '知识摘录'],
+  ['rca.synthetic', '合成告警诊断'], ['rca.proposal', '合成告警诊断（提案）'],
+  ['rca.batch_proposal', '合成告警诊断（批量提案）'], ['knowledge.citation_review', '知识问答（引用审查）'],
+].map(([graph_id, title]) => ({ graph_id, title, summary: title + '摘要', status: graph_id.startsWith('conversation.') ? 'recommended' : 'experimental',
+  agents_using: 0, capabilities: { modes: [], entrypoints: graph_id.startsWith('rca.') ? ['synthetic_alert'] : ['manual'],
+    uses_tools: false, uses_history: false, needs_knowledge_tool: graph_id.startsWith('knowledge.'),
+    needs_workflow: graph_id.startsWith('sop.'), may_interrupt: false, verified_answers: false } }))
+
 vi.mock('../src/session', async () => {
   const { ref } = await import('vue')
   return { bearerToken: ref(''), api: { agents: vi.fn(), request: vi.fn() } }
@@ -54,7 +66,7 @@ function clientComponent() {
   const code = compile(descriptor.template!.content, { mode: 'function', prefixIdentifiers: true, bindingMetadata: bindings }).code
   return { ...Agents, render: new Function('Vue', code)(Vue) }
 }
-const draft = { default_model: { resource_id: 'model', version: '1', content_hash: 'a'.repeat(64) }, graph_version: 'dod.v3', skills: [] }
+const draft = { default_model: { resource_id: 'model', version: '1', content_hash: 'a'.repeat(64) }, graph_id: 'conversation.multi_turn', skills: [] }
 const detail = { agent_id: 'ws', name: 'Operations', revision: 3, active_profile_id: 'profile', draft }
 
 beforeEach(() => {
@@ -62,6 +74,7 @@ beforeEach(() => {
   vi.stubGlobal('ShadowRoot', class {})
   vi.mocked(api.agents).mockReset()
   vi.mocked(api.request).mockReset()
+  graphList.mockReset().mockResolvedValue(catalog)
 })
 
 describe('Agent management', () => {
@@ -166,9 +179,9 @@ describe('Agent management', () => {
     const writingModel = { resource_id: 'writing-model', version: '2', content_hash: 'b'.repeat(64) }
     const details = [
       { agent_id: 'dod-agent', name: 'DoD Helper', revision: 3, active_profile_id: 'dod-profile',
-        draft: { ...draft, graph_version: 'dod.v17', system_prompt: 'Investigate incidents.', default_model: dodModel } },
+        draft: { ...draft, graph_id: 'conversation.single_turn', system_prompt: 'Investigate incidents.', default_model: dodModel } },
       { agent_id: 'writing-agent', name: 'Writing Helper', revision: 8, active_profile_id: 'writing-profile',
-        draft: { ...draft, graph_version: 'dod.v18', system_prompt: 'Improve writing.', default_model: writingModel } },
+        draft: { ...draft, graph_id: 'conversation.multi_turn', system_prompt: 'Improve writing.', default_model: writingModel } },
     ]
     vi.mocked(api.agents).mockResolvedValue(details)
     vi.mocked(api.request).mockImplementation(async (path, init) => {
@@ -189,27 +202,27 @@ describe('Agent management', () => {
     await flush()
     find(root, 'button', 'DoD Helper').props.onClick(); await flush()
     expect(field(root, '系统提示词', 'textarea').props.value).toBe('Investigate incidents.')
-    expect(field(root, '工作流', 'select').props.value).toBe('dod.v17')
+    expect(field(root, '工作流', 'select').props.value).toBe('conversation.single_turn')
     expect(field(root, '默认模型', 'select').props.value).toBe(JSON.stringify(['dod-model', '1', 'a'.repeat(64)]))
     field(root, '系统提示词', 'textarea').props.onInput({ target: { value: 'Investigate service incidents.' } })
     await flush(); find(root, 'button', '保存草稿').props.onClick(); await flush()
 
     find(root, 'button', 'Writing Helper').props.onClick(); await flush()
     expect(field(root, '系统提示词', 'textarea').props.value).toBe('Improve writing.')
-    expect(field(root, '工作流', 'select').props.value).toBe('dod.v18')
+    expect(field(root, '工作流', 'select').props.value).toBe('conversation.multi_turn')
     expect(field(root, '默认模型', 'select').props.value).toBe(JSON.stringify(['writing-model', '2', 'b'.repeat(64)]))
     field(root, '系统提示词', 'textarea').props.onInput({ target: { value: 'Edit technical writing.' } })
     await flush(); find(root, 'button', '保存草稿').props.onClick(); await flush()
 
     find(root, 'button', 'DoD Helper').props.onClick(); await flush()
     expect(field(root, '系统提示词', 'textarea').props.value).toBe('Investigate service incidents.')
-    expect(field(root, '工作流', 'select').props.value).toBe('dod.v17')
+    expect(field(root, '工作流', 'select').props.value).toBe('conversation.single_turn')
     expect(field(root, '默认模型', 'select').props.value).toBe(JSON.stringify(['dod-model', '1', 'a'.repeat(64)]))
     const saves = vi.mocked(api.request).mock.calls.filter(([, init]) => init?.method === 'PATCH')
     expect(saves.map(([path, init]) => [path, new Headers(init?.headers).get('If-Match'), JSON.parse(init!.body as string)]))
       .toEqual([
-        ['/v1/agents/dod-agent', '3', { ...draft, graph_version: 'dod.v17', system_prompt: 'Investigate service incidents.', default_model: dodModel }],
-        ['/v1/agents/writing-agent', '8', { ...draft, graph_version: 'dod.v18', system_prompt: 'Edit technical writing.', default_model: writingModel }],
+        ['/v1/agents/dod-agent', '3', { ...draft, graph_id: 'conversation.single_turn', system_prompt: 'Investigate service incidents.', default_model: dodModel }],
+        ['/v1/agents/writing-agent', '8', { ...draft, graph_id: 'conversation.multi_turn', system_prompt: 'Edit technical writing.', default_model: writingModel }],
       ])
     app.unmount()
   })
@@ -243,7 +256,7 @@ describe('Agent management', () => {
     find(root, 'button', 'Operations').props.onClick()
     await flush()
     const textarea = field(root, '配置草稿 JSON', 'textarea')
-    textarea.value = JSON.stringify({ ...draft, graph_version: 'dod.v4' })
+    textarea.value = JSON.stringify({ ...draft, graph_id: 'sop.conditional' })
     textarea.listeners.input({ target: textarea })
     await flush()
     find(root, 'button', '保存草稿').props.onClick()
@@ -251,10 +264,10 @@ describe('Agent management', () => {
     expect(contents(root)).toContain('版本冲突')
     expect(find(root, 'button', '保存草稿').props.disabled).toBe(true)
     expect(find(root, 'button', '发布草稿').props.disabled).toBe(true)
-    expect(textarea.value).toContain('dod.v4')
+    expect(textarea.value).toContain('sop.conditional')
     find(root, 'button', '重新加载配置').props.onClick()
     await flush()
-    expect(textarea.value).toContain('dod.v4')
+    expect(textarea.value).toContain('sop.conditional')
     expect(vi.mocked(window.confirm)).toHaveBeenCalled()
     app.unmount()
   })
@@ -278,14 +291,14 @@ describe('Agent management', () => {
     await flush()
     find(root, 'button', 'Operations').props.onClick()
     await flush()
-    const workflow = find(root, 'select', 'dod.v18')
-    expect(contents(workflow)).toContain('dod.v17')
-    workflow.props.onChange({ target: { value: 'dod.v18' } })
+    const workflow = find(root, 'select', '对话（多轮）')
+    expect(contents(workflow)).toContain('对话（单轮）')
+    workflow.props.onChange({ target: { value: 'conversation.multi_turn' } })
     await flush()
     find(root, 'button', '保存草稿').props.onClick()
     await flush()
     const patch = vi.mocked(api.request).mock.calls.find(([, init]) => init?.method === 'PATCH')!
-    expect(JSON.parse(patch[1]!.body as string)).toEqual({ ...draft, graph_version: 'dod.v18' })
+    expect(JSON.parse(patch[1]!.body as string)).toEqual({ ...draft, graph_id: 'conversation.multi_turn' })
     find(root, 'button', '发布草稿').props.onClick()
     await flush()
     expect(confirm).toHaveBeenCalled()
@@ -376,7 +389,7 @@ describe('Agent management', () => {
   it('saves structured instructions and explicit budget clears while preserving the draft', async () => {
     bearerToken.value = 'token'
     vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
-    const original = { ...draft, graph_version: 'dod.v18', description: 'old', system_prompt: 'old prompt',
+    const original = { ...draft, graph_id: 'conversation.multi_turn', description: 'old', system_prompt: 'old prompt',
       budget_limits: { tokens: 500, tool_calls: 10 }, skills: [{ resource_id: 'existing' }] }
     vi.mocked(api.request).mockImplementation(async (path, init) => {
       if (path.includes('/model-profiles')) return { items: [], next_cursor: null } as never
@@ -414,12 +427,12 @@ describe('Agent management', () => {
     bearerToken.value = 'token'
     vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
     vi.mocked(api.request).mockImplementation(async path => path.includes('/model-profiles')
-      ? { items: [], next_cursor: null } as never : { ...detail, draft: { ...draft, graph_version: 'dod.v17' } } as never)
+      ? { items: [], next_cursor: null } as never : { ...detail, draft: { ...draft, graph_id: 'conversation.single_turn' } } as never)
     const root = node('root'), app = renderer.createApp(clientComponent())
     app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
     await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
     expect(field(root, '对话历史轮数', 'input').props.disabled).toBe(true)
-    find(root, 'select', 'dod.v18').props.onChange({ target: { value: 'dod.v18' } }); await flush()
+    find(root, 'select', '对话（多轮）').props.onChange({ target: { value: 'conversation.multi_turn' } }); await flush()
     expect(field(root, '对话历史轮数', 'input').props.disabled).toBe(false)
     field(root, '模型调用上限', 'input').props.onInput({ target: { value: '0' } }); await flush()
     expect(find(root, 'button', '保存草稿').props.disabled).toBe(true)
@@ -481,7 +494,7 @@ it('allows configuring a knowledge freshness threshold', async () => {
   vi.mocked(api.request).mockImplementation(async (path, init) => {
     if (path.startsWith('/v1/skills?') || path.includes('/model-profiles')) return { items: [], next_cursor: null } as never
     if (init?.method === 'PATCH') return { revision: 4, draft: JSON.parse(init.body as string) } as never
-    return { ...detail, draft: { ...draft, graph_version: 'dod.v19' } } as never
+    return { ...detail, draft: { ...draft, graph_id: 'knowledge.citation_review' } } as never
   })
   vi.stubGlobal('crypto', { randomUUID: () => 'test-key' })
   const root = node('root'), app = renderer.createApp(clientComponent())
@@ -491,5 +504,54 @@ it('allows configuring a knowledge freshness threshold', async () => {
   await flush(); find(root, 'button', '保存草稿').props.onClick(); await flush()
   const patch = vi.mocked(api.request).mock.calls.find(([, init]) => init?.method === 'PATCH')!
   expect(JSON.parse(patch[1]!.body as string).knowledge_max_age_seconds).toBe(3600)
+  app.unmount()
+})
+
+
+it('offers every catalog graph and displays the selected constraints', async () => {
+  bearerToken.value = 'token'
+  vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
+  vi.mocked(api.request).mockImplementation(async path => path.startsWith('/v1/skills?') || path.includes('/model-profiles')
+    ? { items: [], next_cursor: null } as never : detail as never)
+  const root = node('root'), app = renderer.createApp(clientComponent())
+  app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
+  await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
+  const select = field(root, '工作流', 'select')
+  for (const item of catalog) expect(contents(select)).toContain(item.title)
+  select.props.onChange({ target: { value: 'rca.synthetic' } }); await flush()
+  expect(contents(root)).toContain('仅合成告警入口')
+  expect(contents(root)).toContain('本地')
+  expect(contents(root)).toContain('Worker')
+  select.props.onChange({ target: { value: 'knowledge.citation_review' } }); await flush()
+  expect(contents(root)).toContain('真实知识源')
+  app.unmount()
+})
+
+it('prevents graph changes and saving while the catalog is unavailable', async () => {
+  bearerToken.value = 'token'; graphList.mockRejectedValue(new Error('offline'))
+  vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
+  vi.mocked(api.request).mockImplementation(async path => path.startsWith('/v1/skills?') || path.includes('/model-profiles')
+    ? { items: [], next_cursor: null } as never : detail as never)
+  const root = node('root'), app = renderer.createApp(clientComponent())
+  app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
+  await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
+  expect(field(root, '工作流', 'select').props.disabled).toBe(true)
+  expect(contents(root)).toContain('加载流程图失败')
+  app.unmount()
+})
+
+it('warns when the chosen graph has no mode enabled in the draft', async () => {
+  bearerToken.value = 'token'
+  graphList.mockResolvedValue(catalog.map(item => item.graph_id === 'sop.conditional'
+    ? { ...item, capabilities: { ...item.capabilities, modes: ['sop', 'inspection'] } } : item))
+  vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
+  vi.mocked(api.request).mockImplementation(async path => path.startsWith('/v1/skills?') || path.includes('/model-profiles')
+    ? { items: [], next_cursor: null } as never : { ...detail, draft: { ...draft, allowed_modes: ['qa'] } } as never)
+  const root = node('root'), app = renderer.createApp(clientComponent())
+  app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
+  await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
+  field(root, '工作流', 'select').props.onChange({ target: { value: 'sop.conditional' } }); await flush()
+  expect(contents(root)).toContain('当前允许的运行模式与所选流程图不匹配')
+  expect(contents(root)).toContain('sop、inspection')
   app.unmount()
 })

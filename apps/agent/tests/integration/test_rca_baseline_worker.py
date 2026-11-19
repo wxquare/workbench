@@ -7,19 +7,19 @@ import pytest
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('scenario', ['ok','empty','unavailable','timeout','crash','scope_change','revoked','budget','mixed_team','grant_change','grant_at_send','grant_after_checkpoint','legacy_receipt','check_durable'])
-async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,monkeypatch,scenario):
+async def test_synthetic_baseline_uses_one_scope_and_recovers_without_resend(platform,monkeypatch,scenario):
     import httpx
-    from workbench_agent.domain.profiles import ProfileDraft
+    from workbench_agent.domain.profiles import ProfileDraft, ProfileBudgetLimits
     from workbench_agent.domain.tools import ToolBinding
-    from workbench_agent.domain.runs import CreateRun
-    from workbench_agent.application.runs import RunService
-    from workbench_agent.jobs.worker import Worker
+    from workbench_agent.jobs.worker import Worker, DeploymentConnectorPolicy
+    from workbench_agent.application.synthetic_source_policy import SyntheticSourcePolicy
+    from integration.test_synthetic_alert_v2 import event, ingress, signed
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     from workbench_agent.tools.permissions import DeploymentToolPermissions
     from workbench_agent.tools.policy import PolicyToolExecutor
     from workbench_agent.tools.registry import ToolRegistry
     from workbench_agent.tools.mcp import MCPAdapter,ConnectionPolicy,TrustedConnection,StreamableSessionFactory
-    from contract.test_dod_mcp_mapping import GRANT
+    from datetime import datetime, timedelta, timezone
     from support.mcp import mcp_server_source
     server_src = mcp_server_source()
     monkeypatch.syspath_prepend(str(server_src))
@@ -30,8 +30,16 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
     monkeypatch.setenv('M3_MCP_AGENT','fixture-agent')
     monkeypatch.setenv('M3_MCP_UPSTREAM','fixture-upstream')
     monkeypatch.setenv('M3_MCP_CURSOR','c'*32)
-    names=('metrics_query','logs_search','trace_get')
-    kinds=('metrics','logs','trace')
+    alert_event=event()
+    end=datetime.fromisoformat(alert_event['anchor'])
+    start=end-timedelta(seconds=alert_event['window_seconds'])
+    sample=(start+timedelta(seconds=60)).isoformat()
+    GRANT={'kind':'dod-mcp-v1','team':'ExampleTeam','allowed_scope':{'service':'checkout','environment':'test','region':'id'},
+        'earliest':(start-timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+        'latest':(end+timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),'max_span_seconds':3600,'timezone':'UTC',
+        'sources':{'metrics_query':'metrics','logs_search':'logs'}}
+    names=('metrics_query','logs_search')
+    kinds=('metrics','logs')
     scopes=[{'team':'ExampleTeam','environment':'test','region':'id','service':'checkout','source_id':kind} for kind in kinds]
     sources=[]
     for name,kind,scope in zip(names,kinds,scopes):
@@ -43,9 +51,8 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
             'sources':sources,'cursor_secret_ref':'env://M3_MCP_CURSOR'}
     runtime=Runtime(Settings.model_validate(config)); calls=[]
     records={
-        'metrics': {'series':[{'labels':{'service':'checkout'},'points':[['2026-11-13T00:01:00Z',0.1]],'unit':'ratio','source_id':'metric-1'}]},
-        'logs': {'entries':[{'timestamp':'2026-11-13T00:01:00Z','service':'checkout','level':'ERROR','message':'sample','record_id':'log-1'}]},
-        'trace': {'trace_id':'abc','spans':[{'span_id':'span-1','service':'checkout','name':'purchase','error':True,'start':'2026-11-13T00:01:00Z','end':'2026-11-13T00:01:01Z'}]},
+        'metrics': {'series':[{'labels':{'service':'checkout'},'points':[[sample,0.1]],'unit':'ratio','source_id':'metric-1'}]},
+        'logs': {'entries':[{'timestamp':sample,'service':'checkout','level':'ERROR','message':'sample','record_id':'log-1'}]},
     }
     class Gateway:
         def __init__(self,kind): self.kind=kind
@@ -65,7 +72,7 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
         other_grant = dict(GRANT, team='OTHER')
         team = other_grant if scenario=='mixed_team' else GRANT
         connection_rules = [
-            TrustedConnection(platform.auth.team_id,platform.agent_id,'local','read',frozenset({'metrics_query','trace_get'}),(GRANT,)),
+            TrustedConnection(platform.auth.team_id,platform.agent_id,'local','read',frozenset({'metrics_query'}),(GRANT,)),
             TrustedConnection(platform.auth.team_id,platform.agent_id,'local','read',frozenset({'logs_search'}),(team,)),
         ]
         adapter=MCPAdapter(factory,ConnectionPolicy(lambda:connection_rules))
@@ -76,26 +83,30 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
             binding=ToolBinding(alias='local.'+name,provider='mcp',tool_name=name,server='local',credential_scope='read',permission='baseline.read',input_schema=schema)
             refs.append(await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,binding,key='tool-'+name))
         context=await platform.contexts.resolve(platform.auth,platform.agent_id); ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-        draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_version='dod.v10',tools=tuple(refs)),ws['revision'],key='baseline-draft')
+        draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_id='rca.synthetic',tools=tuple(refs),
+            budget_limits=ProfileBudgetLimits(tool_calls=1) if scenario=='budget' else None),ws['revision'],key='baseline-draft')
         await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='baseline-profile')
-        request=CreateRun.model_validate({'agent_id':platform.agent_id,'mode':'rca','input':{'text':'Investigate'},
-            'business_context':{'region':'id','service':'checkout','environment':'test','anchor':'2026-11-13T00:10:00Z','window_seconds':600,'trace_id':'abc'},'summary_token_reserve':8000,
-            'budgets': {'tool_calls':1} if scenario=='budget' else {}})
-        run=await RunService(platform.backend).create(platform.auth,request,'baseline-run')
+        identities={'v2-test':{'subject':platform.auth.subject,'team_id':platform.auth.team_id,'agent_ids':[platform.agent_id]}}
+        grant=dict(team_id=platform.auth.team_id,agent_id=platform.agent_id,connector_id='v2-test',identity_id='v2-test',
+            subject=platform.auth.subject,service='checkout',environment='test',region='id',rule='error-rate')
+        await SyntheticSourcePolicy(platform.backend).sync([grant],connector_identities=identities,expected_revision=0)
+        run=await ingress(platform).accept(*signed(alert_event))
         rules={'users':{platform.auth.subject:['baseline.read']},'teams':{platform.auth.team_id:['baseline.read']},
                'agents':{platform.agent_id:['baseline.read']},'skills':{'__none__':['baseline.read']},'experts':{'diagnosis':['baseline.read']}}
         if scenario=='revoked': rules['experts']['diagnosis']=[]
         platform.backend._tool_permissions=DeploymentToolPermissions(lambda:rules)
         platform.backend._rca_metric_template='error_rate'
         platform.backend._baseline_factory=lambda execution: PolicyToolExecutor(platform.backend,adapter,execution=execution,delays=(0,0))
-        registry=foundation_worker_registry(platform.backend); worker=Worker(platform.backend,'baseline-worker',registry)
+        registry=foundation_worker_registry(platform.backend)
+        policy=DeploymentConnectorPolicy(lambda:identities)
+        registry.reconciler.connector_policy=policy
+        worker=Worker(platform.backend,'baseline-worker',registry,connector_policy=policy)
         if scenario=='check_durable':
             original=PolicyToolExecutor.execute
             async def check_before_dispatch(self,*args,**kwargs):
                 async with platform.backend.create_uow().begin_read() as uow:
                     checkpoint=await platform.backend.runs.checkpoint(uow,platform.auth.team_id,run.run_id)
-                assert checkpoint['values']['baseline_authority'] == ['ExampleTeam','test','id','checkout',
-                    '2026-11-13T00:00:00+00:00','2026-11-13T00:10:00+00:00']
+                assert checkpoint['values']['baseline_authority'] == ['ExampleTeam','test','id','checkout',start.isoformat(),end.isoformat()]
                 return await original(self,*args,**kwargs)
             monkeypatch.setattr(PolicyToolExecutor,'execute',check_before_dispatch)
         if scenario=='grant_at_send':
@@ -126,7 +137,7 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
                     async with platform.backend.create_uow().begin_write() as uow:
                         await ContextResolver(platform.backend).query_scope(uow,platform.auth,run.run_id,
                             {'region':'id','service':'checkout','environment':'test',
-                             'start_at':'2026-11-13T00:01:00+00:00','end_at':'2026-11-13T00:10:00+00:00'})
+                             'start_at':(start+timedelta(seconds=60)).isoformat(),'end_at':end.isoformat()})
                 return result
             monkeypatch.setattr(PolicyToolExecutor,'execute',change_after)
         if scenario in ('crash','grant_after_checkpoint','legacy_receipt'):
@@ -157,11 +168,11 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
         view=await platform.get_run(run.run_id)
         assert view.status=='partial'
         if scenario=='legacy_receipt':
-            assert len(calls)==3 and len(view.outcome['evidence_refs'])==2
+            assert len(calls)==2 and len(view.outcome['evidence_refs'])==1
             assert any('metrics' in item and 'unknown' in item for item in view.outcome['unresolved_items'])
             async with platform.backend.create_uow().begin_read() as uow:
                 visible=await platform.contexts.current_evidence(uow,platform.auth,run.run_id)
-            assert len(visible)==2
+            assert len(visible)==1
             return
         if scenario in ('scope_change','budget','revoked','mixed_team','grant_change','grant_at_send','grant_after_checkpoint'):
             expected_calls = 0 if scenario in ('revoked','mixed_team') else 1
@@ -170,7 +181,7 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
             usage=await platform.budgets.snapshot(platform.auth,run.run_id)
             assert usage.tool_attempts==(2 if scenario=='grant_at_send' else expected_calls)
             return
-        assert len(view.outcome['evidence_refs']) == (3 if scenario in ('ok','crash','check_durable') else 2)
+        assert len(view.outcome['evidence_refs']) == (2 if scenario in ('ok','crash','check_durable') else 1)
         assert not any(f['status']=='normal' for f in view.outcome['findings'])
         if scenario in ('empty', 'unavailable', 'timeout'):
             assert any('logs' in item and scenario in item for item in view.outcome['unresolved_items'])
@@ -179,22 +190,21 @@ async def test_v10_baseline_uses_one_scope_and_recovers_without_resend(platform,
             scope=await platform.backend.runs.current_scope(uow,platform.auth.team_id,run.run_id)
             evidence=await platform.backend.runs.current_evidence(uow,platform.auth.team_id,run.run_id)
         statuses=saved['values']['baseline_statuses']
-        assert statuses['metrics']=='valid' and statuses['trace']=='valid'
+        assert statuses['metrics']=='valid' and statuses['trace']=='unavailable'
         assert statuses['logs']=={'ok':'valid','empty':'empty','unavailable':'unavailable','timeout':'timeout','crash':'valid','check_durable':'valid'}[scenario]
         assert len([kind for kind,_ in calls if kind=='metrics'])==1
-        assert len([kind for kind,_ in calls if kind=='trace'])==1
         for kind,call in calls:
             assert call.context['query_scope_ref']==scope['scope_id']
             assert call.scope.service=='checkout' and call.scope.region=='id' and call.scope.environment=='test'
             from datetime import datetime
-            assert datetime.fromisoformat(call.parameters['start']) == datetime.fromisoformat('2026-11-13T00:00:00+00:00')
-            assert datetime.fromisoformat(call.parameters['end']) == datetime.fromisoformat('2026-11-13T00:10:00+00:00')
+            assert datetime.fromisoformat(call.parameters['start']) == start
+            assert datetime.fromisoformat(call.parameters['end']) == end
         for row in evidence:
             assert row['scope_id']==scope['scope_id']
-            assert json.loads(row['time_window']) == {'start_at':'2026-11-13T00:00:00+00:00','end_at':'2026-11-13T00:10:00+00:00'}
+            assert json.loads(row['time_window']) == {'start_at':start.isoformat(),'end_at':end.isoformat()}
         async with platform.backend.create_uow().begin_read() as uow:
             disclosed = await platform.contexts.current_evidence(uow, platform.auth, run.run_id)
-        assert len(disclosed) == len(evidence) and len(disclosed) >= 2
+        assert len(disclosed) == len(evidence) and len(disclosed) >= 1
         rules['experts']['diagnosis'] = []
         async with platform.backend.create_uow().begin_read() as uow:
             assert await platform.contexts.current_evidence(uow, platform.auth, run.run_id) == []

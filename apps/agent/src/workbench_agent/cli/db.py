@@ -25,12 +25,14 @@ def _preflight(connection) -> str:
             'SELECT schema_version,checkpoint_codec_version FROM dod_storage_metadata'
         ).fetchall()
         revision = connection.execute('SELECT version_num FROM alembic_version').fetchall()
-        from workbench_agent.persistence.schema_agent_v4 import MIGRATION_HEAD
-        known = {'0001_agent_domain', '0002_shared_skills', '0003_run_trace_contexts', MIGRATION_HEAD}
+        from workbench_agent.persistence.schema_agent_v5 import MIGRATION_HEAD
+        known = {'0001_agent_domain', '0002_shared_skills', '0003_run_trace_contexts', '0004_knowledge_base', MIGRATION_HEAD}
         current_revision = revision[0][0] if len(revision) == 1 else None
         if (current_revision not in known or versions != [(SCHEMA_VERSION, CHECKPOINT_CODEC_VERSION)]
                 or validate_required_schema(connection, revision=current_revision)):
             raise FreshAgentDatabaseRequired(message)
+        if current_revision != MIGRATION_HEAD and any(connection.execute(f'SELECT 1 FROM {table} LIMIT 1').fetchone() for table in ('runtime_profiles', 'runs', 'run_jobs')):
+            raise FreshAgentDatabaseRequired('Graph ID migration requires an empty database; clear or recreate it first')
         if connection.execute('PRAGMA journal_mode').fetchone() != ('wal',):
             raise FreshAgentDatabaseRequired('existing Agent database requires WAL (journal_mode=wal); '
                                'choose a fresh Agent database path; existing database left untouched')

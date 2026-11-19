@@ -133,7 +133,7 @@ async def test_managed_key_works_through_run_and_worker(platform, monkeypatch):
             assert published.status_code == 201
             version = ModelProfileVersion.model_validate(published.json())
             agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
-            draft = ProfileDraft(default_model=version.ref, graph_version='dod.v18', allowed_modes=('qa',))
+            draft = ProfileDraft(default_model=version.ref, graph_id='conversation.multi_turn', allowed_modes=('qa',))
             changed = await platform.profiles.save_draft(platform.auth, platform.agent_id, draft, agent['revision'], key='draft-key')
             await platform.profiles.publish(platform.auth, platform.agent_id, changed['revision'], key='publish-agent-key')
             payload = make_run_payload(platform.agent_id, mode='qa')

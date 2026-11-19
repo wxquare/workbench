@@ -1,4 +1,4 @@
-"""Extractive QA synthesis for dod.v16; model text is never accepted as fact."""
+"""Extractive QA synthesis for knowledge.scoped_excerpt; model text is never accepted as fact."""
 import json
 from uuid import UUID, uuid5
 
@@ -8,6 +8,7 @@ from workbench_agent.application.errors import DomainError
 from workbench_agent.domain.identity import AuthContext
 from workbench_agent.jobs.worker import CapabilityBlocked
 from workbench_agent.runtime.budgets.service import BudgetService
+from workbench_agent.runtime.graphs.ids import GraphId
 from workbench_agent.runtime.graphs.evidence_authority import authorized_sources
 from workbench_agent.runtime.graphs.synthesis import ExcerptSelection, source_texts, validate_selection
 
@@ -36,7 +37,7 @@ async def compose_qa_outcome(state, execution):
                     if set(permitted) != set(refs):
                         raise DomainError('FORBIDDEN', 403)
                 result = await invoker.invoke(execution.guard, 'summary', [HumanMessage(content=prompt)],
-                    output_schema=ExcerptSelection, logical_call_id=str(uuid5(UUID(state['run_id']), 'dod.v16:summary')),
+                    output_schema=ExcerptSelection, logical_call_id=str(uuid5(UUID(state['run_id']), f'{GraphId.KNOWLEDGE_SCOPED_EXCERPT}:summary')),
                     dispatch_check=dispatch_check)
                 if result.status == 'ok':
                     selections = validate_selection(result.validated_data, sources)

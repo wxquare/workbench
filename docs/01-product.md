@@ -1,7 +1,7 @@
 ---
 title: 产品说明
 status: stable
-verified_commit: f932036
+verified_commit: c5f93fb
 ---
 
 # 产品说明
@@ -187,13 +187,13 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-02.3 | 提示词、回复偏好、历史轮数、预算 | ✅ | web 的 Agents 页（校验与表单） |
 | FR-02.4 | 团队成员与角色管理 | 🟡 | api/teams 仅成员读写；无管理页 |
 | FR-02.5 | 仓库、工具绑定 | 🟡 | api/repositories、api/tool_bindings；页面为 Placeholder |
-| FR-03.1 | 直接 LLM 单轮问答 | ✅ | runtime/graphs/direct_qa（dod.v17）；DeepSeek 实测验收 |
-| FR-03.2 | 多轮追问 | ✅ | runtime/graphs/conversation_qa（dod.v18）；web 的 Threads 页 |
-| FR-03.3 | 知识问答与引用 | 🟡 | runtime/graphs/qa_v16 保持 partial；knowledge_qa（dod.v19）校验引用并独立检查支持性；真实模型及业务质量待验收 |
-| FR-04.1 | 告警范围确认与补充区域 | 🟡 | runtime/graphs/rca；网页支持登记的区域输入 schema，待真实业务验收 |
-| FR-04.2 | 指标/日志/Trace 基线采集 | 🟡 | runtime/graphs/rca_baseline；仅合成上游 |
+| FR-03.1 | 直接 LLM 单轮问答 | ✅ | runtime/graphs/direct_qa（conversation.single_turn）；DeepSeek 实测验收 |
+| FR-03.2 | 多轮追问 | ✅ | runtime/graphs/conversation_qa（conversation.multi_turn）；web 的 Threads 页 |
+| FR-03.3 | 知识问答与引用 | 🟡 | runtime/graphs/qa_v16 保持 partial；knowledge_qa（knowledge.citation_review）校验引用并独立检查支持性；真实模型及业务质量待验收 |
+| FR-04.1 | 告警范围确认与补充区域 | 🟡 | runtime/graphs/rca_synthetic；网页支持登记的区域输入 schema，待真实业务验收 |
+| FR-04.2 | 指标/日志/Trace 基线采集 | 🟡 | runtime/graphs/rca_synthetic；仅合成上游 |
 | FR-04.3 | 根因结论 | ⏳ | M3 验收：无完整根因；合成结果恒为 partial |
-| FR-05.1 | 专家子流程（Knowledge/Diagnosis/Code） | 🟡 | runtime/experts；runtime/graphs/multi |
+| FR-05.1 | 专家子流程（Knowledge/Diagnosis/Code） | 🟡 | runtime/experts；知识摘录图 |
 | FR-05.2 | 专家并行 | ⏳ | M3 验收：受控并行未完成；当前顺序执行 |
 | FR-06.1 | 团队共享 Skill 库（创建、草稿、发布、历史版本） | ✅ | web 的 Skills 页；api/skill_library；skill_management/library |
 | FR-06.2 | Agent 绑定 Skill 精确版本 | ✅ | web 的 Agents 页"添加 Skill"；上限 16 个 |
@@ -204,7 +204,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions |
 | FR-08.2 | MCP Server 只读工具 | 🟡 | apps/mcp-server（四类只读工具）；仅合成上游 |
 | FR-08.3 | 工具连接管理页 | ⏳ | web 路由 tools 为 Placeholder |
-| FR-09.1 | SOP 固定工作流（依赖、条件、输出校验） | ✅ | runtime/graphs/sop、sop_graph（dod.v11/v12） |
+| FR-09.1 | SOP 固定工作流（依赖、条件、输出校验） | ✅ | runtime/graphs/sop、sop_graph（sop.conditional） |
 | FR-09.2 | 有限并行 | ⏳ | 实现为 DAG 拓扑序串行 |
 | FR-09.3 | 定时与手动触发 | 🟡 | api/schedules、jobs/scheduler；页面为 Placeholder |
 | FR-10.1 | 异步受理、幂等、持久化、查回 | ✅ | api/runs、api/admission；M1 验收 AT-01 |
@@ -840,7 +840,7 @@ flowchart LR
 | C-01 | 第 20.2 节：任务详情"活动任务轮询刷新"，并列出会话页"关联 Run" | 详情页使用 SSE，连接失败后按 3 秒轮询；会话页 2 秒轮询 | 详情页支持草稿流，需完成真实浏览器验收 |
 | C-02 | 第 1.2 节 FR-10 含"取消、等待输入/确认、恢复" | 网页已实现取消、输入和 Run 级审批，待手工验收 | FR-10 标为部分 |
 | C-03 | 第 1.2 节 FR-01 含 SeaTalk 与告警 Webhook | 仅有 Synthetic 绑定类型的合成入口，且 M3 验收写明真实 SeaTalk 协议未接入 | 标为部分，勿视作已接入 |
-| C-04 | 旧 QA 校验"成功收集后仍为 partial" | dod.v16 仍为 partial；dod.v19 增加引用与支持检查 | 真实模型和业务质量待验收 |
+| C-04 | 旧 QA 校验"成功收集后仍为 partial" | knowledge.scoped_excerpt 仍为 partial；knowledge.citation_review 增加引用与支持检查 | 真实模型和业务质量待验收 |
 | C-05 | 第 9.1 节：Skill 完整加载目标含 scripts/references | 当前仅加载 SKILL.md（v18）；M2 验收文字曾写"Skill 分资源按需加载已实现"，与源码和原文 9.6 不一致 | 标为规划，并提示验收记录措辞存在冲突 |
 | C-06 | 第 8.2 节：RCA"并行获取有限的知识与变更信息" | 实际顺序执行；M3 验收写明受控并行未完成 | 并行标为规划 |
 | C-07 | 第 7.7 节：SOP "有限并行" 为 FR-09 目标 | 实现为拓扑序串行 | FR-09 并行标为规划 |
@@ -856,4 +856,21 @@ flowchart LR
 
 ## 内置知识库
 
-维护者可在知识页面编辑或导入 Markdown，发布不可变版本、查看历史、归档或回滚；按团队和具体服务、环境、区域检索。知识缺口可转为草稿并重放原问题，解决或忽略须人工确认；原 Run 结果不被改写。新图 `dod.v19` 使用引用校验和另一次模型支持检查；检查不是事实真伪或回答质量的保证。仓库含真实 MCP 协议链路测试，但不代表真实模型或企业环境验收完成。
+维护者可在知识页面编辑或导入 Markdown，发布不可变版本、查看历史、归档或回滚；按团队和具体服务、环境、区域检索。知识缺口可转为草稿并重放原问题，解决或忽略须人工确认；原 Run 结果不被改写。新图 `knowledge.citation_review` 使用引用校验和另一次模型支持检查；检查不是事实真伪或回答质量的保证。仓库含真实 MCP 协议链路测试，但不代表真实模型或企业环境验收完成。
+
+## 内置流程图目录
+
+管理端列出并允许绑定八张流程图。对话（单轮）和对话（多轮）为推荐，其余为实验；新建 Agent 默认对话（多轮）和 QA 模式。实验图需在 Worker 配置中显式启用。
+
+| 流程图 | 标识 | 运行入口与限制 |
+| --- | --- | --- |
+| 对话（单轮） | `conversation.single_turn` | 手动 QA；不使用历史或工具 |
+| 对话（多轮） | `conversation.multi_turn` | 手动 QA；最多使用 8 轮历史 |
+| 知识摘录 | `knowledge.scoped_excerpt` | 手动 QA；需要知识工具及查询范围，结果恒为部分完成 |
+| SOP 巡检 | `sop.conditional` | 手动或定时；运行时需要已发布工作流 |
+| 合成告警诊断 | `rca.synthetic` | 仅合成告警入口，当前适配器供本地集成测试 |
+| 合成告警诊断（提案） | `rca.proposal` | 同上，生成单项操作提案 |
+| 合成告警诊断（批量提案） | `rca.batch_proposal` | 同上，生成批量操作提案 |
+| 知识问答（引用审查） | `knowledge.citation_review` | 手动 QA；真实知识源和范围隔离尚未验收 |
+
+旧图 `dod.v1`–`dod.v11` 已退役；旧 ID 和数据不兼容，新协议切换前需清库重建。

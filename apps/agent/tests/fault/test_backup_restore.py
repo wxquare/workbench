@@ -76,6 +76,8 @@ async def test_explicit_clean_restore_acknowledgment_reopens_real_worker_and_api
     report=acknowledge_restore(target,acknowledge=True)
     assert report['external_writes_enabled'] and not report['dispatcher_enabled']
     backend=SQLiteBackend('sqlite+aiosqlite:///'+str(target));assert await backend.health()
+    from support.model import install_test_model
+    install_test_model(backend)
     assert await Worker(backend,'restored-worker',foundation_worker_registry(backend)).run_once()=='projected'
     settings=platform.settings.model_copy(deep=True)
     from pydantic import SecretStr

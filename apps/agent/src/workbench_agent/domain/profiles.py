@@ -1,4 +1,5 @@
 """Immutable published references; drafts are validated before publication."""
+from workbench_agent.runtime.graphs.ids import GraphId
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from workbench_agent.settings import ModelProfile
@@ -35,7 +36,7 @@ class ProfileDraft(FrozenModel):
     budget_limits: ProfileBudgetLimits | None = Field(default=None, exclude_if=lambda v: v is None)
     role_models: tuple[RoleModelBinding, ...] = ()
     knowledge_max_age_seconds: int | None = Field(default=None, gt=0, strict=True, exclude_if=lambda value: value is None)
-    graph_version: str = Field(default='dod.v3', min_length=1, max_length=128)
+    graph_id: str = Field(default=GraphId.CONVERSATION_MULTI_TURN, min_length=1, max_length=128)
     skills: tuple[VersionRef, ...] = ()
     tools: tuple[VersionRef, ...] = ()
     repositories: tuple[VersionRef, ...] = ()

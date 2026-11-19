@@ -47,7 +47,7 @@ async def test_mutation_replay_and_mismatch_are_atomic(platform, client):
     assert first.status_code == again.status_code == 200
     assert first.json() == again.json()
     assert again.headers['Idempotency-Replayed'] == 'true'
-    body['graph_version'] = 'another.v1'
+    body['graph_id'] = 'another.v1'
     mismatch = await client.patch(url, json=body, headers=headers)
     assert mismatch.status_code == 409
     assert mismatch.json()['code'] == 'IDEMPOTENCY_CONFLICT'

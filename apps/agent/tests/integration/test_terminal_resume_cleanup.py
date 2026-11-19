@@ -20,7 +20,7 @@ async def test_terminal_transition_settles_selected_resume_truthfully(platform,t
             async with platform.backend.create_uow().begin_write() as uow:
                 await uow.execute(update(s.resume_requests).where(s.resume_requests.c.request_id==request['request_id']).values(status='applying'))
         else:
-            await p.worker.registry._executors['dod.v2'].apply_resume(Execution(platform.backend,owned),mark=phase=='applied')
+            await p.worker.registry._executors['conversation.multi_turn'].apply_resume(Execution(platform.backend,owned),mark=phase=='applied')
     if terminal=='cancelled':
         await p.service.cancel(platform.auth,run.run_id,'cancel')
         if owned:

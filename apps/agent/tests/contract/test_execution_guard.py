@@ -100,7 +100,7 @@ async def test_worker_renewal_failure_cancels_attempt_without_finalizing(platfor
             finally:
                 cancelled.set()
     registry = ExecutorRegistry()
-    registry.register(CAPS.graph_versions[0], Executor(), ReleasingProjector(platform.backend))
+    registry.register(CAPS.graph_ids[0], Executor(), ReleasingProjector(platform.backend))
     run = await platform.create_run()
     worker = Worker(platform.backend,'a',registry,renew_interval=.01)
     task = asyncio.create_task(worker.run_once())
@@ -134,7 +134,7 @@ async def test_membership_revoked_before_execution_prevents_executor(platform):
     class Executor:
         async def execute(self,execution):
             called.append(execution)
-    registry=ExecutorRegistry(); registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry(); registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend))
     run=await platform.create_run()
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(update(s.team_members).where(s.team_members.c.team_id==platform.auth.team_id).values(status='revoked'))
@@ -177,7 +177,7 @@ async def test_cancel_propagates_and_releases_owned_execution(platform):
                 await asyncio.Event().wait()
             finally:
                 cancelled.set()
-    registry=ExecutorRegistry(); registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry(); registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend))
     run=await platform.create_run()
     task=asyncio.create_task(Worker(platform.backend,'a',registry).run_once())
     await asyncio.wait_for(started.wait(),2)
@@ -200,7 +200,7 @@ async def test_projection_only_does_not_call_executor_and_guards_terminal_releas
         async def reconcile(self,uow,claim):
             calls.append(('reconcile',claim.segment_attempt))
             await platform.backend.jobs.release(uow,claim.guard,status='failed',error_code='RETRY_EXHAUSTED')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend));registry.reconciler=Reconciler()
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend));registry.reconciler=Reconciler()
     run=await platform.create_run(); owned=await claim(platform,'a');await expire_lease(platform,owned.guard)
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(update(s.run_jobs).where(s.run_jobs.c.run_id==run.run_id).values(attempt=3))
@@ -254,7 +254,7 @@ async def test_missing_projector_never_reexecutes_completed_executor(platform):
     class Executor:
         async def execute(self,execution):
             calls.append('ran')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor())
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor())
     await platform.create_run()
     assert await Worker(platform.backend,'a',registry).run_once()=='capability_blocked'
     assert calls==[]
@@ -286,7 +286,7 @@ async def test_three_infrastructure_attempts_then_projection_only_with_durable_b
         async def reconcile(self,uow,claim):
             calls.append('reconcile')
             await platform.backend.jobs.release(uow,claim.guard,status='failed',error_code='RETRY_EXHAUSTED')
-    registry=ExecutorRegistry();registry.register(CAPS.graph_versions[0],Executor(),ReleasingProjector(platform.backend));registry.reconciler=Reconciler()
+    registry=ExecutorRegistry();registry.register(CAPS.graph_ids[0],Executor(),ReleasingProjector(platform.backend));registry.reconciler=Reconciler()
     run=await platform.create_run()
     worker=Worker(platform.backend,'a',registry,jitter=lambda:0)
     for expected_delay in (2000,10000,0):

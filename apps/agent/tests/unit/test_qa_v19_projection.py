@@ -28,7 +28,7 @@ async def test_v19_projection_rechecks_source_authority_and_freshness(monkeypatc
         runs=SimpleNamespace(checkpoint=AsyncMock(return_value=None if scenario == 'missing_checkpoint' else {'values': state})),
         clock=SimpleNamespace(now_ms=AsyncMock(return_value=int(datetime(2026, 1, 2 if scenario == 'expired' else 1, tzinfo=timezone.utc).timestamp() * 1000))))
     guard = SimpleNamespace(team_id='t', run_id='r')
-    context = SimpleNamespace(graph_version='dod.v19', knowledge_max_age_seconds=None if scenario == 'no_threshold' else 3600)
+    context = SimpleNamespace(graph_id='knowledge.citation_review', knowledge_max_age_seconds=None if scenario == 'no_threshold' else 3600)
     outcome = RunOutcome(kind='analysis.v1', completed=True, summary='CPU is 80%', findings=(), root_cause_hypotheses=(),
         impact=None, evidence_refs=() if scenario == 'no_refs' else (evidence_id,), unresolved_items=(), proposed_actions=(), knowledge_gaps=(),
         usage_summary=UsageSummary(), knowledge_answer=None if scenario == 'no_refs' else answer)

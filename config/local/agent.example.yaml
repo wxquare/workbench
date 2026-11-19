@@ -58,7 +58,7 @@ jobs:
   max_segment_attempts: 3
 worker:
   concurrency: 2
-  supported_graph_versions: [dod.v1, dod.v2, dod.v3]
+  supported_graph_ids: [conversation.single_turn, conversation.multi_turn]
   expert_concurrency_per_run: 2
   tool_concurrency_per_run: 4
 stream:

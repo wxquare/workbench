@@ -1,4 +1,5 @@
 """Durable queued admission. No models, graphs, Redis, or external calls in a UoW."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from contextlib import nullcontext
 from uuid import uuid4
@@ -127,9 +128,9 @@ class RunService:
                 if request.expected_revision is not None and (thread is None or thread['revision'] != request.expected_revision):
                     raise DomainError('REVISION_CONFLICT', 409)
                 profile = await self.profiles.published(uow, auth, agent_id)
-                if request.business_context.get('conversation') is True and profile.graph_version != 'dod.v18':
+                if request.business_context.get('conversation') is True and profile.graph_id != GraphId.CONVERSATION_MULTI_TURN:
                     raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
-                if profile.graph_version == 'dod.v18' and (request.mode != 'qa' or 'query_scope' in request.business_context):
+                if profile.graph_id == GraphId.CONVERSATION_MULTI_TURN and (request.mode != 'qa' or 'query_scope' in request.business_context):
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                 if request.business_context.get('conversation') is True and thread is not None:
                     from sqlalchemy import case, func, select
@@ -140,22 +141,19 @@ class RunService:
                     if pending:
                         raise DomainError('THREAD_BUSY', 409)
                     graph = case((func.json_valid(schema.runs.c.versions) == 1,
-                        func.json_extract(schema.runs.c.versions, '$.graph_version')), else_='')
+                        func.json_extract(schema.runs.c.versions, '$.graph_id')), else_='')
                     incompatible = (await uow.execute(select(schema.runs.c.run_id).where(
                         schema.runs.c.team_id == auth.team_id, schema.runs.c.agent_id == agent_id,
                         schema.runs.c.thread_id == thread['thread_id'], schema.runs.c.status == 'succeeded',
-                        func.coalesce(graph, '').not_in(('dod.v17', 'dod.v18'))).limit(1))).first()
+                        func.coalesce(graph, '').not_in((GraphId.CONVERSATION_SINGLE_TURN, GraphId.CONVERSATION_MULTI_TURN))).limit(1))).first()
                     if incompatible:
                         raise DomainError('CONVERSATION_HISTORY_INCOMPATIBLE', 409)
-                if profile.graph_version in ('dod.v13','dod.v14','dod.v15') and not (_ingress_capability is _SYNTHETIC_ALERT_V2 and _uow is not None and auth.identity_kind == 'connector' and source_connector and request.mode == 'rca'):
+                if profile.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL) and not (_ingress_capability is _SYNTHETIC_ALERT_V2 and _uow is not None and auth.identity_kind == 'connector' and source_connector and request.mode == 'rca'):
                     raise DomainError('WORKFLOW_UNAVAILABLE',409)
-                if profile.graph_version == 'dod.v3':
-                    from workbench_agent.application.foundation_context import recording_fields
-                    recording_fields(payload['input'],request.business_context)
                 query_scope = None
-                if profile.graph_version == 'dod.v17' and (request.mode != 'qa' or 'query_scope' in request.business_context):
+                if profile.graph_id == GraphId.CONVERSATION_SINGLE_TURN and (request.mode != 'qa' or 'query_scope' in request.business_context):
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if profile.graph_version in ('dod.v16', 'dod.v19'):
+                if profile.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW):
                     if request.mode != 'qa':
                         raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                     query_scope = request.business_context.get('query_scope')
@@ -166,10 +164,10 @@ class RunService:
                         raise DomainError('INVALID_SCOPE', 422) from None
                 if request.mode not in profile.allowed_modes:
                     raise DomainError('MODE_NOT_ALLOWED', 422)
-                if profile.graph_version in ('dod.v11','dod.v12') and request.mode not in ('sop', 'inspection'):
+                if profile.graph_id == GraphId.SOP_CONDITIONAL and request.mode not in ('sop', 'inspection'):
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                 if request.mode in ('sop', 'inspection'):
-                    if profile.graph_version not in ('dod.v11','dod.v12') or request.workflow_version_id is None:
+                    if profile.graph_id != GraphId.SOP_CONDITIONAL or request.workflow_version_id is None:
                         raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                 elif request.workflow_version_id is not None:
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
@@ -189,11 +187,6 @@ class RunService:
                     workflow = await self.backend.configuration.one(uow, 'workflow_versions', team_id=auth.team_id, agent_id=agent_id, workflow_version_id=str(request.workflow_version_id))
                     if not workflow or digest(json.loads(workflow['definition_json'])) != workflow['hash']:
                         raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                    if profile.graph_version == 'dod.v11':
-                        from workbench_agent.domain.workflows import WorkflowDefinition
-                        validated = WorkflowDefinition.model_validate_json(workflow['definition_json'])
-                        if any(step.condition is not None or step.output_schema is not None for step in validated.steps):
-                            raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                     context = context.model_copy(update={'workflow': VersionRef(resource_id=workflow['workflow_version_id'], version=str(workflow['version']), content_hash=workflow['hash'])})
                 for ref in (context.default_model, *(binding.ref for binding in context.role_models)):
                     model_version=await self.profiles.model_version(uow,auth,ref)
@@ -250,7 +243,7 @@ class RunService:
                 await self.store.insert(uow, 'run_jobs', dict(team_id=auth.team_id, job_id=str(uuid4()), run_id=run_id,
                     generation=1, kind='run', status='ready', available_at=now, capabilities='[]', created_at=now, updated_at=now))
                 event_payload = {'mode': request.mode, 'phase': None, 'attempt': 0,
-                    'versions': context.model_dump(mode='json', include={'agent_profile', 'graph_version',
+                    'versions': context.model_dump(mode='json', include={'agent_profile', 'graph_id',
                         'default_model', 'role_models', 'skills', 'tools', 'repositories'})}
                 await self.backend.execution_events.append_control(uow,auth.team_id,run_id,'run.accepted',event_payload)
                 if namespace:

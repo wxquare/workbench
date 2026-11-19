@@ -180,10 +180,14 @@ async def test_cross_team_resources_are_not_found(client, platform, run_payload)
 async def test_profile_policy_lowers_server_limits_and_restricts_modes(client, platform, run_payload):
     from workbench_agent.domain.profiles import ProfileDraft
     agent = await platform.profiles.get_agent(platform.auth)
-    policy = ProfileDraft.model_validate({**agent['draft'], 'allowed_modes': ['qa'], 'budget_limits': {'model_calls': 3}})
+    policy = ProfileDraft.model_validate({**agent['draft'], 'allowed_modes': [], 'budget_limits': {'model_calls': 3}})
     saved = await platform.profiles.save_draft(platform.auth, platform.agent_id, policy, agent['revision'], key='policy')
     await platform.profiles.publish(platform.auth, platform.agent_id, saved['revision'], key='publish-policy')
-    assert (await post(client, {**run_payload, 'mode': 'rca'})).json()['code'] == 'MODE_NOT_ALLOWED'
+    assert (await post(client, run_payload)).json()['code'] == 'MODE_NOT_ALLOWED'
+    agent = await platform.profiles.get_agent(platform.auth)
+    policy = policy.model_copy(update={'allowed_modes': ('qa',)})
+    saved = await platform.profiles.save_draft(platform.auth, platform.agent_id, policy, agent['revision'], key='enable-qa')
+    await platform.profiles.publish(platform.auth, platform.agent_id, saved['revision'], key='publish-qa')
     assert (await post(client, {**run_payload, 'budgets': {'model_calls': 4}})).json()['code'] == 'BUDGET_EXCEEDED'
     accepted = await post(client, run_payload)
     assert accepted.status_code == 202
@@ -238,7 +242,8 @@ async def test_existing_published_profile_hash_survives_policy_extension(platfor
         row = await platform.backend.configuration.one(uow, 'runtime_profiles',
             agent_id=platform.agent_id, status='published')
     original = json.loads(row['profile_json'])
-    assert set(original) == {'default_model', 'role_models', 'graph_version', 'skills', 'tools', 'repositories'}
+    assert set(original) == {'default_model', 'role_models', 'graph_id', 'skills', 'tools', 'repositories', 'allowed_modes'}
+    assert original['allowed_modes'] == ['qa']
     restored = ProfileDraft.model_validate(original).model_dump(mode='json')
     assert digest(restored) == row['hash']
 
@@ -266,7 +271,7 @@ async def test_first_event_is_namespaced_admission_metadata_independent_of_http_
     assert json.loads(stored_event['payload']) == {
         'mode': 'qa', 'phase': None, 'attempt': 0,
         'versions': {
-            'agent_profile': context['agent_profile'], 'graph_version': 'dod.v1',
+            'agent_profile': context['agent_profile'], 'graph_id': 'conversation.multi_turn',
             'default_model': context['default_model'], 'role_models': [],
             'skills': [], 'tools': [], 'repositories': []}}
     assert set(response.json()) == {'run_id', 'thread_id', 'status', 'revision', 'accepted_at', 'links'}

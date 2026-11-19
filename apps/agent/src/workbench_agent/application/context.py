@@ -18,7 +18,7 @@ class ContextResolver:
         return RunContext(team_id=auth.team_id, agent_id=agent_id, subject=auth.subject,
             identity_kind=auth.identity_kind, agent_scope=auth.agent_scope, roles=current.roles,
             accepted_at_ms=await self.backend.clock.now_ms(uow), source=source, agent_profile=profile.ref,
-            graph_version=profile.graph_version, knowledge_max_age_seconds=profile.knowledge_max_age_seconds,
+            graph_id=profile.graph_id, knowledge_max_age_seconds=profile.knowledge_max_age_seconds,
             system_prompt=profile.system_prompt, response_language=profile.response_language,
             response_format=profile.response_format, conversation_history_turns=profile.conversation_history_turns,
             default_model=profile.default_model, role_models=profile.role_models, skills=profile.skills,

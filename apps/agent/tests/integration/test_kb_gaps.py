@@ -12,7 +12,7 @@ async def test_gap_visibility_and_idempotent_empty_draft(client, platform):
     async with platform.backend.create_uow().begin_write() as uow:
         now = await platform.backend.clock.now_ms(uow)
         await uow.execute(insert(schema.knowledge_gaps).values(team_id=platform.auth.team_id,
-            gap_id=gap_id, run_id=run.run_id, source_trace=json.dumps({'graph': 'dod.v19'}),
+            gap_id=gap_id, run_id=run.run_id, source_trace=json.dumps({'graph': 'knowledge.citation_review'}),
             problem_type='kb.empty', review_status='open', summary='如何检查库存？',
             query_scope=json.dumps({'service': 'stock', 'environment': 'test', 'region': 'sg'}),
             created_at=now, updated_at=now, gap_revision=0))
@@ -43,12 +43,14 @@ async def test_gap_replay_admits_a_new_run_once_and_preserves_original(client, p
         await platform.contexts.query_scope(uow, platform.auth, run.run_id, scope)
         now = await platform.backend.clock.now_ms(uow)
         await uow.execute(insert(schema.knowledge_gaps).values(team_id=platform.auth.team_id, gap_id=gap_id,
-            run_id=run.run_id, source_trace=json.dumps({'graph': 'dod.v19'}), problem_type='kb.empty',
+            run_id=run.run_id, source_trace=json.dumps({'graph': 'knowledge.citation_review'}), problem_type='kb.empty',
             review_status='open', summary='脱敏摘要不能用于重放', query_scope=json.dumps(scope),
             created_at=now, updated_at=now, gap_revision=0))
     owned = await claim(platform)
     async with platform.backend.create_uow().begin_write() as uow:
         await platform.backend.jobs.release(uow, owned.guard, status='partial')
+    from integration.test_public_knowledge_qa import publish_qa
+    await publish_qa(platform)
     url = f'/v1/kb/gaps/{gap_id}/replay'
     request_headers = {'If-Match': '0', 'Idempotency-Key': 'original-and-replay-key'}
     first = await client.post(url, headers=request_headers)
@@ -82,6 +84,8 @@ async def test_replay_link_failure_rolls_back_admitted_run(client, platform, mon
     owned = await claim(platform)
     async with platform.backend.create_uow().begin_write() as uow:
         await platform.backend.jobs.release(uow, owned.guard, status='partial')
+    from integration.test_public_knowledge_qa import publish_qa
+    await publish_qa(platform)
     async def reject(*args, **kwargs):
         return False
     monkeypatch.setattr(platform.backend.knowledge, 'cas_gap', reject)

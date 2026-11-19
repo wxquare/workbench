@@ -1,4 +1,5 @@
 """Checkpoint-driven recovery. Inspection outside writes; every decision fenced inside."""
+from workbench_agent.runtime.graphs.ids import GraphId
 from dataclasses import dataclass
 from workbench_agent.application.results import ResultService
 from workbench_agent.application.resume import ResumeApplier
@@ -25,9 +26,9 @@ class Reconciler:
 
     async def prepare(self,claim):
         """Native locked-framework state semantics, never under caller write UoW."""
-        executor=self.registry._executors.get(claim.context.graph_version)
+        executor=self.registry._executors.get(claim.context.graph_id)
         try:
-            graph=executor.registry.resolve(claim.context.graph_version,executor.registry.state_schema_version(claim.context.graph_version))
+            graph=executor.registry.resolve(claim.context.graph_id,executor.registry.state_schema_version(claim.context.graph_id))
             with executor.guard_provider.bind(claim.guard):
                 snapshot=await graph.aget_state({'configurable':{'thread_id':claim.guard.run_id}})
             checkpoint_id=(snapshot.config or {}).get('configurable',{}).get('checkpoint_id')
@@ -88,7 +89,7 @@ class Reconciler:
             await self.backend.controls.finish(uow,run,'expired'); return decision('expired')
         if observation is None or not observation.valid or observation.checkpoint_id!=checkpoint_id:
             return await fail('STATE_RECONCILIATION_REQUIRED')
-        try: outcome=saved_outcome(saved,claim.context.graph_version)
+        try: outcome=saved_outcome(saved,claim.context.graph_id)
         except (ValueError,TypeError,KeyError): return await fail('STATE_RECONCILIATION_REQUIRED')
         pending=await store.resume_pending(uow,guard.team_id,guard.run_id)
         applied=False
@@ -101,24 +102,24 @@ class Reconciler:
                 await store.change(uow,'interrupts',{'interrupt_id':pending['interrupt_id'],'accepted_resume_request_id':pending['request_id']},{'status':'consumed','updated_at':now})
         if outcome is not None:
             from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome
-            if claim.context.graph_version not in ('dod.v13','dod.v14','dod.v15'):
+            if claim.context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 outcome=await sanitize_v8_outcome(self.backend,uow,claim,outcome)
             from workbench_agent.application.errors import DomainError
-            if claim.context.graph_version not in ('dod.v13','dod.v14','dod.v15'):
+            if claim.context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 try: await ResultService(self.backend).validate(uow,guard,outcome)
                 except (ValueError,DomainError): return await fail('STATE_RECONCILIATION_REQUIRED')
             try:
                 await ResultService(self.backend).finalize_in(uow,guard,outcome,outcome.digest())
             except DomainError as error:
-                if claim.context.graph_version not in ('dod.v13','dod.v14','dod.v15') or error.code!='OPERATION_DENIED': raise
+                if claim.context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL) or error.code!='OPERATION_DENIED': raise
                 await self.backend.jobs.release(uow,guard,status='queued',job_status='capability_blocked',
                     recovery_phase='projection',error_code='EXECUTION_CAPABILITY_LOST')
                 return decision('unavailable','EXECUTION_CAPABILITY_LOST')
             return decision('finalized')
         if saved and saved['interrupts'] and pending is None:
-            if claim.context.graph_version not in ('dod.v2','dod.v3','dod.v9','dod.v10','dod.v13','dod.v14','dod.v15'): return await fail('STATE_RECONCILIATION_REQUIRED')
+            if claim.context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL): return await fail('STATE_RECONCILIATION_REQUIRED')
             # Only registered, exact named descriptors can become a public wait.
-            try: await self.registry._projectors[claim.context.graph_version].project(uow,claim,None)
+            try: await self.registry._projectors[claim.context.graph_id].project(uow,claim,None)
             except (ValueError,KeyError,TypeError): return await fail('STATE_RECONCILIATION_REQUIRED')
             return decision('waiting')
         if run['recovery_phase']=='finalizing' or run['status']=='finalizing':
@@ -126,28 +127,18 @@ class Reconciler:
         if claim.segment_attempt>=3: return await fail('RETRY_EXHAUSTED')
         if run['deadline_at'] is not None and run['deadline_at']<=now:
             await self.backend.controls.finish(uow,run,'timed_out'); return decision('timed_out')
-        allowed={'dod.v1':{'prepare','compose'},'dod.v2':{'prepare','input','compose'},'dod.v3':{'prepare','input','compose'},
-            # v4 investigation uses a stable, guarded subtask namespace and
-            # tool invocation identities; resumed dispatch cannot replay a sent tool.
-            'dod.v4':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
-            'dod.v5':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
-            'dod.v16':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
-            'dod.v17':{'answer'},
-            'dod.v18':{'answer'},
-            'dod.v19':{'prepare','retrieve','draft_answer','validate_citations','review_support','record_gap','compose_outcome'},
-            'dod.v15':{'prepare','input','scope','bind_baseline','collect_baseline','propose','compose'},
-            'dod.v14':{'prepare','input','scope','bind_baseline','collect_baseline','propose','compose'},
-            'dod.v13':{'prepare','input','scope','bind_baseline','collect_baseline','compose'},
-            'dod.v10':{'prepare','input','scope','bind_baseline','collect_baseline','compose'},
-            'dod.v11':{'prepare','step','compose'},
-            'dod.v12':{'prepare','step','compose'},
-            'dod.v9':{'prepare','input','scope','compose'},
-            'dod.v8':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
-            'dod.v7':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
-            'dod.v6':{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'}}
-        safe=(saved is None or bool(observation.next_nodes) and set(observation.next_nodes)<=allowed.get(claim.context.graph_version,set()))
+        allowed={
+            GraphId.KNOWLEDGE_SCOPED_EXCERPT:{'prepare_context','route','select_skills','collect_baseline','investigate','validate_evidence','compose_outcome','finalize'},
+            GraphId.CONVERSATION_SINGLE_TURN:{'answer'},
+            GraphId.CONVERSATION_MULTI_TURN:{'answer'},
+            GraphId.KNOWLEDGE_CITATION_REVIEW:{'prepare','retrieve','draft_answer','validate_citations','review_support','record_gap','compose_outcome'},
+            GraphId.RCA_BATCH_PROPOSAL:{'prepare','input','scope','bind_baseline','collect_baseline','propose','compose'},
+            GraphId.RCA_PROPOSAL:{'prepare','input','scope','bind_baseline','collect_baseline','propose','compose'},
+            GraphId.RCA_SYNTHETIC:{'prepare','input','scope','bind_baseline','collect_baseline','compose'},
+            GraphId.SOP_CONDITIONAL:{'prepare','step','compose'}}
+        safe=(saved is None or bool(observation.next_nodes) and set(observation.next_nodes)<=allowed.get(claim.context.graph_id,set()))
         has_actions=await store.has_actions(uow,guard.team_id,guard.run_id)
-        if safe and has_actions and claim.context.graph_version=='dod.v14':
+        if safe and has_actions and claim.context.graph_id==GraphId.RCA_PROPOSAL:
             from sqlalchemy import select
             from workbench_agent.persistence import schema
             actions=(await uow.execute(select(schema.actions).where(schema.actions.c.team_id==guard.team_id,
@@ -169,7 +160,7 @@ class Reconciler:
                     await self.backend.jobs.release(uow,guard,status='queued',job_status='capability_blocked',
                         recovery_phase='projection',error_code='EXECUTION_CAPABILITY_LOST')
                     return decision('unavailable','EXECUTION_CAPABILITY_LOST')
-        if safe and has_actions and claim.context.graph_version=='dod.v15':
+        if safe and has_actions and claim.context.graph_id==GraphId.RCA_BATCH_PROPOSAL:
             from sqlalchemy import select
             from workbench_agent.persistence import schema
             from workbench_agent.application.synthetic_batch_policy import bound_rules

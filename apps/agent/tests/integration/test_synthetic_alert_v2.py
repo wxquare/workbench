@@ -37,7 +37,7 @@ async def publish_v13(platform,*,with_policy=True):
     context=await platform.contexts.resolve(platform.auth,platform.agent_id)
     agent=await platform.profiles.get_agent(platform.auth,platform.agent_id)
     draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,
-        ProfileDraft(default_model=context.default_model,graph_version='dod.v13'),agent['revision'],key=str(uuid4()))
+        ProfileDraft(default_model=context.default_model,graph_id='rca.synthetic'),agent['revision'],key=str(uuid4()))
     await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key=str(uuid4()))
     if with_policy:
         from workbench_agent.application.synthetic_source_policy import SyntheticSourcePolicy
@@ -225,7 +225,7 @@ async def test_reconciler_takeover_after_scope_change_yields_safe_partial(platfo
     owned=await claim(platform)
     policy=DeploymentConnectorPolicy(lambda:{'v2-test':{'subject':platform.auth.subject,'team_id':platform.auth.team_id,'agent_ids':[platform.agent_id]}})
     registry=foundation_worker_registry(platform.backend)
-    await registry._executors['dod.v13'].execute(Execution(platform.backend,owned,policy))
+    await registry._executors['rca.synthetic'].execute(Execution(platform.backend,owned,policy))
     async with platform.backend.create_uow().begin_write() as uow:
         scope=await platform.backend.runs.current_scope(uow,owned.guard.team_id,owned.guard.run_id)
         changed=json.loads(scope['scope_json']);changed['region']='different'
@@ -322,7 +322,7 @@ async def test_candidate_digest_precedes_permission_sanitization(platform,monkey
         assert await DeadlineService(platform.backend,connector_policy=policy).expire_owned(owned.guard)
     else:
         owned=await claim(platform)
-        await registry._executors['dod.v13'].execute(Execution(platform.backend,owned,policy))
+        await registry._executors['rca.synthetic'].execute(Execution(platform.backend,owned,policy))
         await expire_lease(platform,owned.guard)
         monkeypatch.setattr(recovery,'saved_outcome',lambda saved,version:outcome)
         reconciler=Reconciler(platform.backend,registry);reconciler.connector_policy=policy
@@ -364,7 +364,7 @@ async def test_deadline_does_not_project_after_precise_connector_revocation(plat
         'other':{'subject':platform.auth.subject,'team_id':platform.auth.team_id,'agent_ids':[platform.agent_id]}}
     policy=DeploymentConnectorPolicy(lambda:identities)
     owned=await claim(platform)
-    await foundation_worker_registry(platform.backend)._executors['dod.v13'].execute(Execution(platform.backend,owned,policy))
+    await foundation_worker_registry(platform.backend)._executors['rca.synthetic'].execute(Execution(platform.backend,owned,policy))
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(update(schema.runs).where(schema.runs.c.run_id==str(accepted.run_id)).values(deadline_at=0))
     identities.pop('v2-test')
@@ -396,7 +396,7 @@ async def test_other_backend_policy_revocation_blocks_worker_and_deadline(platfo
     identities={'v2-test':{'subject':platform.auth.subject,'team_id':platform.auth.team_id,'agent_ids':[platform.agent_id]}}
     policy=DeploymentConnectorPolicy(lambda:identities)
     owned=await claim(platform)
-    await foundation_worker_registry(platform.backend)._executors['dod.v13'].execute(Execution(platform.backend,owned,policy))
+    await foundation_worker_registry(platform.backend)._executors['rca.synthetic'].execute(Execution(platform.backend,owned,policy))
     import subprocess,sys
     script='''import asyncio,sys
 from workbench_agent.persistence.backends.sqlite import SQLiteBackend
@@ -478,7 +478,7 @@ async def test_identity_revoked_between_projection_check_and_commit_is_blocked(p
             assert await Worker(platform.backend,'racing-worker',registry,connector_policy=policy).run_once()=='recovery_scheduled'
         else:
             owned=await claim(platform)
-            await registry._executors['dod.v13'].execute(Execution(platform.backend,owned,policy))
+            await registry._executors['rca.synthetic'].execute(Execution(platform.backend,owned,policy))
             await expire_lease(platform,owned.guard)
             reconciler=Reconciler(platform.backend,registry);reconciler.connector_policy=policy
             original=reconciler.prepare
@@ -506,7 +506,7 @@ async def test_deadline_blocks_when_db_identity_revoked_but_source_grant_remains
     identity={'subject':platform.auth.subject,'team_id':platform.auth.team_id,'agent_ids':[platform.agent_id]}
     policy=DeploymentConnectorPolicy(lambda:{'v2-test':identity,'another':identity})
     owned=await claim(platform)
-    await foundation_worker_registry(platform.backend)._executors['dod.v13'].execute(Execution(platform.backend,owned,policy))
+    await foundation_worker_registry(platform.backend)._executors['rca.synthetic'].execute(Execution(platform.backend,owned,policy))
     grant=dict(team_id=platform.auth.team_id,agent_id=platform.agent_id,connector_id='v2-test',identity_id='v2-test',
         subject=platform.auth.subject,service='checkout',environment='test',region='id',rule='error-rate')
     await SyntheticSourcePolicy(platform.backend).sync([grant],connector_identities={'another':identity},expected_revision=1)

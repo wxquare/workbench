@@ -13,7 +13,7 @@ class RunContext(FrozenModel):
     accepted_at_ms: int
     source: str = 'api'
     agent_profile: VersionRef
-    graph_version: str
+    graph_id: str
     system_prompt: str = Field(default='', max_length=12000, exclude_if=lambda v: v == '')
     response_language: Literal['auto', 'zh', 'en'] = Field(default='auto', exclude_if=lambda v: v == 'auto')
     response_format: Literal['default', 'markdown', 'json'] = Field(default='default', exclude_if=lambda v: v == 'default')

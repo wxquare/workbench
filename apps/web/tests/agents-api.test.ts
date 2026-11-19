@@ -4,7 +4,7 @@ import { AgentApi, parseAgentDraft, agentError } from '../src/agents-api'
 
 const draft = {
   default_model: { resource_id: 'model', version: '1', content_hash: 'a'.repeat(64) },
-  graph_version: 'dod.v3', role_models: [], skills: [{ resource_id: 'skill', version: '2', content_hash: 'b'.repeat(64) }],
+  graph_id: 'conversation.multi_turn', role_models: [], skills: [{ resource_id: 'skill', version: '2', content_hash: 'b'.repeat(64) }],
   tools: [], repositories: [], budget_limits: { tokens: 500 }, allowed_modes: ['qa'],
 }
 
@@ -12,7 +12,7 @@ describe('Agent API', () => {
   it('saves the complete draft using the current revision and authentication', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json({ agent_id: 'ws', revision: 8, draft }))
     const client = new AgentApi(new ApiClient(() => 'token', fetcher), () => 'save-key')
-    const edited = parseAgentDraft(JSON.stringify({ ...draft, graph_version: 'dod.v4' }))
+    const edited = parseAgentDraft(JSON.stringify({ ...draft, graph_id: 'sop.conditional' }))
     await client.save('ws', 7, edited)
     const [path, init] = fetcher.mock.calls[0]
     expect(path).toBe('/v1/agents/ws')
@@ -20,7 +20,7 @@ describe('Agent API', () => {
     expect(new Headers(init.headers).get('If-Match')).toBe('7')
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('save-key')
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token')
-    expect(JSON.parse(init.body)).toEqual({ ...draft, graph_version: 'dod.v4' })
+    expect(JSON.parse(init.body)).toEqual({ ...draft, graph_id: 'sop.conditional' })
   })
 
   it('reuses the idempotency key after an uncertain failure and changes it for a different operation', async () => {
@@ -64,8 +64,8 @@ describe('Agent API', () => {
 
   it('preserves omitted fields, including nested settings, while allowing explicit clears', () => {
     const original = { ...draft, budget_limits: { tokens: 500, tool_calls: 10 } }
-    expect(parseAgentDraft('{"graph_version":"dod.v4","budget_limits":{"tokens":100},"skills":[]}', original))
-      .toEqual({ ...original, graph_version: 'dod.v4', budget_limits: { tokens: 100, tool_calls: 10 }, skills: [] })
+    expect(parseAgentDraft('{"graph_id":"sop.conditional","budget_limits":{"tokens":100},"skills":[]}', original))
+      .toEqual({ ...original, graph_id: 'sop.conditional', budget_limits: { tokens: 100, tool_calls: 10 }, skills: [] })
     expect(parseAgentDraft('{"budget_limits":null}', original).budget_limits).toBeNull()
   })
 

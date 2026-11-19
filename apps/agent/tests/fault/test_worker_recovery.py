@@ -5,6 +5,11 @@ from support.interrupts import InterruptPlatform
 from workbench_agent.jobs.worker import Execution
 from workbench_agent.persistence import schema as s
 
+@pytest.fixture(autouse=True)
+def deterministic_model(platform):
+    from support.model import install_test_model
+    install_test_model(platform.backend)
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize('attempts',[1,3])
 async def test_saved_outcome_wins_over_retry_exhaustion(platform,attempts):
@@ -12,7 +17,7 @@ async def test_saved_outcome_wins_over_retry_exhaustion(platform,attempts):
     run=await platform.create_run(); owned=await claim(platform)
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     registry=foundation_worker_registry(platform.backend)
-    await registry._executors['dod.v1'].execute(Execution(platform.backend,owned))
+    await registry._executors['conversation.multi_turn'].execute(Execution(platform.backend,owned))
     await expire_lease(platform,owned.guard)
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(update(s.run_jobs).values(attempt=attempts))
@@ -24,19 +29,21 @@ async def test_saved_outcome_wins_over_retry_exhaustion(platform,attempts):
 
 @pytest.mark.asyncio
 async def test_applied_marker_recovers_without_second_command_then_continues_outside_write(platform):
-    from workbench_agent.jobs.reconciler import Reconciler
-    p=InterruptPlatform(platform);run,w=await p.waiting_run();await p.resume(run,w,key='once')
-    await p.apply_then_crash(run)
-    decision=await Reconciler(platform.backend,p.worker.registry).recover(run.run_id)
+    from support.rca_recovery import RcaRecovery
+    p=RcaRecovery(platform);run,w=await p.waiting_run();await p.resume(run,w)
+    owned=await claim(platform)
+    await p.executor.apply_resume(Execution(platform.backend,owned,p.policy),mark=False)
+    await expire_lease(platform,owned.guard)
+    decision=await p.registry.reconciler.recover(run.run_id)
     assert decision.action=='continue'
-    assert await p.resume_status(run)=='applied'
+    assert (await row(platform,s.resume_requests,run_id=run.run_id))['status']=='applied'
     assert (await row(platform,s.interrupts,interrupt_id=w['interrupt_id']))['status']=='consumed'
     async with platform.backend.create_uow().begin_read() as uow:
         jobs=(await uow.execute(select(s.run_jobs).where(s.run_jobs.c.run_id==run.run_id).order_by(s.run_jobs.c.generation))).mappings().all()
     assert [j['status'] for j in jobs]==['done','done','ready']
     assert jobs[-1]['kind']=='recover'
     assert await p.worker.run_once()=='projected'
-    assert (await platform.get_run(run.run_id)).status=='succeeded'
+    assert (await platform.get_run(run.run_id)).status=='partial'
 
 @pytest.mark.asyncio
 async def test_no_checkpoint_exhausted_fails_without_fourth_execution(platform):
@@ -77,29 +84,31 @@ async def test_cancel_requested_dead_owner_is_fenced_and_cleaned(platform):
 async def test_real_sigkill_named_checkpoint_boundaries(platform,tmp_path,hook):
     import asyncio,time
     from support.processes import ProcessFault,ledger_count
+    from support.rca_recovery import RcaRecovery
     from workbench_agent.jobs.scheduler import Scheduler
-    p=InterruptPlatform(platform)
+    p=RcaRecovery(platform)
     if hook=='after_input_application':
-        run,w=await p.waiting_run();await p.resume(run,w,key='process-resume')
+        run,w=await p.waiting_run();await p.resume(run,w);state=None
     else:
-        await p.publish_v2();run=await platform.create_run()
+        run,state=await p.admit(conflict=hook=='after_interrupt_checkpoint')
     ledger=tmp_path/'nodes.log'
-    boundary=await ProcessFault(platform.settings.storage.database_url.get_secret_value(),hook,ledger).crash()
+    identities={'v2-test':{'subject':platform.auth.subject,'team_id':platform.auth.team_id,'agent_ids':[platform.agent_id]}}
+    boundary=await ProcessFault(platform.settings.storage.database_url.get_secret_value(),hook,ledger,state,identities).crash()
     start=time.monotonic()
     if hook!='after_interrupt_checkpoint': await expire_lease(platform,boundary['guard'])
     # This first case uses the actual 45s persisted lease, 5s scheduler scan and
     # real process death. Other cases shorten only post-kill expiry for speed.
-    scheduler=Scheduler(platform.backend,p.worker.registry)
+    scheduler=Scheduler(platform.backend,p.registry,connector_policy=p.policy)
     while time.monotonic()-start<90:
         await scheduler.tick()
         await p.worker.run_once()
         view=await platform.get_run(run.run_id)
-        if view.status in ('waiting_input','succeeded'): break
+        if view.status in ('waiting_input','partial'): break
         await asyncio.sleep(5 if hook=='after_interrupt_checkpoint' else .05)
     elapsed=time.monotonic()-start
     print(f'RECOVERY hook={hook} elapsed_seconds={elapsed:.3f} real_lease={hook=="after_interrupt_checkpoint"} status={view.status}')
     assert elapsed<=90
-    assert view.status==('waiting_input' if hook=='after_interrupt_checkpoint' else 'succeeded')
+    assert view.status==('waiting_input' if hook=='after_interrupt_checkpoint' else 'partial')
     if hook=='after_interrupt_checkpoint':
         assert elapsed>=40
         assert ledger_count(ledger,'question')==1
@@ -108,7 +117,7 @@ async def test_real_sigkill_named_checkpoint_boundaries(platform,tmp_path,hook):
         assert await platform.count_rows('run_outcomes')==1
         if hook=='after_input_application':
             assert ledger_count(ledger,'command')==1
-            assert await p.resume_status(run)=='applied'
+            assert (await row(platform,s.resume_requests,run_id=run.run_id))['status']=='applied'
     async with platform.backend.create_uow().begin_read() as uow:
         events=(await uow.execute(select(s.run_events.c.type).where(s.run_events.c.run_id==run.run_id))).scalars().all()
     assert events.count('run.completed')==(0 if hook=='after_interrupt_checkpoint' else 1)
@@ -126,23 +135,19 @@ async def test_applied_marker_at_exhaustion_is_consumed_without_fourth_execution
 
 @pytest.mark.asyncio
 async def test_native_next_checkpoint_authorizes_one_safe_recover_generation(platform):
-    from workbench_agent.jobs.reconciler import Reconciler
-    p=InterruptPlatform(platform);await p.publish_v2();run=await platform.create_run();owned=await claim(platform)
-    ex=p.worker.registry._executors['dod.v2'];g=ex.registry.resolve('dod.v2','dod-state-v2')
-    with ex.guard_provider.bind(owned.guard):
-        await g.ainvoke({'run_id':run.run_id,'input_text':'safe','actor':platform.auth.subject,'messages':[]},
-            {'configurable':{'thread_id':run.run_id}},context=Execution(platform.backend,owned),interrupt_after=['prepare'],durability='sync')
+    from support.rca_recovery import RcaRecovery
+    p=RcaRecovery(platform);run,owned=await p.start(interrupt_after=['prepare'],conflict=False)
     await expire_lease(platform,owned.guard)
-    assert (await Reconciler(platform.backend,p.worker.registry).recover(run.run_id)).action=='continue'
+    assert (await p.registry.reconciler.recover(run.run_id)).action=='continue'
     assert await p.worker.run_once()=='projected'
-    assert (await platform.get_run(run.run_id)).status=='succeeded'
+    assert (await platform.get_run(run.run_id)).status=='partial'
 
 @pytest.mark.asyncio
 async def test_corrupt_checkpoint_fails_closed_instead_of_perpetual_projection_retry(platform):
     from workbench_agent.jobs.reconciler import Reconciler
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     run=await platform.create_run();owned=await claim(platform);registry=foundation_worker_registry(platform.backend)
-    await registry._executors['dod.v1'].execute(Execution(platform.backend,owned));await expire_lease(platform,owned.guard)
+    await registry._executors['conversation.multi_turn'].execute(Execution(platform.backend,owned));await expire_lease(platform,owned.guard)
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(update(s.graph_checkpoints).values(payload=b'corrupt'))
     result=await Reconciler(platform.backend,registry).recover(run.run_id)
@@ -170,7 +175,7 @@ async def test_final_checkpoint_recovery_supersedes_interrupted_draft_once(platf
     run=await platform.create_run();owned=await claim(platform);registry=foundation_worker_registry(platform.backend)
     event=await RunEventStore(platform.backend).append_execution(owned.guard,'assistant.delta',{'text':'interrupted draft'})
     message=str(event.message_id)
-    await registry._executors['dod.v1'].execute(Execution(platform.backend,owned));await expire_lease(platform,owned.guard)
+    await registry._executors['conversation.multi_turn'].execute(Execution(platform.backend,owned));await expire_lease(platform,owned.guard)
     assert (await Reconciler(platform.backend,registry).recover(run.run_id)).action=='finalized'
     async with platform.backend.create_uow().begin_read() as uow:
         rows=(await uow.execute(select(s.run_events.c.message_id).where(s.run_events.c.type=='assistant.message_superseded'))).scalars().all()
@@ -178,13 +183,13 @@ async def test_final_checkpoint_recovery_supersedes_interrupted_draft_once(platf
 
 @pytest.mark.asyncio
 async def test_submitted_resume_before_command_safely_continues_without_new_question(platform):
-    from workbench_agent.jobs.reconciler import Reconciler
-    p=InterruptPlatform(platform);run,w=await p.waiting_run();await p.resume(run,w,key='not-applied')
+    from support.rca_recovery import RcaRecovery
+    p=RcaRecovery(platform);run,w=await p.waiting_run();await p.resume(run,w)
     owned=await claim(platform);await expire_lease(platform,owned.guard)
-    assert (await Reconciler(platform.backend,p.worker.registry).recover(run.run_id)).action=='continue'
-    assert await p.resume_status(run)=='submitted'
+    assert (await p.registry.reconciler.recover(run.run_id)).action=='continue'
+    assert (await row(platform,s.resume_requests,run_id=run.run_id))['status']=='submitted'
     assert await p.worker.run_once()=='projected'
-    assert await p.resume_status(run)=='applied'
+    assert (await row(platform,s.resume_requests,run_id=run.run_id))['status']=='applied'
     assert await platform.count_rows('interrupts')==1
 
 @pytest.mark.asyncio
@@ -234,7 +239,7 @@ async def test_revoked_owner_is_parked_without_crashing_scheduler_or_replaying(p
     async with platform.backend.create_uow().begin_write() as uow:
         candidates=await platform.backend.jobs.candidates(uow,run_id=other.run_id)
         other_owned,_=await platform.backend.jobs.claim(uow,registry.capabilities(),'other-worker',candidates)
-    await registry._executors['dod.v1'].execute(Execution(platform.backend,other_owned))
+    await registry._executors['conversation.multi_turn'].execute(Execution(platform.backend,other_owned))
     await expire_lease(platform,other_owned.guard)
     team=await row(platform,s.teams,team_id=platform.auth.team_id)
     await platform.teams.set_member(platform.auth,platform.auth.subject,'admin','revoked',expected_revision=team['revision'],key='revoke-recovery')

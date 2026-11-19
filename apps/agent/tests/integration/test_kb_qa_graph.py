@@ -21,7 +21,7 @@ async def publish_qa(platform, tools=()):
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=context.default_model, graph_version='dod.v19', tools=tools, knowledge_max_age_seconds=3153600000),
+        ProfileDraft(default_model=context.default_model, graph_id='knowledge.citation_review', tools=tools, knowledge_max_age_seconds=3153600000),
         agent['revision'], key='qa-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, draft['revision'], key='qa-publish')
 

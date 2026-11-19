@@ -72,7 +72,7 @@ class RunEventStore:
     @staticmethod
     def _project(event,run,permitted):
         context=RunContext.model_validate_json(run['versions'])
-        if context.graph_version in ('dod.v1','dod.v2','dod.v3') or permitted:
+        if permitted:
             return event
         if event.type == 'assistant.delta':
             return event.model_copy(update={'payload':{'text':'[Content unavailable]'}})

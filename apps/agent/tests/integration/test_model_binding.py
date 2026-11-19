@@ -64,15 +64,15 @@ async def test_model_ref_invalid_version_is_a_validation_error(platform, client)
         json={'default_model': ref}, headers={'If-Match': str((await platform.profiles.get_agent(platform.auth,platform.agent_id))['revision']), 'Idempotency-Key': 'malformed'})
     assert response.status_code == 422
 
-async def test_context_pins_published_graph_version_across_later_publication(platform):
+async def test_context_pins_published_graph_id_across_later_publication(platform):
     old = await platform.contexts.resolve(platform.auth, platform.agent_id)
     current = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     changed = await platform.profiles.save_draft(platform.auth, platform.agent_id,
-        ProfileDraft(default_model=old.default_model, graph_version='dod.v2'), current['revision'], key='graph-draft')
+        ProfileDraft(default_model=old.default_model, graph_id='conversation.single_turn'), current['revision'], key='graph-draft')
     await platform.profiles.publish(platform.auth, platform.agent_id, changed['revision'], key='graph-publish')
     new = await platform.contexts.resolve(platform.auth, platform.agent_id)
-    assert old.graph_version == 'dod.v1'
-    assert new.graph_version == 'dod.v2'
+    assert old.graph_id == 'conversation.multi_turn'
+    assert new.graph_id == 'conversation.single_turn'
 
 async def test_default_agent_lookup_is_not_limited_to_first_inventory_page(platform):
     from uuid import UUID

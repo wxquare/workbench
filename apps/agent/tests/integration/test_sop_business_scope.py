@@ -4,8 +4,8 @@ import pytest
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('scenario', ['mixed','same','grant_change','grant_at_send','grant_after_checkpoint','legacy_receipt'])
-@pytest.mark.parametrize('graph_version', ['dod.v11','dod.v12'])
-async def test_sop_rejects_mixed_business_teams_before_dispatch(platform, monkeypatch, scenario, graph_version):
+@pytest.mark.parametrize('graph_id', ['sop.conditional'])
+async def test_sop_rejects_mixed_business_teams_before_dispatch(platform, monkeypatch, scenario, graph_id):
     import httpx
     from workbench_agent.application.runs import RunService
     from workbench_agent.application.workflows import WorkflowService
@@ -57,7 +57,7 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(platform, monkey
             schema=catalog.tools[catalog.names.index(name)].inputSchema
             refs.append(await ToolRegistry(platform.backend).publish(platform.auth,platform.agent_id,ToolBinding(alias=name,provider='mcp',tool_name=name,server='local',credential_scope='read',permission='read',input_schema=schema),key=name))
         context=await platform.contexts.resolve(platform.auth,platform.agent_id); ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-        draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_version=graph_version,tools=tuple(refs)),ws['revision'],key='mixed-draft')
+        draft=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=context.default_model,graph_id=graph_id,tools=tuple(refs)),ws['revision'],key='mixed-draft')
         await platform.profiles.publish(platform.auth,platform.agent_id,draft['revision'],key='mixed-publish')
         wf=await WorkflowService(platform.backend).publish(platform.auth,platform.agent_id,WorkflowDefinition.model_validate({'name':'check','steps':[
             {'step_id':'metrics','tool':'metrics_query','arguments':{'template_id':'error_rate'}},

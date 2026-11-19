@@ -1,4 +1,5 @@
 """Revalidate action provenance before any delivery or reconciliation I/O."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from workbench_agent.application.authorization import Authorization
 from workbench_agent.application.errors import DomainError
@@ -39,7 +40,7 @@ async def require_action_authority(backend,uow,action,approval,run,*,reader=None
             reader_context=context.model_copy(update={'subject':reader.subject,'identity_kind':reader.identity_kind,
                 'agent_scope':reader.agent_scope,'roles':reader.roles})
             if not permissions.allows(reader_context,binding.permission,'diagnosis'): raise ValueError()
-        if context.graph_version=='dod.v14':
+        if context.graph_id==GraphId.RCA_PROPOSAL:
             from workbench_agent.application.synthetic_proposal_policy import bound_rule
             rule,proposal_revision,proposal_hash,source_revision,source_hash=await bound_rule(backend,uow,context,run['run_id'],action['scope'],with_policy=True)
             from sqlalchemy import select
@@ -48,7 +49,7 @@ async def require_action_authority(backend,uow,action,approval,run,*,reader=None
             if not linked or (linked['proposal_revision'],linked['proposal_hash'],linked['source_revision'],linked['source_hash'])!=(proposal_revision,proposal_hash,source_revision,source_hash): raise ValueError()
             if rule['binding']!=ref.model_dump(mode='json') or rule['arguments']!=payload['arguments'] or rule['approver']!=grant['approver']:
                 raise ValueError()
-        if context.graph_version=='dod.v15':
+        if context.graph_id==GraphId.RCA_BATCH_PROPOSAL:
             from workbench_agent.application.synthetic_batch_policy import bound_rules
             rules,proposal_revision,proposal_hash,source_revision,source_hash=await bound_rules(backend,uow,context,run['run_id'],action['scope'],with_policy=True)
             prefix='synthetic-v15:'+run['run_id']+':'

@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: f932036
+verified_commit: c5f93fb
 ---
 
 # 开发指南
@@ -412,7 +412,7 @@ sequenceDiagram
 | 4 | 指定 `thread_id` 时校验 Thread 归属于该 Agent | 404 |
 | 5 | `client_message_id`：命中且未过期的 `source_events` 回放原结果，不同请求体则冲突 | `SOURCE_CONFLICT`（409） |
 | 6 | `expected_revision` 与 Thread 当前 revision 比较 | `REVISION_CONFLICT`（409） |
-| 7 | 读取已发布 Profile；`business_context.conversation=true` 要求图为 `dod.v18` | `CONVERSATION_WORKFLOW_REQUIRED`（409） |
+| 7 | 读取已发布 Profile；`business_context.conversation=true` 要求图为 `conversation.multi_turn` | `CONVERSATION_WORKFLOW_REQUIRED`（409） |
 | 8 | v18 要求 `mode=qa` 且无 `query_scope`；会话中不得有未结束 Run；历史成功 Run 必须来自 v17/v18 | `WORKFLOW_UNAVAILABLE`、`THREAD_BUSY`、`CONVERSATION_HISTORY_INCOMPATIBLE`（409） |
 | 9 | v13–v15 仅允许合成告警受信通道调用 | `WORKFLOW_UNAVAILABLE`（409） |
 | 10 | v16：仅 `qa`，`validate_qa_scope` 校验 `query_scope`；v17：仅 `qa` 且不得带 `query_scope` | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`（409） |
@@ -486,7 +486,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 候选 | `SQLiteJobStore.candidates` | `available_at <= now` 且 Job 状态为 `ready/retry_wait/capability_blocked`，或为 `leased` 且 `lease_until <= now`；每页最多 64 条，用 `row_number()` 按（团队、级别）分区，游标 `(_level, _team_rank, created_at, job_id)` |
 | 优先级 | `Fairness.level` | `resume/recover`=0，`run`（其余默认）=1，`alert`=2，`schedule`=3；同级别团队轮转，记录上次领取的团队 |
-| 能力匹配 | `_supports` | 普通执行需 `graph_versions` 含该图（已注册执行器**且**有投影器）；纯投影需 `can_reconcile` 且在 `projection_graph_versions` 内；Job 的 `capabilities` 必须是 Worker `features` 的子集。不满足且 Job 未被租出时标记 `capability_blocked` |
+| 能力匹配 | `_supports` | 普通执行需 `graph_ids` 含该图（已注册执行器**且**有投影器）；纯投影需 `can_reconcile` 且在 `projection_graph_ids` 内；Job 的 `capabilities` 必须是 Worker `features` 的子集。不满足且 Job 未被租出时标记 `capability_blocked` |
 | 等待态 | `_candidate` | Run 处于 `waiting_input/waiting_approval` 时只能被 `kind='resume'` 的 Job 领取 |
 | Thread 占用 | `_candidate` | `threads.active_run_id` 非空且不是当前 Run 时，把候选 `available_at` 推迟 1 秒 |
 | 配额 | `_candidate` | Team 须 `active`，Team 有效租约数 `< execution_limit`；**全局**有效租约数 `< 2`（硬编码） |
@@ -529,13 +529,13 @@ flowchart TD
     PO -- 是 --> REC["reconciler.prepare 读检查点<br/>写事务内 reconciler.reconcile"]
     PO -- 否 --> GV{"图版本已注册<br/>执行器 + 投影器?"}
     GV -- 否 --> CB["CapabilityBlocked"]
-    GV -- 是 --> EX["registry._executors[graph_version].execute(execution)"]
+    GV -- 是 --> EX["registry._executors[graph_id].execute(execution)"]
     EX --> PR["check_projection"]
     PR --> PJ["写事务: lock_scope + LeaseGuard.require<br/>projector.project(uow, claim, result)"]
     PJ --> DONE["projected"]
 ```
 
-执行器与投影器由 `runtime/graphs/registry.py::foundation_worker_registry` 注册，按 `RunContext.graph_version` 选择：
+执行器与投影器由 `runtime/graphs/registry.py::foundation_worker_registry` 注册，按 `RunContext.graph_id` 选择：
 
 - `FoundationExecutor.execute`：以 `run_id` 为 LangGraph `thread_id`，`recursion_limit=128`；首次执行从 `messages` 表读取受理时的输入构造初始状态，已有检查点则以 `ainvoke(None, ...)` 继续；检查点上有未消费中断时不自行编造回复，直接返回。v10–v15、v17、v18 使用 `durability='sync'`。
 - `InterruptExecutor(FoundationExecutor)`：用于 v2、v3、v9、v10、v13–v15。先 `apply_resume`（见 §3.5），再继续执行。
@@ -668,7 +668,7 @@ SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4
 
 ### 4.1 图版本注册与选择
 
-`runtime/graphs/registry.py::foundation_worker_registry` 是当前版本清单：为 `dod.v1` 到 `dod.v18` 的每个已支持版本登记编译后的图、状态 Schema、执行器和结果投影器。`GraphRegistry.register` 拒绝同名版本再次登记；`resolve(graph_version, state_schema_version)` 同时核对版本与状态 Schema。这样恢复时仍使用受理时固定的图，而不会误用新发布的图代码。新增版本须保持旧版本可解析，直到历史 Run 已归档或有显式兼容迁移。
+`runtime/graphs/registry.py::foundation_worker_registry` 注册八个语义化图 ID；`runtime/graphs/catalog.py` 维护展示元数据并从编译图提取结构。`GraphRegistry.resolve(graph_id, state_schema_version)` 同时核对图 ID 和状态 Schema，恢复时使用受理快照固定的图。新增图须登记唯一 ID、目录元数据和节点及边说明，补充受理、结构、权限和执行测试；不兼容行为应使用新 ID。默认 Worker 仅启用两张对话图，其他图需在 `worker.supported_graph_ids` 中配置。旧 `dod.v1`–`dod.v11` 已退役，切换前须清库重建。
 
 | 入口 | 责任 | 不能省略的检查 |
 | --- | --- | --- |
@@ -678,7 +678,7 @@ SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4
 | `PortableCheckpointSaver` | 把 LangGraph 检查点映射到统一存储 | 每次受保护写入绑定当前 `InvocationGuard` |
 | `ResultProjector` | 将检查点进度变成业务状态 | 只能投影已持久化的图事实 |
 
-源码：`runtime/graphs/registry.py`、`runtime/checkpoints/portable.py`、`runtime/results.py`。图定义分别位于 `runtime/graphs/{foundation,qa,qa_v16,code,multi,rca,rca_baseline,rca_synthetic,rca_proposal,rca_batch,sop_graph,direct_qa,conversation_qa}.py`。图的输入/输出结构和 reducer 位于 `runtime/state/`。
+源码：`runtime/graphs/registry.py`、`runtime/checkpoints/portable.py`、`runtime/results.py`。图定义分别位于 `runtime/graphs/{qa_v16,rca_synthetic,rca_proposal,rca_batch,sop_graph,direct_qa,conversation_qa,knowledge_qa}.py`。图的输入/输出结构和 reducer 位于 `runtime/state/`。
 
 ### 4.2 图状态与业务状态的两次落盘
 
@@ -852,10 +852,10 @@ Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3�
 
 ### 10.4 启用问答 Agent
 
-**直接问答（`dod.v17` 单轮 / `dod.v18` 多轮）**
+**直接问答（`conversation.single_turn` 单轮 / `conversation.multi_turn` 多轮）**
 
 1. 先在团队级准备好已发布的模型版本；新建 Agent 用它初始化，不继承其他 Agent 的提示词、预算或资源绑定。
-2. 在 `/app/agents` 选择 Agent，检查现有草稿（不要覆盖他人的草稿），把 `graph_version` 设为 `dod.v17` 或 `dod.v18`，`allowed_modes` 设为 `["qa"]`，保存并发布。
+2. 在 `/app/agents` 选择 Agent，检查现有草稿（不要覆盖他人的草稿），把 `graph_id` 设为 `conversation.single_turn` 或 `conversation.multi_turn`，`allowed_modes` 设为 `["qa"]`，保存并发布。
 3. 部署侧还需在 `service.model_credential_bindings` 中按 `agent_ids` 授权模型端点与凭据引用，并重启 Worker。
 4. 发布只影响之后创建的 Run；历史 Run 保持原工作流。缺少团队级模型时返回 `MODEL_PROFILE_UNAVAILABLE`。
 
@@ -867,7 +867,7 @@ export WORKBENCH_AGENT_ID='<Agent UUID>'
 export WORKBENCH_BEARER='<管理员 Bearer Token>'
 qa_tmp=$(mktemp -d)
 curl -fsS "$WORKBENCH_API/v1/agents/$WORKBENCH_AGENT_ID" -H "Authorization: Bearer $WORKBENCH_BEARER" > "$qa_tmp/agent.json"
-jq '.draft | .graph_version="dod.v18" | .allowed_modes=["qa"]' "$qa_tmp/agent.json" > "$qa_tmp/draft.json"
+jq '.draft | .graph_id="conversation.multi_turn" | .allowed_modes=["qa"]' "$qa_tmp/agent.json" > "$qa_tmp/draft.json"
 curl -fsS -X PATCH "$WORKBENCH_API/v1/agents/$WORKBENCH_AGENT_ID" \
   -H "Authorization: Bearer $WORKBENCH_BEARER" -H 'Content-Type: application/json' \
   -H "If-Match: $(jq -r .revision "$qa_tmp/agent.json")" \
@@ -877,7 +877,7 @@ curl -fsS -X POST "$WORKBENCH_API/v1/agents/$WORKBENCH_AGENT_ID/profiles/publish
   -H "Idempotency-Key: $(uuidgen)"
 ```
 
-**知识问答（`dod.v16`）**
+**知识问答（`knowledge.scoped_excerpt`）**
 
 需要额外三件事：已发布的 `knowledge_search` 工具绑定、`mcp_connections`（含同一个业务范围的 `scope_grants`）、`tool_permissions` 中用户/团队/Agent/Skill/专家五层授权取交集。工具 Schema 必须从配置的 MCP Server 发现，不能手写：
 
@@ -891,7 +891,7 @@ catalog = await adapter.discover(server, credential_scope, team_id=team, agent_i
 schema = catalog.tools[catalog.names.index("knowledge_search")].inputSchema
 ```
 
-然后 `PUT /v1/agents/{agent_id}/tool-bindings/{alias}`（`If-Match: 0`）→ `/publish`（`If-Match: 1`）→ 在 Agent 草稿中追加该工具引用并把 `graph_version` 设为 `dod.v16` → 发布 Agent。可选探测：`POST .../tool-bindings/{alias}/probe`，再用 `GET .../admin-jobs/{job_id}` 轮询；只有部署侧存在 `probe_requests` 时才会真正发起业务查询。
+然后 `PUT /v1/agents/{agent_id}/tool-bindings/{alias}`（`If-Match: 0`）→ `/publish`（`If-Match: 1`）→ 在 Agent 草稿中追加该工具引用并把 `graph_id` 设为 `knowledge.scoped_excerpt` → 发布 Agent。可选探测：`POST .../tool-bindings/{alias}/probe`，再用 `GET .../admin-jobs/{job_id}` 轮询；只有部署侧存在 `probe_requests` 时才会真正发起业务查询。
 
 调用 `POST /v1/runs` 时必须带五个 Scope 键且不能多余，时间窗最大 1 小时：
 
@@ -915,14 +915,7 @@ cd apps/agent
 
 ### 10.5 任务详情手工验收
 
-使用隔离的开发环境、正在运行的 API 与 Worker，以及使用 `dod.v3` 的测试 Agent。通过 `POST /v1/runs` 创建独立测试任务：`business_context` 使用 `{"region_candidates":["sg","id"]}` 触发输入等待，使用 `{"confirm_recording":true}` 触发 Run 级审批等待。使用开发凭据，不要把令牌写进日志或 PR。
-
-1. 等待态任务点击取消并确认；检查最终取消及刷新后状态。
-2. 区域等待填写 `sg` 并提交；检查任务继续并在结果中记录区域。
-3. 分别创建两个审批等待，测试批准与拒绝，检查对应结果；确认批准需要二次确认。
-4. 复核并发标签页导致的冲突、无权限、网络中断及恢复、等待过期，均应有明确提示；中断时检查轮询提示，恢复后检查状态一致。
-
-该合成图只验证人机交互，不代表真实 RCA 或外部 Action 审批验收。上述场景由验收人确认通过后，才能调整产品能力状态。
+在隔离开发环境中验证保留图的任务详情、取消和恢复；等待输入场景使用本地合成告警入口。复核并发操作、无权限、网络中断及等待过期，并确认合成适配器不能代表生产告警接入。
 
 ### 10.6 提交前文档核对
 
@@ -946,12 +939,12 @@ cd apps/agent
 
 ## 内置知识库开发与测试
 
-知识模块位于 `apps/agent/src/workbench_agent/knowledge/`，管理与内部查询路由分别在 `api/knowledge.py`、`api/kb_internal.py`，SQLite 实现在 `persistence/backends/knowledge.py`。新问答图为 `runtime/graphs/knowledge_qa.py`（`dod.v19`），不改变旧 `dod.v16` 的 partial 语义。配置 Agent 时须选择对应图、配置已发布工具绑定和授权，并确保 Worker 支持该图版本。
+知识模块位于 `apps/agent/src/workbench_agent/knowledge/`，管理与内部查询路由分别在 `api/knowledge.py`、`api/kb_internal.py`，SQLite 实现在 `persistence/backends/knowledge.py`。新问答图为 `runtime/graphs/knowledge_qa.py`（`knowledge.citation_review`），不改变旧 `knowledge.scoped_excerpt` 的 partial 语义。配置 Agent 时须选择对应图、配置已发布工具绑定和授权，并确保 Worker 支持该图版本。
 
 `tests/integration/test_kb_mcp_chain.py` 覆盖真实 MCP 协议链路，相关迁移、检索、缺口、恢复、问答和 UI 测试分别位于 `test_kb_*` 与 `apps/web/tests/knowledge-*`。测试使用受控数据和模型替身，不能据此宣称真实模型表现或业务质量已验证。
 
 ## 知识问答 v19 离线评估
 
-`dod.v19` 需要在目标 Worker 的 `supported_graph_versions` 中显式加入，且发布的 Agent profile 必须显式设置正整数 `knowledge_max_age_seconds`；该值在 Run 受理时冻结。无阈值或来源时间无法判断时不得完成。真实知识源和范围隔离尚待确认，不应仅根据合成测试启用。切回 v16 应发布新的 profile，只影响新 Run。
+`knowledge.citation_review` 需要在目标 Worker 的 `supported_graph_ids` 中显式加入，且发布的 Agent profile 必须显式设置正整数 `knowledge_max_age_seconds`；该值在 Run 受理时冻结。无阈值或来源时间无法判断时不得完成。真实知识源和范围隔离尚待确认，不应仅根据合成测试启用。切回知识摘录图应发布新的 profile，只影响新 Run。
 
 使用 `workbench evaluate --dataset <文件> --dataset-type knowledge --output <报告>` 运行独立知识评估，原 RCA 命令默认行为不变。真实验收需要至少 30 条独立业务标注和人工审核，覆盖可答（含多来源）、无答案、冲突和过期；引用正确率至少 95%，可答可用率至少 80%，不可答误答、无引用结论和越权均为零。`apps/agent/tests/fixtures/knowledge-eval-synthetic.json` 仅用于测试，不构成业务验收。

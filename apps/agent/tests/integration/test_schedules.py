@@ -43,7 +43,7 @@ async def test_concurrent_schedule_scans_admit_one_run(platform):
     platform.backend.clock.now_ms=now
     ctx=await platform.contexts.resolve(platform.auth,platform.agent_id)
     ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    d=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_version='dod.v11'),ws['revision'],key='schedule-profile-draft')
+    d=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_id='sop.conditional'),ws['revision'],key='schedule-profile-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,d['revision'],key='schedule-profile')
     wf=await WorkflowService(platform.backend).publish(platform.auth,platform.agent_id,
         WorkflowDefinition.model_validate({'name':'check','steps':[{'step_id':'logs','tool':'logs.read'}]}),key='schedule-workflow')
@@ -58,7 +58,7 @@ async def test_concurrent_schedule_scans_admit_one_run(platform):
     await ScheduleScanner(platform.backend).tick()
     assert await platform.count_rows('runs')==1
 
-async def prepare_schedule(platform, *, cron='*/5 * * * *', graph_version='dod.v11'):
+async def prepare_schedule(platform, *, cron='*/5 * * * *', graph_id='sop.conditional'):
     from datetime import datetime,timezone
     from workbench_agent.application.schedules import ScheduleService
     from workbench_agent.application.workflows import WorkflowService
@@ -69,7 +69,7 @@ async def prepare_schedule(platform, *, cron='*/5 * * * *', graph_version='dod.v
     async def now(_): return current[0]
     platform.backend.clock.now_ms=now
     ctx=await platform.contexts.resolve(platform.auth,platform.agent_id); ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    d=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_version=graph_version),ws['revision'],key='setup-draft')
+    d=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_id=graph_id),ws['revision'],key='setup-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,d['revision'],key='setup-profile')
     wf=await WorkflowService(platform.backend).publish(platform.auth,platform.agent_id,
         WorkflowDefinition.model_validate({'name':'check','steps':[{'step_id':'logs','tool':'logs.read'}]}),key='setup-workflow')
@@ -141,7 +141,7 @@ async def test_schedule_http_create_list_pause_and_manual_trigger(platform,clien
     from workbench_agent.application.workflows import WorkflowService
     from workbench_agent.domain.profiles import ProfileDraft
     ctx=await platform.contexts.resolve(platform.auth,platform.agent_id); ws=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    d=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_version='dod.v11'),ws['revision'],key='api-draft')
+    d=await platform.profiles.save_draft(platform.auth,platform.agent_id,ProfileDraft(default_model=ctx.default_model,graph_id='sop.conditional'),ws['revision'],key='api-draft')
     await platform.profiles.publish(platform.auth,platform.agent_id,d['revision'],key='api-profile')
     wf=await WorkflowService(platform.backend).publish(platform.auth,platform.agent_id,WorkflowDefinition.model_validate({'name':'check','steps':[{'step_id':'logs','tool':'logs.read'}]}),key='api-wf')
     path=f'/v1/agents/{platform.agent_id}/schedules'
@@ -393,23 +393,23 @@ async def test_fire_history_cursor_rejects_other_schedule_and_bad_values(platfor
 @pytest.mark.asyncio
 async def test_schedule_accepts_v12_and_pins_workflow(platform):
     from workbench_agent.jobs.schedules import ScheduleScanner
-    _,item,clock=await prepare_schedule(platform,graph_version='dod.v12')
+    _,item,clock=await prepare_schedule(platform,graph_id='sop.conditional')
     clock[0]+=5*60000
     fires=await ScheduleScanner(platform.backend).tick()
     assert fires[0]['status']=='started'
     run=await platform.get_run(fires[0]['run_id'])
-    assert run.context.graph_version=='dod.v12' and run.context.workflow is not None
+    assert run.context.graph_id=='sop.conditional' and run.context.workflow is not None
 
 @pytest.mark.asyncio
-async def test_v11_schedule_rejects_advanced_workflow_at_creation(platform):
+async def test_conditional_schedule_accepts_advanced_workflow_at_creation(platform):
     from workbench_agent.application.schedules import ScheduleService
     from workbench_agent.application.workflows import WorkflowService
     from workbench_agent.application.errors import DomainError
     from workbench_agent.domain.workflows import WorkflowDefinition
     from workbench_agent.domain.schedules import ScheduleSpec
-    await prepare_schedule(platform,graph_version='dod.v11')
+    await prepare_schedule(platform,graph_id='sop.conditional')
     wf=await WorkflowService(platform.backend).publish(platform.auth,platform.agent_id,
         WorkflowDefinition.model_validate({'name':'advanced','steps':[{'step_id':'a','tool':'read','output_schema':{'type':'object'}}]}),key='advanced-wf')
-    with pytest.raises(DomainError,match='WORKFLOW_UNAVAILABLE'):
-        await ScheduleService(platform.backend).create(platform.auth,platform.agent_id,
-            ScheduleSpec(cron='0 * * * *',timezone='UTC',workflow_version_id=wf.workflow_version_id,input_text='check'),key='advanced-schedule')
+    item = await ScheduleService(platform.backend).create(platform.auth,platform.agent_id,
+        ScheduleSpec(cron='0 * * * *',timezone='UTC',workflow_version_id=wf.workflow_version_id,input_text='check'),key='advanced-schedule')
+    assert item['schedule_id']

@@ -21,7 +21,7 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 _context = ContextVar('dod_log_context', default={})
 _LOG_FIELDS = frozenset({'request_id', 'team_id', 'agent_id', 'thread_id', 'run_id', 'job_id',
     'run_epoch', 'invocation_id', 'attempt', 'status', 'duration_ms', 'queue_wait_ms',
-    'model_id', 'role', 'input_tokens', 'output_tokens', 'graph_version', 'error_code'})
+    'model_id', 'role', 'input_tokens', 'output_tokens', 'graph_id', 'error_code'})
 _EVENT = re.compile(r'^[a-z][a-z0-9_.-]{0,79}$')
 
 

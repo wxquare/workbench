@@ -10,7 +10,7 @@ def test_fresh_knowledge_schema_and_missing_index_readiness(config_data):
     path = url.removeprefix('sqlite+aiosqlite:///')
     with sqlite3.connect(path) as db:
         db.execute('PRAGMA foreign_keys=ON')
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0004_knowledge_base',)
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0005_graph_id',)
         sql = db.execute("SELECT sql FROM sqlite_master WHERE name='kb_fts'").fetchone()[0]
         assert 'trigram' in sql
         assert validate_required_schema(db) == []
@@ -30,15 +30,11 @@ def test_published_pointer_cannot_reference_another_team_version(config_data):
             'team_id', 'entry_id', 'published_version']
 
 
-async def test_v3_upgrade_preserves_real_run_and_existing_gap(config_data):
-    from contextlib import closing
+def test_populated_v3_upgrade_rejects_without_changing_run_or_gap(config_data):
     from pathlib import Path
+    import pytest
     from sqlalchemy import create_engine
-    from workbench_agent.application.runs import RunService
-    from workbench_agent.cli.bootstrap import BootstrapService
-    from workbench_agent.domain.identity import AuthContext
-    from workbench_agent.domain.runs import CreateRun
-    from workbench_agent.persistence.backends.sqlite import SQLiteBackend
+    from workbench_agent.cli.db import FreshAgentDatabaseRequired
     from workbench_agent.persistence.schema_agent_v3 import metadata
     from workbench_agent.settings import Settings
 
@@ -51,21 +47,17 @@ async def test_v3_upgrade_preserves_real_run_and_existing_gap(config_data):
         connection.exec_driver_sql('CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)')
         connection.exec_driver_sql("INSERT INTO alembic_version VALUES ('0003_run_trace_contexts')")
         connection.exec_driver_sql("INSERT INTO dod_storage_metadata VALUES ('dod-storage-agent-v1','dod-checkpoint-v1')")
+        connection.exec_driver_sql("INSERT INTO teams(team_id,name,status) VALUES ('team','Team','active')")
+        connection.exec_driver_sql("INSERT INTO agents(team_id,agent_id,name) VALUES ('team','agent','Agent')")
+        connection.exec_driver_sql("INSERT INTO runtime_profiles(team_id,profile_id,agent_id,version,graph_version,profile_json,hash,status) VALUES ('team','profile','agent',1,'dod.v18','{}','hash','published')")
+        connection.exec_driver_sql("INSERT INTO threads(team_id,thread_id,agent_id) VALUES ('team','thread','agent')")
+        connection.exec_driver_sql("INSERT INTO runs(team_id,run_id,thread_id,agent_id,status,runtime_profile_id,versions,budgets,wall_deadline_at) VALUES ('team','run','thread','agent','partial','profile','{}','{}',1000)")
+        connection.exec_driver_sql("INSERT INTO knowledge_gaps(team_id,gap_id,run_id,source_trace,problem_type,review_status,summary) VALUES ('team','gap','run','{}','old','open','preserve')")
     engine.dispose()
-    backend = SQLiteBackend(config_data['storage']['database_url'])
-    try:
-        await BootstrapService(backend).apply(settings)
-        auth = AuthContext(team_id=settings.bootstrap.team_id, subject=settings.bootstrap.admin_subject, roles=('admin',))
-        accepted = await RunService(backend).create(auth, CreateRun.model_validate({'agent_id': settings.bootstrap.agent_id,
-            'mode': 'qa', 'input': {'text': '问题'}}), 'before-upgrade')
-    finally:
-        await backend.close()
-    with closing(sqlite3.connect(path)) as db, db:
-        db.execute('PRAGMA foreign_keys=ON')
-        db.execute('''INSERT INTO knowledge_gaps(team_id,gap_id,run_id,source_trace,problem_type,review_status,summary,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?)''', (settings.bootstrap.team_id, 'old-gap', accepted.run_id, '{}', 'old', 'open', 'preserve', 1, 1))
-    migrate(config_data['storage']['database_url'])
-    with closing(sqlite3.connect(path)) as db:
-        assert not validate_required_schema(db)
-        assert db.execute('SELECT summary,gap_revision FROM knowledge_gaps WHERE gap_id=?', ('old-gap',)).fetchone() == ('preserve', 0)
-        assert db.execute('SELECT run_id FROM runs WHERE run_id=?', (accepted.run_id,)).fetchone() == (accepted.run_id,)
+    with pytest.raises(FreshAgentDatabaseRequired, match='empty database'):
+        migrate(config_data['storage']['database_url'])
+    with sqlite3.connect(path) as db:
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0003_run_trace_contexts',)
+        assert db.execute('SELECT graph_version FROM runtime_profiles').fetchone() == ('dod.v18',)
+        assert db.execute('SELECT run_id FROM runs').fetchone() == ('run',)
+        assert db.execute('SELECT summary FROM knowledge_gaps').fetchone() == ('preserve',)

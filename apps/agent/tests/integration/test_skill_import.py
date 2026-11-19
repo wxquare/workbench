@@ -31,7 +31,7 @@ async def test_seed_import_job_publish_and_frozen_run_context(platform, tmp_path
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     async with platform.backend.create_uow().begin_read() as uow:
         old = await platform.profiles.published(uow, platform.auth, platform.agent_id)
-    draft = ProfileDraft(default_model=old.default_model, graph_version='dod.v1', skills=(ref,))
+    draft = ProfileDraft(default_model=old.default_model, graph_id='conversation.multi_turn', skills=(ref,))
     updated = await platform.profiles.save_draft(platform.auth, platform.agent_id, draft, agent['revision'], key=str(uuid4()))
     await platform.profiles.publish(platform.auth, platform.agent_id, updated['revision'], key=str(uuid4()))
     run = await platform.create_run(key='first-import-run')
@@ -164,7 +164,7 @@ async def test_real_run_keeps_skill_across_rollout_and_agent_rollback(platform, 
         agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
         async with platform.backend.create_uow().begin_read() as uow:
             current = await platform.profiles.published(uow, platform.auth, platform.agent_id)
-        draft = ProfileDraft(default_model=current.default_model, graph_version='dod.v1', skills=(ref,))
+        draft = ProfileDraft(default_model=current.default_model, graph_id='conversation.multi_turn', skills=(ref,))
         changed = await platform.profiles.save_draft(platform.auth, platform.agent_id, draft, agent['revision'], key=str(uuid4()))
         await platform.profiles.publish(platform.auth, platform.agent_id, changed['revision'], key=str(uuid4()))
     first = await publish('version one', 1)

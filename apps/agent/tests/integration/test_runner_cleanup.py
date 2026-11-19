@@ -70,7 +70,7 @@ async def test_real_worker_lease_loss_keeps_failed_cleanup_recoverable(platform,
         row=dict(await platform.backend.configuration.one(uow,'repo_snapshots',team_id=platform.auth.team_id,agent_id=platform.agent_id,repo_id='app',commit_sha=commit))
     ref=VersionRef(resource_id=row['snapshot_id'],version=commit,content_hash=snapshot_identity_hash(row))
     current=await platform.contexts.resolve(platform.auth,platform.agent_id);agent=await platform.profiles.get_agent(platform.auth,platform.agent_id)
-    draft=ProfileDraft(default_model=current.default_model,graph_version='dod.v1',repositories=(ref,))
+    draft=ProfileDraft(default_model=current.default_model,graph_id='conversation.multi_turn',repositories=(ref,))
     changed=await platform.profiles.save_draft(platform.auth,platform.agent_id,draft,agent['revision'],key=str(uuid4()))
     await platform.profiles.publish(platform.auth,platform.agent_id,changed['revision'],key=str(uuid4()))
     rules={'users':{platform.auth.subject:['runner.execute']},'teams':{platform.auth.team_id:['runner.execute']},'agents':{platform.agent_id:['runner.execute']},'experts':{'diagnosis':['runner.execute']},'skills':{'__none__':['runner.execute']}}
@@ -82,7 +82,7 @@ async def test_real_worker_lease_loss_keeps_failed_cleanup_recoverable(platform,
     platform.backend._runner_bindings={'check':binding};platform.backend._runner=runner;platform.backend._snapshot_objects=objects;platform.backend._runner_daemon_id='daemon-one'
     class Graph:
         async def execute(self,execution): return await ExecutionExecutor(platform.backend,execution).execute('check',invocation_id='live-cleanup')
-    registry=ExecutorRegistry();registry.register('dod.v1',Graph(),ReleasingProjector(platform.backend))
+    registry=ExecutorRegistry();registry.register('conversation.multi_turn',Graph(),ReleasingProjector(platform.backend))
     run=await platform.create_run();worker=Worker(platform.backend,'run-worker',registry,renew_interval=.05)
     task=asyncio.create_task(worker.run_once())
     for _ in range(500):

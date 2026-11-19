@@ -19,7 +19,7 @@ async def run_worker(settings,*,once=False,registry=None):
     staging_reaper=None
     runner_reaper=None
     if registry is None:
-        registry=foundation_worker_registry(backend)
+        registry=foundation_worker_registry(backend, supported_graph_ids=settings.worker.supported_graph_ids)
         if settings.storage.skill_object_root is not None:
             from workbench_agent.skill_management.importer import SkillImportWorker
             from workbench_agent.skill_management.objects import LocalSkillObjects

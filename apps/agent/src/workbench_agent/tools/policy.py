@@ -1,4 +1,5 @@
 """Validation primitives for the guarded tool execution boundary."""
+from workbench_agent.runtime.graphs.ids import GraphId
 from jsonschema import Draft202012Validator, SchemaError
 
 _IDENTITY_KEYS=frozenset({'team_id','agent_id','subject','user_id','credential','credential_scope','secret_ref','auth_ref','headers'})
@@ -145,7 +146,7 @@ class PolicyToolExecutor:
             else:
                 if not validate_arguments(binding,args): return ToolResult(status='invalid_input',error=ToolError(code='INVALID_INPUT'))
                 if not arguments_within_scope(args,values): return ToolResult(status='denied',error=ToolError(code='SCOPE_DENIED'))
-            expected_knowledge_scope = bound_args['scope'] if context.graph_version == 'dod.v19' and binding.tool_name == 'knowledge_search' else None
+            expected_knowledge_scope = bound_args['scope'] if context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW and binding.tool_name == 'knowledge_search' else None
             if not binding.read_only:
                 return ToolResult(status='ok',proposed_action=ActionProposal(binding_ref=binding_ref,scope_id=scope_id,args=args,args_hash=digest(args)))
             if previous:

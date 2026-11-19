@@ -63,13 +63,13 @@ class BootstrapService:
         if agent is None:
             await self.store.insert(uow, 'agents', dict(team_id=seed.team_id, agent_id=seed.agent_id,
                 name=seed.agent_name, created_at=now, updated_at=now))
-            draft = ProfileDraft(default_model=default.ref)
+            draft = ProfileDraft(default_model=default.ref, allowed_modes=('qa',))
             data = draft.model_dump(mode='json')
             profile_id = str(uuid4())
             for version, status in ((0, 'draft'), (1, 'published')):
                 await self.store.insert(uow, 'runtime_profiles', dict(team_id=seed.team_id,
                     profile_id=profile_id if version else str(uuid4()), agent_id=seed.agent_id,
-                    version=version, graph_version=draft.graph_version, profile_json=canonical(data), hash=digest(data),
+                    version=version, graph_id=draft.graph_id, profile_json=canonical(data), hash=digest(data),
                     model_versions=canonical([default.ref.model_dump()]), skill_versions='[]', tool_versions='[]', repo_versions='[]',
                     status=status, created_at=now, updated_at=now))
             await self.store.change(uow, 'agents', {'team_id': seed.team_id, 'agent_id': seed.agent_id},

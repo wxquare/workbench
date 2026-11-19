@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: f932036
+verified_commit: c5f93fb
 ---
 
 # 架构设计
@@ -67,7 +67,7 @@ verified_commit: f932036
 | ADR-006 版本冻结 + 实时复核 | 受理时冻结 VersionRef，执行时重新校验当前权限 |
 | ADR-007 移除 Workspace | 领域直接是 Team → Agent → Thread → Run |
 | ADR-008 独立 MCP Server | 只读取证能力独立进程、独立包、独立身份 |
-| ADR-009 直接问答与知识问答分图 | `dod.v17/v18` 纯模型回答；`dod.v16` 带检索且恒为 partial；`dod.v19` 校验引用并独立检查支持性 |
+| ADR-009 直接问答与知识问答分图 | 两张对话图使用模型回答；`knowledge.scoped_excerpt` 带检索且恒为 partial；`knowledge.citation_review` 校验引用并独立检查支持性 |
 | ADR-010 SQLite 先行 | 单机、单 Worker、短写事务；WAL 不放网络文件系统 |
 
 ---
@@ -199,10 +199,10 @@ RunContext 是执行依据的接受快照，由 ContextResolver 与接受事务�
 | team_id、agent_id | 从认证与授权后的 Agent 解析，接受后不改 |
 | subject、identity_kind | 发起者与身份类别快照；不保存 Token |
 | agent_profile | 精确 runtime_profiles.profile_id、version、hash |
-| graph_version | 固定已注册 Graph 实现；恢复不能换最新版 |
+| graph_id | 固定已注册 Graph 实现；恢复不能换实现 |
 | default_model | 指向 model_profile_versions.model_version_id 的发布引用 |
 | skills、tools、repositories | VersionRef[] 固定版本集合 |
-| conversation_history_turns | v18 最大历史轮数；0–8，默认 8 |
+| conversation_history_turns | 多轮对话最大历史轮数；0–8，默认 8 |
 
 VersionRef 是 `{resource_id, version, content_hash}` 值对象。排队/等待期间发布新配置不影响原 Run 的固定引用；权限撤销仍即时生效。
 
@@ -300,9 +300,9 @@ Run 是历史事实，删除或停用 Agent 不应改写历史 Run 的受理快�
 
 | 配置 | 运行时来源 |
 | --- | --- |
-| graph_version | Agent 已发布 Profile；保存进 RunContext |
+| graph_id | Agent 已发布 Profile；保存进 RunContext |
 | Agent 行为与上下文策略 | Agent 草稿显式发布；受理时冻结，执行中不读取最新草稿 |
-| 图状态 Schema 版本 | GraphRegistry 中与图版本关联；v2/v3 共用 `dod-state-v2` |
+| 图状态 Schema 版本 | GraphRegistry 中与图实现关联，用于恢复时校验 |
 | WorkflowVersion | SOP/巡检 请求指定的已发布工作流 |
 | 模型、工具、Skill、仓库版本 | RunContext 中固定的版本引用；使用时仍检查当前权限 |
 
@@ -310,15 +310,15 @@ Run 是历史事实，删除或停用 Agent 不应改写历史 Run 的受理快�
 
 ### 4.2 已注册的工作流拓扑
 
-| 版本 | 用途 | 节点链 |
+| 图 ID | 用途 | 节点链 |
 | --- | --- | --- |
-| dod.v1–v3 | 基础输入记录与中断 | prepare → input → compose |
-| dod.v4–v8、v16 | 通用八节点链（多专家） | prepare → route → select_skills → collect_baseline → investigate → validate_evidence → compose_outcome → finalize |
-| dod.v9–v10 | 告警 RCA（范围与基线） | prepare → input → scope → bind_baseline → collect_baseline → compose |
-| dod.v11–v12 | SOP / 巡检 | prepare → step（按索引重复）→ compose |
-| dod.v13–v15 | 合成告警 RCA + 动作提案 | 同基线 RCA + propose |
-| dod.v17 | 直接模型问答（单轮） | START → answer → END |
-| dod.v18 | 多轮直接问答 | START → answer → END（加载有界历史） |
+| knowledge.scoped_excerpt | 指定范围的知识摘录 | prepare_context → route → select_skills → collect_baseline → investigate → validate_evidence → compose_outcome → finalize |
+| sop.conditional | SOP / 巡检 | prepare → step（按条件重复）→ compose |
+| rca.synthetic | 合成告警 RCA | prepare → input → scope → bind_baseline → collect_baseline → compose |
+| rca.proposal、rca.batch_proposal | 合成告警 RCA 与提案 | 合成告警 RCA 流程增加 propose |
+| conversation.single_turn | 直接模型问答（单轮） | START → answer → END |
+| conversation.multi_turn | 多轮直接问答 | START → answer → END（加载有界历史） |
+| knowledge.citation_review | 知识问答与引用审查 | prepare → retrieve → draft_answer → validate_citations → review_support → record_gap → compose_outcome |
 
 ![工作流目标架构](assets/03-workflow.svg)
 
@@ -326,7 +326,7 @@ Run 是历史事实，删除或停用 Agent 不应改写历史 Run 的受理快�
 
 | 专家 | 模型角色 | 工具能力 | 结果用途 |
 | --- | --- | --- | --- |
-| Knowledge | knowledge | 经哈希校验的已发布 ToolBinding；v16 选择 knowledge_search | 提供检索引用 |
+| Knowledge | knowledge | 经哈希校验的已发布 ToolBinding；知识摘录使用 knowledge_search | 提供检索引用 |
 | Diagnosis | diagnosis | 受控诊断工具 | 提供诊断调查文本与引用 |
 | Code | code | read_snapshot(path, start, end) | 固定 commit 文件行证据 |
 
@@ -348,8 +348,8 @@ Run 是历史事实，删除或停用 Agent 不应改写历史 Run 的受理快�
 ### 4.6 直接问答的请求与响应边界
 
 - v17：单轮直接 LLM 调用，不传历史消息、QueryScope 或工具列表。
-- v18：多轮对话，读取同 Agent 同 Thread 内已完成 v17/v18 成功结果作为历史；最多 8 轮、正文上限 16000 字节。
-- 系统提示由：平台基础约束 → Agent 系统提示词 → 回复偏好 → 固定 Skill 指令（v18）组成。
+- 多轮对话读取同 Agent 同 Thread 内已完成的单轮或多轮对话成功结果作为历史；最多 8 轮、正文上限 16000 字节。
+- 系统提示由：平台基础约束 → Agent 系统提示词 → 回复偏好 → 固定 Skill 指令（多轮对话）组成。
 - 模型返回后追加"以下内容由模型生成，未经外部知识源验证。"提示。
 
 ---
@@ -628,7 +628,7 @@ skills/skill-name/
 
 - 发布版本不可原地修改；回滚通过改变 Agent 的生效绑定并重新发布 Agent 实现。
 - Run 固定版本，恢复时继续使用该版本；权限撤销仍即时生效。
-- v18 仅加载显式绑定的 `SKILL.md` 文本指令，不自动执行引用资源或脚本。
+- 多轮对话仅加载显式绑定的 `SKILL.md` 文本指令，不自动执行引用资源或脚本。
 
 ### 10.2 共享库发布流程
 
@@ -837,7 +837,7 @@ API、SSE、产物下载、Resume、Cancel 使用同一资源授权边界。Runn
 | 动态 Skill 选择 | select_skills 节点尚未实现动态检索 |
 | 并行调查 | v7/v8 顺序调用专家，无并行 fan-out |
 | 完整假设调查 | 跨专家假设合并尚未完全接入 |
-| 自动摘要/长期记忆 | 未实现；v18 仅加载有界历史 |
+| 自动摘要/长期记忆 | 未实现；多轮对话仅加载有界历史 |
 
 ### 16.2 待决项
 
@@ -864,8 +864,8 @@ API、SSE、产物下载、Resume、Cancel 使用同一资源授权边界。Runn
 
 Agent v4 迁移新增 `kb_entries`、`kb_entry_versions` 两张普通表，扩展 `knowledge_gaps`，并建立 SQLite FTS5 trigram 虚表 `kb_fts`。草稿和不可变发布版本分开保存，发布及索引更新在事务内进行；检索仅使用发布版本，回执和证据固定命中的版本。归档和回滚不改写已有版本。
 
-管理与阅读走 `/v1/kb/*` 用户认证；MCP Server 经 `normalized-http-v1` 调用默认关闭的 `/internal/kb/query`，用独立服务令牌和具体范围授权。范围中条目未指定的维度表示适用范围，并不授予请求方通配权限。`dod.v19` 先校验引用，再独立调用模型检查每个声明是否受引用支持；仅检查通过且证据有效时完成。无命中、不可回答或引用无效可记录缺口，处理包括草稿、重放和人工确认。仓库的 MCP 链路测试不等于线上部署或模型质量验收。
+管理与阅读走 `/v1/kb/*` 用户认证；MCP Server 经 `normalized-http-v1` 调用默认关闭的 `/internal/kb/query`，用独立服务令牌和具体范围授权。范围中条目未指定的维度表示适用范围，并不授予请求方通配权限。`knowledge.citation_review` 先校验引用，再独立调用模型检查每个声明是否受引用支持；仅检查通过且证据有效时完成。无命中、不可回答或引用无效可记录缺口，处理包括草稿、重放和人工确认。仓库的 MCP 链路测试不等于线上部署或模型质量验收。
 
-## 知识问答 v19 的来源验证
+## 知识问答的来源验证
 
-`dod.v19` 将每条结论绑定到 evidence ID、source ID 和逐字引用，并在最终投影时重查授权、范围与来源更新时间。阈值缺失或证据不可验证时结果降级为 partial。引用匹配与独立模型支持检查不能证明结论的语义正确性；真实接入和业务评估仍是启用前置条件。已发布 v16、v17、v18 的行为保持不变。
+`knowledge.citation_review` 将每条结论绑定到 evidence ID、source ID 和逐字引用，并在最终投影时重查授权、范围与来源更新时间。阈值缺失或证据不可验证时结果降级为 partial。引用匹配与独立模型支持检查不能证明结论的语义正确性；真实接入和业务评估仍是启用前置条件。

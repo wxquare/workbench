@@ -1,4 +1,5 @@
 """Authorized atomic interrupt CAS admission and replay-safe input decisions."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from uuid import uuid4
 from dataclasses import dataclass
@@ -84,7 +85,7 @@ class ResumeService:
                     {'accepted_resume_request_id':request_id,'status':'response_submitted','revision':row['revision']+1,'updated_at':now})
                 if changed!=1: raise DomainError('INTERRUPT_CONFLICT',409)
                 if response['kind']=='user_input':
-                    if json.loads(run['versions'])['graph_version'] in ('dod.v9','dod.v10','dod.v13','dod.v14','dod.v15'):
+                    if json.loads(run['versions'])['graph_id'] in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                         current = await self.store.current_scope(uow, auth.team_id, run_id)
                         if (not current or not descriptor.get('expected_scope_id')
                                 or current['scope_id'] != descriptor['expected_scope_id']):

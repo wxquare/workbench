@@ -9,6 +9,7 @@ from workbench_agent.application.context import ContextResolver
 from workbench_agent.domain.identity import AuthContext
 from workbench_agent.domain.query_scope import AlertScopeInput, alert_window, resolve_alert_scope, revise_alert_scope
 from workbench_agent.runtime.budgets.service import BudgetService
+from workbench_agent.runtime.graphs.ids import GraphId
 from workbench_agent.runtime.graphs.interrupts import INPUT_SCHEMA
 
 STATE_SCHEMA_VERSION = 'dod-state-v13'
@@ -224,7 +225,7 @@ def build_rca(saver):
             if key not in eligible or key not in plan:
                 continue
             ref, args, _ = plan[key]
-            invocation = str(uuid5(UUID(state['run_id']), 'dod.v13:baseline:' + key))
+            invocation = str(uuid5(UUID(state['run_id']), f'{GraphId.RCA_SYNTHETIC}:baseline:' + key))
             try:
                 result = await executor.execute(context, execution.guard, invocation, ref, args,
                     expected_tool=wanted[key], max_logical_calls=4, expected_scope_id=state['scope_ref'],

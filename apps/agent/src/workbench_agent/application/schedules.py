@@ -1,4 +1,5 @@
 """Authorized creation and management of durable inspection schedules."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -18,16 +19,11 @@ class ScheduleService:
             await self.authorization.current(uow,auth,agent_id,'maintainer')
             async def operation():
                 profile=await ProfileService(self.backend).published(uow,auth,agent_id)
-                if profile.graph_version not in ('dod.v11','dod.v12') or 'inspection' not in profile.allowed_modes:
+                if profile.graph_id != GraphId.SOP_CONDITIONAL or 'inspection' not in profile.allowed_modes:
                     raise DomainError('WORKFLOW_UNAVAILABLE',409)
                 row=await self.backend.configuration.one(uow,'workflow_versions',team_id=auth.team_id,
                     agent_id=agent_id,workflow_version_id=str(spec.workflow_version_id))
                 if not row or digest(json.loads(row['definition_json']))!=row['hash']: raise not_found()
-                if profile.graph_version=='dod.v11':
-                    from workbench_agent.domain.workflows import WorkflowDefinition
-                    definition=WorkflowDefinition.model_validate_json(row['definition_json'])
-                    if any(step.condition is not None or step.output_schema is not None for step in definition.steps):
-                        raise DomainError('WORKFLOW_UNAVAILABLE',409)
                 now=await self.backend.clock.now_ms(uow)
                 due=int(next_due(spec.cron,spec.timezone,datetime.fromtimestamp(now/1000,timezone.utc)).timestamp()*1000)
                 schedule_id=str(uuid4())

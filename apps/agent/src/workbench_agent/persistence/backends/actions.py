@@ -1,4 +1,5 @@
 """SQLite action/approval/outbox operations; all use the caller's UoW."""
+from workbench_agent.runtime.graphs.ids import GraphId
 from sqlalchemy import insert, select, update, and_, or_, case, func
 from workbench_agent.persistence import schema as s
 
@@ -24,13 +25,13 @@ class SQLiteActionStore:
         if not destinations: return None
         # Exclude unfinished synthetic runs in SQL so any number of blocked
         # rows cannot starve another destination, Run or tenant.
-        graph=case((func.json_valid(s.runs.c.versions)==1,func.json_extract(s.runs.c.versions,'$.graph_version')),else_='')
+        graph=case((func.json_valid(s.runs.c.versions)==1,func.json_extract(s.runs.c.versions,'$.graph_id')),else_='')
         from workbench_agent.domain.guards import TERMINAL_RUN_STATUSES
         return (await uow.execute(select(s.outbox).join(s.actions,and_(s.actions.c.team_id==s.outbox.c.team_id,
             s.actions.c.action_id==s.outbox.c.action_id)).join(s.runs,and_(s.runs.c.team_id==s.actions.c.team_id,
             s.runs.c.run_id==s.actions.c.run_id)).where(s.outbox.c.status=='pending',
             s.outbox.c.available_at<=now,s.outbox.c.destination.in_(destinations),
-            or_(graph.is_(None),graph.not_in(('dod.v14','dod.v15')),s.runs.c.status.in_(TERMINAL_RUN_STATUSES)))
+            or_(graph.is_(None),graph.not_in((GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL)),s.runs.c.status.in_(TERMINAL_RUN_STATUSES)))
             .order_by(s.outbox.c.created_at,s.outbox.c.outbox_id).limit(1))).mappings().first()
 
     async def expired(self, uow, now):

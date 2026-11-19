@@ -91,7 +91,7 @@ async def platform(config_data):
         async with backend.create_uow().begin_read() as uow:
             published=await profiles.published(uow,auth,agent)
         current=await profiles.get_agent(auth,agent)
-        changed=await profiles.save_draft(auth,agent,ProfileDraft(default_model=published.default_model,graph_version='dod.v1'),
+        changed=await profiles.save_draft(auth,agent,ProfileDraft(default_model=published.default_model,graph_id='conversation.multi_turn'),
             expected_revision=current['revision'],key=str(uuid4()))
         await profiles.publish(auth,agent,expected_revision=changed['revision'],key=str(uuid4()))
     yield value

@@ -48,23 +48,26 @@ def test_actual_v2_executed_legacy_timing_fails_closed_before_ddl(tmp_path, stat
     assert snapshot(path) == before
 
 
-async def test_bootstrap_preserves_v1_and_explicit_v2_publication_keeps_old_run_pinned(platform):
+async def test_bootstrap_preserves_published_graph_and_new_publication_keeps_old_run_pinned(platform):
     old = await platform.create_run()
     original = await row(platform, s.runs, run_id=old.run_id)
-    assert RunContext.model_validate_json(original['versions']).graph_version == 'dod.v1'
+    assert RunContext.model_validate_json(original['versions']).graph_id == 'conversation.multi_turn'
     await platform.bootstrap()
     async with platform.backend.create_uow().begin_read() as uow:
         current = await platform.profiles.published(uow, platform.auth, platform.agent_id)
-    assert current.graph_version == 'dod.v1'
-    p = InterruptPlatform(platform)
-    await p.publish_v2()
+    assert current.graph_id == 'conversation.multi_turn'
+    from workbench_agent.domain.profiles import ProfileDraft
+    draft = await platform.profiles.get_agent(platform.auth, platform.agent_id)
+    saved = await platform.profiles.save_draft(platform.auth, platform.agent_id,
+        ProfileDraft(default_model=current.default_model, graph_id='conversation.single_turn'),
+        draft['revision'], key='new-graph-draft')
+    await platform.profiles.publish(platform.auth, platform.agent_id, saved['revision'], key='new-graph-publish')
     new = await platform.create_run('new')
     assert (await row(platform, s.runs, run_id=old.run_id))['versions'] == original['versions']
-    assert RunContext.model_validate_json((await row(platform, s.runs, run_id=new.run_id))['versions']).graph_version == 'dod.v2'
-    assert p.worker.registry._executors['dod.v1'].registry.resolve('dod.v1', 'dod-state-v1')
+    assert RunContext.model_validate_json((await row(platform, s.runs, run_id=new.run_id))['versions']).graph_id == 'conversation.single_turn'
 
 
-async def test_fresh_seed_defaults_to_v3(config_data):
+async def test_fresh_seed_defaults_to_multiturn_qa(config_data):
     from workbench_agent.application.profiles import ProfileService
 
     settings = Settings.model_validate(config_data)
@@ -75,7 +78,8 @@ async def test_fresh_seed_defaults_to_v3(config_data):
         auth = AuthContext(team_id=settings.bootstrap.team_id, subject=settings.bootstrap.admin_subject, roles=('admin',))
         async with backend.create_uow().begin_read() as uow:
             profile = await ProfileService(backend).published(uow, auth, settings.bootstrap.agent_id)
-        assert profile.graph_version == 'dod.v3'
+        assert profile.graph_id == 'conversation.multi_turn'
+        assert profile.allowed_modes == ('qa',)
     finally:
         await backend.close()
 

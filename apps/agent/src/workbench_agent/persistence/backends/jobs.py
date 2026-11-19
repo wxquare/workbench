@@ -49,8 +49,8 @@ class SQLiteJobStore:
 
     @staticmethod
     def _supports(capabilities,context,job,projection_only):
-        versions=capabilities.projection_graph_versions if projection_only else capabilities.graph_versions
-        return (not projection_only or capabilities.can_reconcile) and context.graph_version in versions and set(
+        versions=capabilities.projection_graph_ids if projection_only else capabilities.graph_ids
+        return (not projection_only or capabilities.can_reconcile) and context.graph_id in versions and set(
             json.loads(job['capabilities'])).issubset(capabilities.features)
 
     async def has_priority_work(self,uow,capabilities):
@@ -150,7 +150,7 @@ class SQLiteJobStore:
         guard=ExecutionGuard(team['team_id'],run['thread_id'],run['run_id'],job['job_id'],worker_id,epoch)
         if not projection_only:
             await self.events.supersede_drafts(uow,guard)
-            await self.events.append_execution(uow,guard,'run.started',{'graph_version':context.graph_version,'generation':job['generation']})
+            await self.events.append_execution(uow,guard,'run.started',{'graph_id':context.graph_id,'generation':job['generation']})
         return ClaimedJob(guard,context,job['kind'],job['generation'],job['attempt']+(0 if projection_only else 1),now+45000,attempts+(0 if projection_only else 1),projection_only,reason)
 
     async def renew(self,uow,guard):

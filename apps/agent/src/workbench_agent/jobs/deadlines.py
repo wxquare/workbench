@@ -1,4 +1,5 @@
 """Durable deadlines. Running expiration requires actual lease ownership."""
+from workbench_agent.runtime.graphs.ids import GraphId
 class DeadlineService:
     def __init__(self,backend,connector_policy=None): self.backend,self.connector_policy=backend,connector_policy
 
@@ -53,19 +54,19 @@ class DeadlineService:
                 service=ResultService(self.backend)
                 try:
                     context=RunContext.model_validate_json(run['versions'])
-                    if context.graph_version in ('dod.v13','dod.v14','dod.v15'):
+                    if context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                         from workbench_agent.application.synthetic_source_policy import require_bound_source
                         identity=await require_bound_source(uow,context,guard.run_id)
                         check=getattr(self.connector_policy,'require_source_current',None)
                         if not identity or not callable(check): raise CapabilityBlocked('source identity policy unavailable')
                         await check(context,identity)
-                    outcome=saved_outcome(saved,context.graph_version)
+                    outcome=saved_outcome(saved,context.graph_id)
                     if outcome is not None:
                         from types import SimpleNamespace
                         from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome
-                        if context.graph_version not in ('dod.v13','dod.v14','dod.v15'):
+                        if context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                             outcome=await sanitize_v8_outcome(self.backend,uow,SimpleNamespace(guard=guard,context=context),outcome)
-                        if context.graph_version not in ('dod.v13','dod.v14','dod.v15'):
+                        if context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                             outcome=await service.validate(uow,guard,outcome)
                 except (ValueError,ValidationError,DomainError,CapabilityBlocked): outcome=None
                 if outcome is not None:

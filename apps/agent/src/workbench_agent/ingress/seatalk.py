@@ -68,7 +68,7 @@ class SyntheticChatIngress:
             return await self.runs.resume(auth,str(event.resume.run_id),resume,'ingress:'+event_key,
                 source_connector=self.binding.connector_id,source_thread=thread_key,source_event=event_key,
                 source_payload=event.model_dump(mode='json'))
-        request=CreateRun(agent_id=self.binding.agent_id,mode='auto',input={'type':'text','text':event.text},
+        request=CreateRun(agent_id=self.binding.agent_id,mode='qa',input={'type':'text','text':event.text},
             client_message_id=event_key,business_context={'source_occurred_at':event.occurred_at,'source_actor':event.actor,'source_thread':thread_key})
         return await self.runs.create(auth,request,'ingress:'+event_key,source_connector=self.binding.connector_id,
             source_thread=thread_key)

@@ -7,6 +7,7 @@ import pytest
 
 from workbench_agent.application.errors import DomainError
 from workbench_agent.ingress.alerts import SyntheticAlertBinding, SyntheticAlertIngress
+from integration.test_synthetic_alert_v2 import event as alert_event, ingress as alert_ingress, publish_v13, signed as sign_alert
 
 
 def signed(body, secret=b'test-only-secret', timestamp=None, *, connector_id=None, legacy=False):
@@ -27,46 +28,85 @@ def binding(platform):
         agent_id=platform.agent_id, actor_subject=platform.auth.subject, secret=b'test-only-secret')
 
 
-@pytest.mark.asyncio
 async def test_duplicate_signed_alert_atomically_creates_one_run(platform):
-    ingress = SyntheticAlertIngress(platform.backend, binding(platform))
-    raw, headers = signed({'event_id':'alert-001', 'text':'Threshold exceeded', 'region':'ID'})
+    await publish_v13(platform)
+    ingress = alert_ingress(platform)
+    raw, headers = sign_alert(alert_event())
     first = await ingress.accept(raw, headers)
     second = await ingress.accept(raw, headers)
     assert first.run_id == second.run_id
     assert await platform.count_rows('runs') == 1
     assert await platform.count_rows('source_events') == 1
+    assert await platform.count_rows('synthetic_alert_sources') == 1
 
 
-@pytest.mark.asyncio
 async def test_invalid_signature_or_changed_replay_never_creates_new_run(platform):
-    ingress = SyntheticAlertIngress(platform.backend, binding(platform))
-    raw, headers = signed({'event_id':'alert-001', 'text':'Threshold exceeded', 'region':'ID'})
+    await publish_v13(platform)
+    ingress = alert_ingress(platform)
+    alert = alert_event()
+    raw, headers = sign_alert(alert)
     with pytest.raises(DomainError):
         await ingress.accept(raw + b' ', headers)
     assert await platform.count_rows('runs') == 0
     await ingress.accept(raw, headers)
-    altered, altered_headers = signed({'event_id':'alert-001', 'text':'Different', 'region':'ID'})
     with pytest.raises(DomainError):
-        await ingress.accept(altered, altered_headers)
+        await ingress.accept(*sign_alert({**alert, 'text': 'Different'}))
     assert await platform.count_rows('runs') == 1
 
 
-@pytest.mark.asyncio
 async def test_connector_event_dedupes_after_service_account_rotation(platform):
     from uuid import uuid4
     from dataclasses import replace
+    from workbench_agent.application.synthetic_source_policy import SyntheticSourcePolicy
+    from workbench_agent.ingress.alerts import SyntheticAlertV2Ingress
+    await publish_v13(platform)
     async with platform.backend.create_uow().begin_write() as uow:
         now = await platform.backend.clock.now_ms(uow)
-        await platform.backend.configuration.insert(uow, 'team_members', dict(
-            team_id=platform.auth.team_id, member_id=str(uuid4()), subject='rotated',
-            role='admin', status='active', created_at=now, updated_at=now))
-    raw, headers = signed({'event_id':'alert-rotation', 'text':'Threshold', 'region':'ID'})
-    initial = binding(platform)
-    first = await SyntheticAlertIngress(platform.backend, initial).accept(raw, headers)
-    second = await SyntheticAlertIngress(platform.backend, replace(initial, actor_subject='rotated')).accept(raw, headers)
+        await platform.backend.configuration.insert(uow, 'team_members', dict(team_id=platform.auth.team_id,
+            member_id=str(uuid4()), subject='rotated', role='admin', status='active', created_at=now, updated_at=now))
+    ingress = alert_ingress(platform)
+    raw, headers = sign_alert(alert_event())
+    first = await ingress.accept(raw, headers)
+    identities = {'v2-test': {'subject': 'rotated', 'team_id': platform.auth.team_id, 'agent_ids': [platform.agent_id]}}
+    grant = dict(team_id=platform.auth.team_id, agent_id=platform.agent_id, connector_id='v2-test', identity_id='v2-test',
+        subject='rotated', service='checkout', environment='test', region='id', rule='error-rate')
+    await SyntheticSourcePolicy(platform.backend).sync([grant], connector_identities=identities, expected_revision=1)
+    rotated = SyntheticAlertV2Ingress(platform.backend, replace(ingress.binding, actor_subject='rotated'))
+    second = await rotated.accept(raw, headers)
     assert first.run_id == second.run_id
     assert await platform.count_rows('runs') == 1
+
+
+async def test_source_receipt_failure_rolls_back_run_and_job(platform, monkeypatch):
+    await publish_v13(platform)
+    original = platform.backend.runs.insert
+    async def fail_receipt(uow, resource, values):
+        if resource == 'source_events':
+            raise RuntimeError('injected receipt failure')
+        return await original(uow, resource, values)
+    monkeypatch.setattr(platform.backend.runs, 'insert', fail_receipt)
+    with pytest.raises(RuntimeError, match='injected receipt'):
+        await alert_ingress(platform).accept(*sign_alert(alert_event()))
+    assert await platform.count_rows('runs') == 0
+    assert await platform.count_rows('run_jobs') == 0
+    assert await platform.count_rows('source_events') == 0
+    assert await platform.count_rows('synthetic_alert_sources') == 0
+
+
+async def test_concurrent_duplicates_make_one_run(platform):
+    import asyncio
+    await publish_v13(platform)
+    ingress = alert_ingress(platform)
+    raw, headers = sign_alert(alert_event())
+    first, second = await asyncio.gather(ingress.accept(raw, headers), ingress.accept(raw, headers))
+    assert first.run_id == second.run_id
+    assert await platform.count_rows('runs') == 1
+
+
+
+
+
+
 
 
 @pytest.mark.asyncio
@@ -79,30 +119,8 @@ async def test_stale_signature_is_rejected_before_admission(platform):
     assert await platform.count_rows('runs') == 0
 
 
-@pytest.mark.asyncio
-async def test_source_receipt_failure_rolls_back_run_and_job(platform, monkeypatch):
-    original = platform.backend.runs.insert
-    async def fail_receipt(uow, resource, values):
-        if resource == 'source_events':
-            raise RuntimeError('injected receipt failure')
-        return await original(uow, resource, values)
-    monkeypatch.setattr(platform.backend.runs, 'insert', fail_receipt)
-    raw, headers = signed({'event_id':'rollback', 'text':'Threshold', 'region':'ID'})
-    with pytest.raises(RuntimeError, match='injected receipt'):
-        await SyntheticAlertIngress(platform.backend, binding(platform)).accept(raw, headers)
-    assert await platform.count_rows('runs') == 0
-    assert await platform.count_rows('run_jobs') == 0
-    assert await platform.count_rows('source_events') == 0
 
 
-@pytest.mark.asyncio
-async def test_concurrent_duplicates_make_one_run(platform):
-    import asyncio
-    ingress = SyntheticAlertIngress(platform.backend, binding(platform))
-    raw, headers = signed({'event_id':'concurrent', 'text':'Threshold', 'region':'ID'})
-    first, second = await asyncio.gather(ingress.accept(raw, headers), ingress.accept(raw, headers))
-    assert first.run_id == second.run_id
-    assert await platform.count_rows('runs') == 1
 
 
 @pytest.mark.asyncio
@@ -149,7 +167,7 @@ async def test_chat_named_resume_requires_actor_and_replays_atomically(platform,
     from support.jobs import claim
     from workbench_agent.runtime.checkpoints.portable import InvocationGuard, PortableCheckpointSaver
     from workbench_agent.persistence.checkpoints.codec import CheckpointCodec
-    from workbench_agent.runtime.graphs.interrupts import build_interrupt_graph
+    from support.interrupt_graph import build_interrupt_graph
     from workbench_agent.jobs.worker import Execution, DeploymentConnectorPolicy
     p=InterruptPlatform(platform)
     from uuid import uuid4
@@ -173,7 +191,7 @@ async def test_chat_named_resume_requires_actor_and_replays_atomically(platform,
                 DeploymentConnectorPolicy(lambda:{'chat':{'subject':platform.auth.subject,'team_id':platform.auth.team_id,
                     'agent_ids':[platform.agent_id]}})),durability='sync')
     async with platform.backend.create_uow().begin_write() as uow:
-        await p.worker.registry._projectors['dod.v2'].project(uow,owned,None)
+        await p.worker.registry._projectors['conversation.multi_turn'].project(uow,owned,None)
     view=await platform.get_run(run.run_id)
     event={'event_id':'m2','thread_id':'t1','actor':'alice','text':'ID',
            'resume':{'run_id':run.run_id,'interrupt_id':view.waiting['interrupt_id'],

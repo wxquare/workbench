@@ -3,15 +3,15 @@ from workbench_agent.persistence import schema as s
 from workbench_agent.domain.guards import WorkerCapabilities
 from workbench_agent.jobs.claim import JobService
 
-CAPS = WorkerCapabilities(graph_versions=('dod.v1',),projection_graph_versions=('dod.v1',),can_reconcile=True)
+CAPS = WorkerCapabilities(graph_ids=('conversation.multi_turn',),projection_graph_ids=('conversation.multi_turn',),can_reconcile=True)
 
 async def claim(platform, worker_id='worker'):
     # Fixture publication defaults are read from the admitted frozen context.
     async with platform.backend.create_uow().begin_read() as uow:
         versions = (await uow.execute(select(s.runs.c.versions).limit(1))).scalar_one()
     from workbench_agent.domain.context import RunContext
-    graph = RunContext.model_validate_json(versions).graph_version
-    return await JobService(platform.backend).claim(WorkerCapabilities(graph_versions=(graph,),projection_graph_versions=(graph,),can_reconcile=True),worker_id)
+    graph = RunContext.model_validate_json(versions).graph_id
+    return await JobService(platform.backend).claim(WorkerCapabilities(graph_ids=(graph,),projection_graph_ids=(graph,),can_reconcile=True),worker_id)
 
 async def expire_lease(platform, guard):
     async with platform.backend.create_uow().begin_write() as uow:

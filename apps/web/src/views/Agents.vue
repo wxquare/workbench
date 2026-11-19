@@ -5,6 +5,7 @@ import { ApiError, type Agent } from '../api'
 import { api, bearerToken } from '../session'
 import { AgentApi, parseAgentDraft, agentError, type AvailableModel, type Draft, type ModelRef, type AgentDetail } from '../agents-api'
 import { SkillApi, type Skill } from '../skills-api'
+import { GraphApi, type GraphSummary } from '../graphs-api'
 
 const items = ref<Agent[]>([])
 const selected = ref<AgentDetail | null>(null)
@@ -16,6 +17,9 @@ const skillDialogOpen = ref(false), skillSearch = ref(''), pendingSkills = ref<s
 const skillSearchInput = ref<HTMLInputElement | null>(null), skillAddButton = ref<HTMLButtonElement | null>(null)
 const skillDialog = ref<HTMLElement | null>(null)
 const skillService = new SkillApi(api)
+const graphService = new GraphApi(api)
+const graphs = ref<GraphSummary[]>([]), graphError = ref(''), graphsLoading = ref(false)
+let graphGeneration = 0
 const loading = ref(false), busy = ref(false), stale = ref(false)
 const invalidNumbers = ref<Record<string, string>>({})
 const dirty = computed(() => editor.value !== baseline.value || Object.keys(invalidNumbers.value).length > 0)
@@ -31,6 +35,8 @@ const budgetFields = [
 ] as const
 const validationError = computed(() => {
   const draft = currentDraft.value
+  if (graphsLoading.value || graphError.value || !graphs.value.length) return '请先加载流程图目录。'
+  if (draft && !graphs.value.some(graph => graph.graph_id === draft.graph_id)) return '当前流程图不可用，请重新选择。'
   if (!draft) return '请先修正配置 JSON。'
   if (Object.keys(invalidNumbers.value).length) return '预算和知识有效期须为正整数，对话历史轮数须为 0 至 8 的整数。'
   const age = draft.knowledge_max_age_seconds
@@ -56,10 +62,26 @@ const validationError = computed(() => {
 const workflow = computed(() => {
   if (!selected.value?.draft) return ''
   try {
-    const value = parseAgentDraft(editor.value, selected.value.draft).graph_version
-    return typeof value === 'string' ? value : 'dod.v3'
+    const value = parseAgentDraft(editor.value, selected.value.draft).graph_id
+    return typeof value === 'string' ? value : 'conversation.multi_turn'
   } catch { return '' }
 })
+const selectedGraph = computed(() => graphs.value.find(graph => graph.graph_id === workflow.value))
+const modesMismatch = computed(() => {
+  const modes = currentDraft.value?.allowed_modes
+  const supported = selectedGraph.value?.capabilities.modes
+  return Array.isArray(modes) && !!supported?.length && !supported.some(mode => modes.includes(mode))
+})
+async function loadGraphs() {
+  const current = ++graphGeneration
+  graphsLoading.value = true; graphError.value = ''
+  try {
+    const value = await graphService.list()
+    if (!Array.isArray(value)) throw new Error('目录格式无效。')
+    if (current === graphGeneration) graphs.value = value
+  } catch (e) { if (current === graphGeneration) { graphs.value = []; graphError.value = `加载流程图失败：${agentError(e)}` } }
+  finally { if (current === graphGeneration) graphsLoading.value = false }
+}
 function refKey(value: unknown): string {
   if (!value || typeof value !== 'object') return ''
   const ref = value as Partial<ModelRef>
@@ -207,6 +229,8 @@ async function loadModels(id: string, current = generation) {
 watch(bearerToken, () => {
   ++generation
   ++operation
+  ++graphGeneration
+  graphs.value = []; graphError.value = ''; graphsLoading.value = false
   service = new AgentApi(api)
   items.value = []; selected.value = null; editor.value = baseline.value = ''; name.value = ''
   invalidNumbers.value = {}
@@ -214,9 +238,9 @@ watch(bearerToken, () => {
   skills.value = []; skillError.value = ''; skillsLoading.value = false
   skillDialogOpen.value = false; skillSearch.value = ''; pendingSkills.value = []
   error.value = notice.value = ''; stale.value = false; loading.value = busy.value = false
-  if (bearerToken.value) void loadList()
+  if (bearerToken.value) { void loadList(); void loadGraphs() }
 }, { immediate: true })
-onUnmounted(() => { ++generation; ++operation })
+onUnmounted(() => { ++generation; ++operation; ++graphGeneration })
 
 async function createAgent() {
   const trimmed = name.value.trim()
@@ -246,7 +270,7 @@ function changeWorkflow(event: Event) {
   if (!selected.value?.draft) return
   try {
     const draft = parseAgentDraft(editor.value, selected.value.draft)
-    draft.graph_version = (event.target as HTMLSelectElement).value
+    draft.graph_id = (event.target as HTMLSelectElement).value
     editor.value = JSON.stringify(draft, null, 2)
     error.value = ''
   } catch (e) { error.value = agentError(e) }
@@ -370,18 +394,26 @@ async function publish() {
           <p class="form-note">ID: {{ selected.agent_id }} · Revision: {{ selected.revision }} · {{ selected.active_profile_id ? '已发布' : '未发布' }}</p>
           <p v-if="!selected.draft" class="form-note">此 Agent 没有可编辑的草稿。</p>
           <template v-else>
-            <label>工作流<select :value="workflow" :disabled="busy" @change="changeWorkflow">
+            <label>工作流<select :value="workflow" :disabled="busy || graphsLoading || !!graphError || !graphs.length" @change="changeWorkflow">
               <option v-if="!workflow" value="" disabled>请先修正配置 JSON</option>
-              <option v-if="workflow && !['dod.v17', 'dod.v18', 'dod.v19'].includes(workflow)" :value="workflow">{{ workflow }}（当前）</option>
-              <option value="dod.v17">dod.v17</option>
-              <option value="dod.v18">dod.v18</option>
-              <option value="dod.v19">dod.v19 · 知识问答</option>
+              <option v-if="workflow && !selectedGraph" :value="workflow">当前流程图不可用</option>
+              <option v-for="graph in graphs" :key="graph.graph_id" :value="graph.graph_id">{{ graph.title }} · {{ graph.summary }}</option>
             </select></label>
-            <p v-if="workflow === 'dod.v17'" class="form-note">dod.v17 不执行工具、技能或知识库。</p>
-            <p v-if="workflow === 'dod.v18'" class="form-note">dod.v18 使用绑定的技能指令，不执行技能脚本、工具或知识库。</p>
-            <p v-if="workflow === 'dod.v19'" class="form-note">dod.v19 需要已发布的 knowledge_search 工具绑定和对应授权。</p>
-            <label v-if="workflow === 'dod.v19'">知识来源有效期（秒）<input type="number" min="1" step="1" :value="invalidNumbers.knowledge_max_age_seconds ?? currentDraft?.knowledge_max_age_seconds ?? ''" :disabled="busy || !currentDraft" @input="updateKnowledgeAge(eventValue($event))" /></label>
-            <p v-if="workflow === 'dod.v19'" class="form-note">未设置有效期或来源时间不可验证时，知识问答不会标记为完成。</p>
+            <p v-if="graphsLoading" class="form-note">正在加载流程图…</p>
+            <p v-else-if="graphError" class="form-error" role="alert">{{ graphError }}</p>
+            <button v-if="graphError" type="button" @click="loadGraphs">重试加载流程图</button>
+            <div v-if="selectedGraph" class="form-note graph-hint">
+              <p>{{ selectedGraph.summary }}</p>
+              <p v-if="selectedGraph.status === 'experimental'">实验流程图：Worker 需要显式启用对应能力。</p>
+              <p v-if="selectedGraph.capabilities.needs_knowledge_tool">需要知识工具与查询范围。</p>
+              <p v-if="selectedGraph.capabilities.needs_workflow">运行时需要已发布的工作流。</p>
+              <p v-if="selectedGraph.capabilities.entrypoints.includes('synthetic_alert')">仅合成告警入口；当前适配器仅供本地集成测试。</p>
+              <p v-if="workflow === 'knowledge.citation_review'">真实知识源和范围隔离尚未验收，完成核对后才能在真实环境启用。</p>
+              <p v-if="modesMismatch">当前允许的运行模式与所选流程图不匹配。请在配置草稿 JSON 的 allowed_modes 中启用所需模式：{{ selectedGraph.capabilities.modes.join('、') }}。</p>
+              <a :href="`/app/graphs/${encodeURIComponent(selectedGraph.graph_id)}`" @click="confirmNavigation">查看结构</a>
+            </div>
+            <label v-if="workflow === 'knowledge.citation_review'">知识来源有效期（秒）<input type="number" min="1" step="1" :value="invalidNumbers.knowledge_max_age_seconds ?? currentDraft?.knowledge_max_age_seconds ?? ''" :disabled="busy || !currentDraft" @input="updateKnowledgeAge(eventValue($event))" /></label>
+            <p v-if="workflow === 'knowledge.citation_review'" class="form-note">未设置有效期或来源时间不可验证时，知识问答不会标记为完成。</p>
             <label>默认模型<select :value="modelKey" :disabled="busy || modelsLoading || !!modelError || !models.length" @change="changeModel">
               <option v-if="!modelKey || !models.some(model => refKey(model.active_ref) === modelKey)" :value="modelKey">当前模型{{ modelKey ? ` (${JSON.parse(modelKey)[0]} · ${JSON.parse(modelKey)[1]})` : '' }}</option>
               <option v-for="model in models" :key="refKey(model.active_ref)" :value="refKey(model.active_ref)">{{ model.name }} · 版本 {{ model.active_ref.version }}</option>
@@ -427,8 +459,8 @@ async function publish() {
             </div>
             <div class="settings-group">
               <h2>上下文管理</h2>
-              <div class="settings-grid"><label>对话历史轮数<input type="number" min="0" max="8" step="1" :value="numberValue('conversation_history_turns')" :disabled="busy || !currentDraft || workflow !== 'dod.v18'" @input="updateNumber('conversation_history_turns', eventValue($event))" /></label></div>
-              <p class="form-note">模型最多参考最近的历史对话轮数；每轮包含一个问题和回答。设为 0 时不参考历史，不会删除会话记录。仅适用于 dod.v18。</p>
+              <div class="settings-grid"><label>对话历史轮数<input type="number" min="0" max="8" step="1" :value="numberValue('conversation_history_turns')" :disabled="busy || !currentDraft || workflow !== 'conversation.multi_turn'" @input="updateNumber('conversation_history_turns', eventValue($event))" /></label></div>
+              <p class="form-note">模型最多参考最近的历史对话轮数；每轮包含一个问题和回答。设为 0 时不参考历史，不会删除会话记录。仅适用于多轮对话。</p>
             </div>
             <div class="settings-group">
               <h2>预算上限</h2>

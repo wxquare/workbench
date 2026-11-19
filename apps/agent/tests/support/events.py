@@ -19,6 +19,18 @@ class EventPlatform:
     async def read_events(self,run_id,after_seq=0):
         return await self.events.read_batch(self.p.auth,run_id,after_seq,100)
 
+    async def persisted_delta_texts(self,run_id):
+        # Merger tests inspect durable writes; public event reads apply disclosure.
+        import json
+        from sqlalchemy import select
+        from workbench_agent.persistence import schema
+        async with self.p.backend.create_uow().begin_read() as uow:
+            payloads = (await uow.execute(select(schema.run_events.c.payload).where(
+                schema.run_events.c.team_id == self.p.auth.team_id,
+                schema.run_events.c.run_id == run_id, schema.run_events.c.type == 'assistant.delta')
+                .order_by(schema.run_events.c.seq))).scalars().all()
+        return [json.loads(payload)['text'] for payload in payloads]
+
 class StreamingClient:
     """Calls actual ASGI send incrementally; bounded queue imposes network backpressure."""
     def __init__(self,app,path,token,headers=()):

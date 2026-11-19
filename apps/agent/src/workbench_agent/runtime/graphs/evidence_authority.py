@@ -1,4 +1,5 @@
 """Revalidate evidence provenance and current permissions within a caller UoW."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from workbench_agent.application.idempotency import digest
 from workbench_agent.domain.profiles import VersionRef
@@ -57,8 +58,8 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 binding = load_published_binding(raw) if digest(raw) == ref.content_hash else None
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
-                if context.graph_version in ('dod.v4', 'dod.v10', 'dod.v11', 'dod.v12', 'dod.v13', 'dod.v14', 'dod.v15'): expert = 'diagnosis'
-                elif context.graph_version in ('dod.v5', 'dod.v7', 'dod.v8', 'dod.v16', 'dod.v19'): expert = 'knowledge'
+                if context.graph_id in (GraphId.SOP_CONDITIONAL, GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL): expert = 'diagnosis'
+                elif context.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW): expert = 'knowledge'
                 else: continue
                 authority = (expert, binding.permission)
             else:
@@ -74,7 +75,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
             if row['quality'] == 'truncated' and (not include_truncated or not truncated):
                 continue
             value = json.loads(payload['payload'])
-            if context.graph_version == 'dod.v19':
+            if context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW:
                 # Knowledge receipts bind the frozen scope but carry no time window.
                 # Verify the immutable payload and each upstream reference again.
                 current = json.loads(scope['scope_json'])
@@ -97,7 +98,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                         invocation_id=invocation['logical_call_id'], scope_id=scope_id,
                         upstream_scope=item['scope']) for item in upstream):
                     continue
-            if context.graph_version in ('dod.v10','dod.v13','dod.v14','dod.v15') or (context.graph_version in ('dod.v11','dod.v12') and receipt.get('kind') == 'mcp-evidence-v1' and binding.tool_name in DOD_MCP_TOOLS):
+            if context.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL) or (context.graph_id == GraphId.SOP_CONDITIONAL and receipt.get('kind') == 'mcp-evidence-v1' and binding.tool_name in DOD_MCP_TOOLS):
                 # Pre-binding v10 receipts did not prove the business team.
                 # Keep them unavailable instead of guessing their provenance.
                 from datetime import datetime, timezone
@@ -130,16 +131,16 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
 
 async def sanitize_v8_outcome(backend, uow, claim, outcome):
     """Discard inaccessible evidence and text atomically before projection."""
-    if claim.context.graph_version not in ('dod.v8', 'dod.v10', 'dod.v13', 'dod.v14', 'dod.v15', 'dod.v16', 'dod.v19'):
+    if claim.context.graph_id not in (GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL, GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW):
         return outcome
-    if not outcome.evidence_refs and not (claim.context.graph_version == 'dod.v19' and outcome.completed):
+    if not outcome.evidence_refs and not (claim.context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW and outcome.completed):
         return outcome
     await backend.jobs.lock_scope(uow, claim.guard)
     await backend.lease_guard.require(uow, claim.guard, {'running', 'finalizing'})
     refs = {str(ref) for ref in outcome.evidence_refs}
     allowed, scope_id = await authorized_sources(backend, uow, claim.guard, claim.context, refs)
     safe = bool(refs) and set(allowed) == refs
-    if safe and claim.context.graph_version == 'dod.v19' and outcome.completed:
+    if safe and claim.context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW and outcome.completed:
         from datetime import datetime, timezone
         from workbench_agent.domain.knowledge_answers import AnswerDraft, KnowledgeAnswer, SupportReview
         from workbench_agent.knowledge.answer_validation import collect_passages, validate_answer, validate_freshness

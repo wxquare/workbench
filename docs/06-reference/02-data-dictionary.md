@@ -1,15 +1,15 @@
 ---
 title: 数据字典
 status: stable
-verified_commit: 2115cf7
+verified_commit: c5f93fb
 ---
 
-# 数据字典（schema_agent_v4：v3 字段快照与知识库增量）
+# 数据字典（schema_agent_v5：图 ID 与知识库增量）
 
 > **读者**：查字段、写迁移、核对数据的人。**以代码为准**，由 SQLAlchemy 元数据抽取。
 > 小节编号保留 `A.x` 前缀，便于从旧文档迁移引用；接口见 [01 接口参考](01-api.md)，配置见 [03 配置参考](03-configuration.md)。
 
-> 本文用途：给出 Workbench Agent 持久层在 `schema_v1…schema_v20`（Workspace 历史链）叠加、再经 `schema_agent_v1…v4`（Agent 链）演进后的最终物理结构（表、字段、约束、索引与演进）。**一切以代码为准**：结构信息由脚本从 `apps/agent/src/workbench_agent/persistence/` 下的 SQLAlchemy 元数据实际导入后抽取并人工整理，原文 13.2 仅用作分组与业务语义参考，其差异见文末「核对记录」。
+> 本文用途：给出 Workbench Agent 持久层在 `schema_v1…schema_v20`（Workspace 历史链）叠加、再经 `schema_agent_v1…v5`（Agent 链）演进后的最终物理结构（表、字段、约束、索引与演进）。**一切以代码为准**：结构信息由脚本从 `apps/agent/src/workbench_agent/persistence/` 下的 SQLAlchemy 元数据实际导入后抽取并人工整理，原文 13.2 仅用作分组与业务语义参考，其差异见文末「核对记录」。
 
 ## A.0 概览与约定
 
@@ -17,8 +17,8 @@ verified_commit: 2115cf7
 
 | 项 | 取值（来源） |
 | --- | --- |
-| 最终 Schema | `schema_agent_v4.metadata`（`persistence/schema.py` 导出） |
-| Agent 迁移头 | `0004_knowledge_base`（链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts → 0004_knowledge_base） |
+| 最终 Schema | `schema_agent_v5.metadata`（`persistence/schema.py` 导出） |
+| Agent 迁移头 | `0005_graph_id`（链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts → 0004_knowledge_base → 0005_graph_id） |
 | 存储协议 / Codec | `dod-storage-agent-v1` / `dod-checkpoint-v1`（`schema_agent_v1.py` 常量；写入 `dod_storage_metadata`） |
 | 历史 Workspace 链 | `schema_v1…schema_v20`，对应 `migrations/versions/0001_core…0021_synthetic_batch_policy`（共 21 个迁移，其中 `0005_resume_protocol` 仅数据规整，无 Schema 变化，所以 `schema_vN` 与迁移编号自 v5 起错位 1） |
 | Agent 基线生成方式 | `schema_agent_v1` 在导入时遍历 `schema_v20`，把表名 `workspaces→agents`、列名 `workspace_id→agent_id` 机械替换，约束/索引名同步替换；`0001_agent_domain` 仅允许在**全新库**上 `create_all`，已有库直接报错，不迁移 Workspace 数据 |
@@ -198,7 +198,7 @@ erDiagram
 | `profile_id` | `VARCHAR(36)` | 否 | — | v1 | 配置身份或版本 UUID，精确含义见本表说明。 |
 | `agent_id` | `VARCHAR(36)` | 否 | — | v1 | 所属 Agent UUID；关联须同时校验团队和资源作用域。 |
 | `version` | `BIGINT` | 否 | — | v1 | 资源内不可变内容发布序号；不与 CAS revision 混用。 |
-| `graph_version` | `VARCHAR(128)` | 否 | — | v1 | 精确 Graph 实现版本，如 dod.v15。 |
+| `graph_id` | `VARCHAR(128)` | 否 | — | agent_v5 | 不可变的语义图 ID，例如 `rca.batch_proposal`。 |
 | `model_versions` | `TEXT` | 是 | — | v1 | 默认和角色模型的 VersionRef 数组 JSON，草稿可空。 |
 | `skill_versions` | `TEXT` | 是 | — | v1 | 已绑定 Skill 的 VersionRef 数组 JSON，草稿可空。 |
 | `tool_versions` | `TEXT` | 是 | — | v1 | 已绑定工具 VersionRef 数组 JSON，草稿可空。 |
@@ -1922,7 +1922,7 @@ erDiagram
 #### A.9.12 `synthetic_proposal_policy`：合成单动作规则单例
 
 - 用途：合成单动作规则单例。
-- 语义说明（来自原文，已按 DDL 复核，业务规则以服务层为准）：dod.v14 可信提议规则；模型正文不能注册任意动作、目标或审批人。
+- 语义说明（来自原文，已按 DDL 复核，业务规则以服务层为准）：`rca.proposal` 可信提议规则；模型正文不能注册任意动作、目标或审批人。
 - 引入/演进：首次出现于 schema_v18（0019_synthetic_proposal_policy）。
 
 | 字段 | 类型 | 可空 | 默认 | 引入 | 说明 |
@@ -1942,7 +1942,7 @@ erDiagram
 #### A.9.13 `synthetic_batch_policy`：合成多动作规则单例
 
 - 用途：合成多动作规则单例。
-- 语义说明（来自原文，已按 DDL 复核，业务规则以服务层为准）：dod.v15 有界多动作规则，与单动作策略分别维护 revision/hash。
+- 语义说明（来自原文，已按 DDL 复核，业务规则以服务层为准）：`rca.batch_proposal` 有界多动作规则，与单动作策略分别维护 revision/hash。
 - 引入/演进：首次出现于 schema_v20（0021_synthetic_batch_policy）。
 
 | 字段 | 类型 | 可空 | 默认 | 引入 | 说明 |
@@ -2021,7 +2021,7 @@ erDiagram
 | schema_v19 | `0020_synthetic_action_policy` | 新增 synthetic_action_policy_bindings | 0020 仅 DDL |
 | schema_v20 | `0021_synthetic_batch_policy` | 新增 synthetic_batch_policy 单例表 | 0021 仅 DDL；Workspace 链终点，共 59 表 575 字段 |
 
-### A.10.2 Agent 链（schema_agent_v1…v4）
+### A.10.2 Agent 链（schema_agent_v1…v5）
 
 | Schema | 迁移 | Schema 变化 | 迁移的数据行为 |
 | --- | --- | --- | --- |
@@ -2116,3 +2116,7 @@ timeline
 `knowledge_gaps` 增加可空的 `query_scope`、`dedup_digest`、`resolved_entry_id`、`resolved_version`、`replay_run_id`、`verification_status` 和非空 `gap_revision`（默认 0）；按团队与 digest 建唯一索引，并通过复合外键约束关联版本和重放 Run。历史行保持可读。
 
 迁移还建立 `kb_fts` FTS5 trigram 虚表（不计入普通表统计），保存 title、content、tags、aliases 及不索引的团队、条目、版本、分段、行号和 hash 等定位字段。v3 的字段明细和图示不包含本增量。
+
+## Agent v5 图 ID 变更
+
+`runtime_profiles.graph_version` 重命名为 `graph_id`；Run 快照和 Worker 能力也使用 `graph_id` / `graph_ids`。旧库如包含 Profile、Run 或 Job，迁移拒绝并要求清库重建；不会自动转换旧运行数据。

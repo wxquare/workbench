@@ -1,4 +1,5 @@
 """Guarded action proposals and explicit approval; delivery remains disabled."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from uuid import uuid4
 from workbench_agent.application.authorization import Authorization
@@ -56,13 +57,13 @@ class ActionService:
         from workbench_agent.application.action_grants import matched_action_grant
         from workbench_agent.domain.identity import AuthContext
         grant,policy_hash,policy=await matched_action_grant(self.backend,uow,context,binding_ref,args)
-        if context.graph_version=='dod.v14':
+        if context.graph_id==GraphId.RCA_PROPOSAL:
             from workbench_agent.application.synthetic_proposal_policy import bound_rule
             rule,proposal_revision,proposal_hash,source_revision,source_hash=await bound_rule(self.backend,uow,context,guard.run_id,scope_id,with_policy=True)
             if (rule!=_synthetic_rule or rule['binding']!=binding_ref.model_dump(mode='json')
                 or rule['arguments']!=args or rule['approver']!=grant['approver']
                 or action_key!='synthetic-v14:'+guard.run_id): raise DomainError('OPERATION_DENIED',403)
-        if context.graph_version=='dod.v15':
+        if context.graph_id==GraphId.RCA_BATCH_PROPOSAL:
             if _batch_capability is not _BATCH_PROPOSAL: raise DomainError('OPERATION_DENIED',403)
             from workbench_agent.application.synthetic_batch_policy import bound_rules
             rules,proposal_revision,proposal_hash,source_revision,source_hash=await bound_rules(self.backend,uow,context,guard.run_id,scope_id,with_policy=True)
@@ -85,7 +86,7 @@ class ActionService:
         payload_hash = action_payload_hash(tool_version, target, args)
         prior = await self.backend.actions.one(uow, 'actions', team_id=guard.team_id, action_key=action_key)
         if prior:
-            if context.graph_version in ('dod.v14','dod.v15'):
+            if context.graph_id in (GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
                 from sqlalchemy import select
                 from workbench_agent.persistence import schema
                 linked=(await uow.execute(select(schema.synthetic_action_policy_bindings).where(schema.synthetic_action_policy_bindings.c.team_id==guard.team_id,schema.synthetic_action_policy_bindings.c.action_id==prior['action_id']))).mappings().first()
@@ -100,7 +101,7 @@ class ActionService:
             run_id=guard.run_id, action_key=action_key, tool_version=tool_version, payload_hash=payload_hash,
             payload_ref=canonical({'binding':binding_ref.model_dump(mode='json'), 'target':target, 'arguments':args}),
             scope=scope_id, state='proposed', revision=0, created_at=now, updated_at=now))
-        if context.graph_version in ('dod.v14','dod.v15'):
+        if context.graph_id in (GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL):
             from sqlalchemy import insert
             from workbench_agent.persistence import schema
             await uow.execute(insert(schema.synthetic_action_policy_bindings).values(team_id=guard.team_id,action_id=action_id,

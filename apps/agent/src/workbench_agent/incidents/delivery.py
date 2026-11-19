@@ -1,4 +1,5 @@
 """Bind confirmed local simulated receipts to the originating synthetic incident."""
+from workbench_agent.runtime.graphs.ids import GraphId
 import json
 from types import SimpleNamespace
 from uuid import UUID,uuid5
@@ -19,7 +20,7 @@ async def project_delivery_link(backend,uow,action,outbox,receipt,now):
             or json.loads(latest['receipt'])!=receipt or json.loads(box['receipt_ref'])!=receipt): return
         run=await backend.runs.one(uow,'runs',team_id=action['team_id'],run_id=action['run_id'])
         context=RunContext.model_validate_json(run['versions'])
-        if context.graph_version not in ('dod.v13','dod.v14','dod.v15'): return
+        if context.graph_id not in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL): return
         await require_bound_source(uow,context,action['run_id'])
         source,event,scope,matches=await source_scope(backend,uow,SimpleNamespace(team_id=action['team_id'],run_id=action['run_id']))
         if not matches or scope['scope_id']!=action['scope']: return
