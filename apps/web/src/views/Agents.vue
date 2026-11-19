@@ -35,8 +35,8 @@ const budgetFields = [
 ] as const
 const validationError = computed(() => {
   const draft = currentDraft.value
-  if (graphsLoading.value || graphError.value || !graphs.value.length) return '请先加载流程图目录。'
-  if (draft && !graphs.value.some(graph => graph.graph_id === draft.graph_id)) return '当前流程图不可用，请重新选择。'
+  if (graphsLoading.value || graphError.value || !graphs.value.length) return '请先加载工作流目录。'
+  if (draft && !graphs.value.some(graph => graph.graph_id === draft.graph_id)) return '当前工作流不可用，请重新选择。'
   if (!draft) return '请先修正配置 JSON。'
   if (Object.keys(invalidNumbers.value).length) return '预算和知识有效期须为正整数，对话历史轮数须为 0 至 8 的整数。'
   const age = draft.knowledge_max_age_seconds
@@ -79,7 +79,7 @@ async function loadGraphs() {
     const value = await graphService.list()
     if (!Array.isArray(value)) throw new Error('目录格式无效。')
     if (current === graphGeneration) graphs.value = value
-  } catch (e) { if (current === graphGeneration) { graphs.value = []; graphError.value = `加载流程图失败：${agentError(e)}` } }
+  } catch (e) { if (current === graphGeneration) { graphs.value = []; graphError.value = `加载工作流失败：${agentError(e)}` } }
   finally { if (current === graphGeneration) graphsLoading.value = false }
 }
 function refKey(value: unknown): string {
@@ -396,20 +396,20 @@ async function publish() {
           <template v-else>
             <label>工作流<select :value="workflow" :disabled="busy || graphsLoading || !!graphError || !graphs.length" @change="changeWorkflow">
               <option v-if="!workflow" value="" disabled>请先修正配置 JSON</option>
-              <option v-if="workflow && !selectedGraph" :value="workflow">当前流程图不可用</option>
+              <option v-if="workflow && !selectedGraph" :value="workflow">当前工作流不可用</option>
               <option v-for="graph in graphs" :key="graph.graph_id" :value="graph.graph_id">{{ graph.title }} · {{ graph.summary }}</option>
             </select></label>
-            <p v-if="graphsLoading" class="form-note">正在加载流程图…</p>
+            <p v-if="graphsLoading" class="form-note">正在加载工作流…</p>
             <p v-else-if="graphError" class="form-error" role="alert">{{ graphError }}</p>
-            <button v-if="graphError" type="button" @click="loadGraphs">重试加载流程图</button>
+            <button v-if="graphError" type="button" @click="loadGraphs">重试加载工作流</button>
             <div v-if="selectedGraph" class="form-note graph-hint">
               <p>{{ selectedGraph.summary }}</p>
-              <p v-if="selectedGraph.status === 'experimental'">实验流程图：Worker 需要显式启用对应能力。</p>
+              <p v-if="selectedGraph.status === 'experimental'">实验工作流：Worker 需要显式启用对应能力。</p>
               <p v-if="selectedGraph.capabilities.needs_knowledge_tool">需要知识工具与查询范围。</p>
               <p v-if="selectedGraph.capabilities.needs_workflow">运行时需要已发布的工作流。</p>
               <p v-if="selectedGraph.capabilities.entrypoints.includes('synthetic_alert')">仅合成告警入口；当前适配器仅供本地集成测试。</p>
               <p v-if="workflow === 'knowledge.citation_review'">真实知识源和范围隔离尚未验收，完成核对后才能在真实环境启用。</p>
-              <p v-if="modesMismatch">当前允许的运行模式与所选流程图不匹配。请在配置草稿 JSON 的 allowed_modes 中启用所需模式：{{ selectedGraph.capabilities.modes.join('、') }}。</p>
+              <p v-if="modesMismatch">当前允许的运行模式与所选工作流不匹配。请在配置草稿 JSON 的 allowed_modes 中启用所需模式：{{ selectedGraph.capabilities.modes.join('、') }}。</p>
               <a :href="`/app/graphs/${encodeURIComponent(selectedGraph.graph_id)}`" @click="confirmNavigation">查看结构</a>
             </div>
             <label v-if="workflow === 'knowledge.citation_review'">知识来源有效期（秒）<input type="number" min="1" step="1" :value="invalidNumbers.knowledge_max_age_seconds ?? currentDraft?.knowledge_max_age_seconds ?? ''" :disabled="busy || !currentDraft" @input="updateKnowledgeAge(eventValue($event))" /></label>

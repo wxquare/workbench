@@ -10,6 +10,11 @@ async def test_spa_deep_links_and_assets(client, platform):
     (root / 'assets' / 'app.js').write_text('console.log("app")')
     assert (await client.get('/app/', headers={'Accept': 'text/html'})).text == '<html>DoD app</html>'
     assert (await client.get('/app/runs/abc', headers={'Accept': 'text/html'})).text == '<html>DoD app</html>'
+    assert (await client.get('/app/graphs/', headers={'Accept': 'text/html'})).text == '<html>DoD app</html>'
+    assert (await client.get('/app/graphs/conversation.multi_turn', headers={'Accept': 'text/html'})).text == '<html>DoD app</html>'
+    assert (await client.get('/app/graphs/unknown.graph', headers={'Accept': 'text/html'})).status_code == 404
+    assert (await client.get('/app/graphs/unknown', headers={'Accept': 'text/html'})).status_code == 404
+    assert (await client.get('/app/graphs/conversation.multi_turn')).status_code == 404
     assert (await client.get('/app/assets/app.js')).text == 'console.log("app")'
     assert (await client.get('/app/assets/missing.js', headers={'Accept': 'text/html'})).status_code == 404
     assert (await client.get('/app/assets/missing', headers={'Accept': 'text/html'})).status_code == 404

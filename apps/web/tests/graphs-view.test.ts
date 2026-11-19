@@ -35,7 +35,7 @@ function component() {
 const caps = { modes: ['qa'], entrypoints: ['manual'], uses_tools: false, uses_history: false,
   needs_knowledge_tool: false, needs_workflow: false, may_interrupt: false, verified_answers: false }
 const items = ['对话（单轮）', '对话（多轮）', '知识摘录', 'SOP 巡检', '合成告警诊断', '合成告警提案', '合成告警批量提案', '知识引用审查']
-  .map((title, index) => ({ graph_id: `id${index}`, title, summary: `${title}简介`, status: index < 2 ? 'recommended' : 'experimental',
+  .map((title, index) => ({ graph_id: index === 7 ? 'knowledge.citation_review' : `id${index}`, title, summary: `${title}简介`, status: index < 2 ? 'recommended' : 'experimental',
     agents_using: index, capabilities: { ...caps, entrypoints: index >= 4 && index <= 6 ? ['synthetic_alert'] : ['manual'] } }))
 
 it('renders all graphs and local synthetic entry limits', async () => {
@@ -45,8 +45,13 @@ it('renders all graphs and local synthetic entry limits', async () => {
   app.component('router-link', { template: '<a><slot /></a>' })
   app.provide(ssrContextKey, { modules: new Set() }); app.mount(root); await flush()
   for (const item of items) expect(text(root)).toContain(item.title)
+  expect(text(root)).toContain('工作流')
+  expect(text(root).indexOf('推荐')).toBeLessThan(text(root).indexOf('能力对比'))
+  expect(text(root).match(/查看详情/g)).toHaveLength(8)
   expect(text(root)).toContain('仅合成告警入口')
   expect(text(root)).toContain('本地集成测试')
+  expect(text(root)).toContain('真实知识源和范围隔离尚未验收')
+  expect(text(root).match(/Worker 需显式启用/g)).toHaveLength(6)
   expect(text(root)).toContain('7 个 Agent 使用')
   app.unmount()
 })
@@ -61,6 +66,8 @@ it('clears the previous detail while a different graph loads', async () => {
   app.component('router-link', { template: '<a><slot /></a>' })
   app.provide(ssrContextKey, { modules: new Set() }); app.mount(root); await flush()
   expect(text(root)).toContain(detail.title)
+  expect(text(root)).toContain('执行结构')
+  expect(text(root).indexOf('执行结构')).toBeLessThan(text(root).indexOf('适用场景'))
   route.params = { id: 'second' }; await flush()
   expect(text(root)).not.toContain(detail.title)
   resolve({ ...detail, title: '第二张图' }); await flush()

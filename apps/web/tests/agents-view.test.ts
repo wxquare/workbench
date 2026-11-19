@@ -536,7 +536,7 @@ it('prevents graph changes and saving while the catalog is unavailable', async (
   app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
   await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
   expect(field(root, '工作流', 'select').props.disabled).toBe(true)
-  expect(contents(root)).toContain('加载流程图失败')
+  expect(contents(root)).toContain('加载工作流失败')
   app.unmount()
 })
 
@@ -551,7 +551,7 @@ it('warns when the chosen graph has no mode enabled in the draft', async () => {
   app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
   await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
   field(root, '工作流', 'select').props.onChange({ target: { value: 'sop.conditional' } }); await flush()
-  expect(contents(root)).toContain('当前允许的运行模式与所选流程图不匹配')
+  expect(contents(root)).toContain('当前允许的运行模式与所选工作流不匹配')
   expect(contents(root)).toContain('sop、inspection')
   app.unmount()
 })

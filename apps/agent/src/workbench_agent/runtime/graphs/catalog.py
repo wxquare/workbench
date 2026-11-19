@@ -86,7 +86,7 @@ knowledge_nodes = {
 }
 
 RCA_NOTE = '仅合成告警入口；当前适配器仅供本地集成测试，不支持生产告警接入。'
-EXPERIMENTAL_NOTE = '实验图需要 Worker 显式配置此图的能力。'
+EXPERIMENTAL_NOTE = '实验工作流需要 Worker 显式配置此工作流的能力。'
 _specs = (
     GraphSpec(GraphId.CONVERSATION_SINGLE_TURN, '对话（单轮）', '仅根据当前问题生成回答。', '无需外部查询的单次问答。', '需要历史对话或外部知识验证的问题。', 'recommended',
         GraphCapabilities(('qa',), ('manual',)), single_nodes, {}, ('读取当前问题。', '调用模型并标记回答未经外部知识源验证。')),

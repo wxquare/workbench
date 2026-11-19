@@ -14,7 +14,7 @@ let timer: ReturnType<typeof setTimeout> | undefined, previous = '', key = ''
 function stopPoll() { if (timer) clearTimeout(timer); timer = undefined }
 function showError(e: unknown) {
   const message = e instanceof Error ? e.message : '请求失败。'
-  error.value = message.includes('CONVERSATION_WORKFLOW_REQUIRED') ? '请先在 Agent 管理中发布“对话（多轮）”流程图。'
+  error.value = message.includes('CONVERSATION_WORKFLOW_REQUIRED') ? '请先在 Agent 管理中发布“对话（多轮）”工作流。'
     : message.includes('CONVERSATION_HISTORY_INCOMPATIBLE') ? '此会话包含不支持的旧工作流记录，请新建会话。'
     : message.includes('THREAD_BUSY') ? '会话中还有任务正在执行，请等待完成后再发送。' : message
 }

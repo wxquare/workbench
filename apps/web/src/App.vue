@@ -12,7 +12,7 @@ const primary = [
 ]
 const manage = [
   { label: 'Agent 管理', path: '/agents', icon: FolderOpened }, { label: '模型配置', path: '/models', icon: Cpu },
-  { label: '流程图', path: '/graphs', icon: Connection }, { label: 'Skills', path: '/skills', icon: Collection }, { label: '知识库', path: '/knowledge', icon: Reading }, { label: '工具连接', path: '/tools', icon: Connection },
+  { label: '工作流', path: '/graphs', icon: Connection }, { label: 'Skills', path: '/skills', icon: Collection }, { label: '知识库', path: '/knowledge', icon: Reading }, { label: '工具连接', path: '/tools', icon: Connection },
   { label: '定时任务', path: '/schedules', icon: Timer }, { label: '数据统计', path: '/statistics', icon: DataAnalysis },
 ]
 const active = computed(() => route.path.startsWith('/runs') ? '/runs' : route.path.startsWith('/knowledge') ? '/knowledge' : route.path.startsWith('/graphs') ? '/graphs' : route.path)

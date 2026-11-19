@@ -23,7 +23,8 @@ export function layoutGraph(nodes: Node[], edges: GraphEdge[]): { nodes: Positio
   }
   const groups = new Map<number, string[]>()
   for (const id of ids) { const depth = layer.get(id)!; groups.set(depth, [...(groups.get(depth) ?? []), id]) }
-  const width = Math.max(300, ...[...groups.values()].map(group => group.length * 240 + 80))
+  const hasSkipEdge = sortedEdges.some(edge => (layer.get(edge.target) ?? 0) > (layer.get(edge.source) ?? 0) + 1)
+  const width = Math.max(300, ...[...groups.values()].map(group => group.length * 240 + 80)) + (hasSkipEdge ? 40 : 0)
   const positioned = ids.map(id => {
     const depth = layer.get(id)!, group = groups.get(depth)!, index = group.indexOf(id)
     return { id, x: width / 2 + (index - (group.length - 1) / 2) * 240, y: 55 + depth * 140 }
@@ -31,9 +32,14 @@ export function layoutGraph(nodes: Node[], edges: GraphEdge[]): { nodes: Positio
   const locations = new Map(positioned.map(node => [node.id, node]))
   const routed = sortedEdges.map(edge => {
     const a = locations.get(edge.source)!, b = locations.get(edge.target)!
-    if (a.id === b.id) return { ...edge, path: `M ${a.x + 90} ${a.y} C ${a.x + 170} ${a.y - 65}, ${a.x + 170} ${a.y + 65}, ${a.x + 90} ${a.y + 22}`,
-      labelX: a.x + 145, labelY: a.y - 40 }
-    return { ...edge, path: `M ${a.x} ${a.y + 30} L ${b.x} ${b.y - 30}`, labelX: (a.x + b.x) / 2 + 8, labelY: (a.y + b.y) / 2 }
+    if (a.id === b.id) return { ...edge, path: `M ${a.x + 90} ${a.y} C ${a.x + 125} ${a.y - 65}, ${a.x + 125} ${a.y + 65}, ${a.x + 90} ${a.y + 22}`,
+      labelX: a.x + 105, labelY: a.y - 40 }
+    if (layer.get(b.id)! > layer.get(a.id)! + 1) {
+      const laneX = Math.min(a.x, b.x) - 125
+      return { ...edge, path: `M ${a.x - 90} ${a.y} C ${laneX} ${a.y + 35}, ${laneX} ${b.y - 35}, ${b.x - 90} ${b.y}`,
+        labelX: laneX + 20, labelY: (a.y + b.y) / 2 - 55 }
+    }
+    return { ...edge, path: `M ${a.x} ${a.y + 30} L ${b.x} ${b.y - 30}`, labelX: (a.x + b.x) / 2, labelY: (a.y + b.y) / 2 }
   })
-  return { nodes: positioned, edges: routed, width: width + 110, height: Math.max(130, ...positioned.map(n => n.y + 55)) }
+  return { nodes: positioned, edges: routed, width, height: Math.max(130, ...positioned.map(n => n.y + 55)) }
 }
