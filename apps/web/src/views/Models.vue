@@ -136,8 +136,9 @@ async function probe() {
 </script>
 
 <template>
-  <div class="page-heading"><div><div class="eyebrow">AGENT <span></span> 模型管理</div><h1>模型配置</h1></div></div>
-  <div class="models-toolbar">
+  <section class="admin-page models-admin">
+  <header class="admin-page-header"><div><p class="workflow-eyebrow">MODEL CONFIGURATION</p><h1>模型配置</h1><p>为 Agent 维护模型草稿、发布版本并检查连接状态。</p></div><span v-if="agent" class="admin-page-count">{{ profiles.length }} 个模型</span></header>
+  <div class="models-toolbar panel">
     <label>Agent
       <select :value="agent" :disabled="loading || busy || !bearerToken" @change="switchAgent">
         <option value="">请选择 Agent</option>
@@ -150,18 +151,18 @@ async function probe() {
   <p v-if="!bearerToken" class="form-note">请先提供 Bearer Token。</p>
   <p v-if="error" class="form-error" role="alert">{{ error }}</p>
   <p v-if="notice" role="status">{{ notice }}</p>
-  <div v-if="agent" class="models-layout">
-    <section aria-label="模型列表" class="models-list">
-      <h2>模型 <span>{{ profiles.length }}</span></h2>
+  <div v-if="agent" class="models-layout admin-workspace">
+    <section aria-label="模型列表" class="models-list admin-rail panel">
+      <h2>模型列表 <span class="admin-list-count">{{ profiles.length }}</span></h2>
       <p v-if="loading">加载中...</p>
       <p v-else-if="!profiles.length">暂无模型配置。</p>
       <button v-for="item in profiles" :key="item.profile_id" type="button" class="model-row" :class="{ active: selected?.profile_id === item.profile_id }" :disabled="busy" @click="choose(item)">
-        <strong>{{ item.name }}</strong><span>{{ item.active_version === null ? '未发布' : `版本 ${item.active_version}` }}</span><small>修订 {{ item.revision }}</small>
+        <strong>{{ item.name }}</strong><span class="admin-status" :class="item.active_version === null ? 'draft' : 'published'">{{ item.active_version === null ? '未发布' : `版本 ${item.active_version}` }}</span><small>修订 {{ item.revision }}</small>
       </button>
     </section>
-    <section v-if="draft" class="models-editor">
-      <h2>{{ creating ? '新建模型' : selected?.name }}</h2>
-      <p v-if="selected">{{ selected.active_version === null ? '未发布' : `已发布版本 ${selected.active_version}` }} · 修订 {{ selected.revision }}<span v-if="dirty"> · 有未保存的修改</span></p>
+    <section v-if="draft" class="models-editor admin-detail panel">
+      <div class="admin-editor-heading"><div><p class="workflow-eyebrow">{{ creating ? '新建配置' : '模型详情' }}</p><h2>{{ creating ? '新建模型' : selected?.name }}</h2></div><span v-if="selected" class="admin-status" :class="selected.active_version === null ? 'draft' : 'published'">{{ selected.active_version === null ? '未发布' : `版本 ${selected.active_version}` }}</span></div>
+      <p v-if="selected" class="admin-detail-meta">修订 {{ selected.revision }}<span v-if="dirty"> · 有未保存的修改</span></p>
       <form @submit.prevent="save">
         <div class="model-fields">
           <label>名称<input v-model.trim="draft.name" required :disabled="!creating || busy" /></label>
@@ -183,32 +184,39 @@ async function probe() {
       </form>
       <div v-if="job" class="probe-status" role="status"><strong>探测状态：{{ job.status }}</strong><span>{{ job.job_id }}</span><pre v-if="job.result_ref">{{ job.result_ref }}</pre><button v-if="['queued', 'running'].includes(job.status)" type="button" @click="pollJob(job.job_id, generation, agent)">刷新状态</button></div>
     </section>
-    <p v-else class="empty-editor">选择模型查看配置。</p>
+    <div v-else class="admin-detail panel admin-empty"><span class="admin-empty-mark">M</span><h2>选择一个模型</h2><p>在左侧打开模型，查看配置或发布新版本。</p></div>
   </div>
+  <div v-else-if="bearerToken && !loading && !error" class="admin-detail panel admin-empty"><span class="admin-empty-mark">M</span><h2>先选择 Agent</h2><p>选择一个 Agent 后，可以查看它的模型配置。</p></div>
+  </section>
 </template>
 
 <style scoped>
-.models-toolbar { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+.models-toolbar { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin-bottom:16px; padding:15px 18px; }
 .models-toolbar label, .model-fields label { display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600; }
-.models-toolbar select { min-width:220px; }
-.models-toolbar button { display:inline-flex; align-items:center; gap:6px; }
+.models-toolbar label { min-width: min(260px, 100%); }
+.models-toolbar button { display:inline-flex; align-items:center; gap:6px; min-height:39px; padding:0 12px; border:1px solid #d5deeb; border-radius:7px; background:#fff; color:#425672; cursor:pointer; }
+.models-toolbar button:last-child { background:#4b6fd6; border-color:#4b6fd6; color:#fff; font-weight:650; }
+.models-toolbar button:disabled { opacity:.55; cursor:not-allowed; }
 .models-toolbar svg { width:16px; height:16px; }
-.models-layout { display:grid; grid-template-columns:minmax(200px, 280px) minmax(0, 1fr); gap:28px; border-top:1px solid #dce2e5; padding-top:20px; }
+.models-layout { margin-top:16px; }
 .models-layout h2 { font-size:16px; margin:0 0 16px; }
 .models-list h2 span { color:#69777e; font-weight:400; }
-.model-row { display:grid; width:100%; text-align:left; gap:5px; padding:12px; border:0; border-bottom:1px solid #e4e9eb; border-radius:0; background:transparent; }
-.model-row.active { background:#e5f1ed; border-left:3px solid #24765e; }
-.model-row span, .model-row small { color:#59666a; font-size:12px; }
-.models-editor { min-width:0; max-width:800px; }
+.model-row { display:grid; width:100%; text-align:left; justify-items:start; gap:7px; margin-top:5px; padding:12px; border:1px solid transparent; border-radius:8px; background:transparent; cursor:pointer; }
+.model-row:hover,.model-row.active { background:#edf2ff; border-color:#dce5fc; }
+.model-row strong { color:#354963; font-size:12px; }
+.model-row small { color:#5b6d85; font-size:10px; }
+.models-editor { min-width:0; max-width:none; }
+.admin-editor-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.admin-editor-heading h2 { margin:0; font-size:22px; }
 .models-editor > p, .empty-editor { color:#59666a; font-size:13px; }
 .model-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
 .model-fields .wide { grid-column:1 / -1; }
 .credential-field { display:flex; align-items:end; gap:10px; }
 .credential-field label { flex:1; min-width:0; }
-.model-fields input, .models-toolbar select { min-width:0; width:100%; padding:9px; border:1px solid #cbd5d8; border-radius:4px; background:#fff; }
+.model-fields input, .models-toolbar select { min-width:0; width:100%; padding:10px; border:1px solid #d5deeb; border-radius:7px; background:#fff; }
 .model-fields .check { flex-direction:row; align-items:center; }
 .model-fields .check input { width:auto; }
-.model-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.model-actions { display:flex; flex-wrap:wrap; gap:8px; padding-top:17px; border-top:1px solid #edf1f6; }
 .probe-status { display:grid; gap:8px; margin-top:24px; padding-top:16px; border-top:1px solid #dce2e5; overflow-wrap:anywhere; font-size:13px; }
 .probe-status pre { white-space:pre-wrap; overflow-wrap:anywhere; }
 .probe-status button { justify-self:start; }

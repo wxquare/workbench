@@ -373,25 +373,30 @@ async function publish() {
 </script>
 
 <template>
-  <div class="page-heading"><div><div class="eyebrow">AGENT <span></span> 管理</div><h1>Agent 管理</h1></div></div>
-  <section class="panel qa-panel">
-    <div class="qa-form">
+  <section class="admin-page">
+    <header class="admin-page-header"><div><p class="workflow-eyebrow">AGENT MANAGEMENT</p><h1>Agent 管理</h1><p>选择 Agent，配置工作流、模型和技能，再发布给新任务使用。</p></div><span class="admin-page-count">{{ items.length }} 个 Agent</span></header>
+    <div class="admin-alerts">
       <p v-if="!bearerToken" class="form-note">请先提供 Bearer Token。</p>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <p v-if="notice" class="form-note" role="status">{{ notice }}</p>
+    </div>
+    <div class="admin-workspace">
+      <aside class="admin-rail panel qa-form" aria-label="Agent 列表与创建">
       <form class="create-form" @submit.prevent="createAgent">
         <label>新建 Agent<input v-model="name" maxlength="128" placeholder="名称" :disabled="!bearerToken || busy || loading" /></label>
         <div class="form-actions"><button class="primary-button" type="submit" :disabled="!bearerToken || busy || loading || !name.trim()">创建</button></div>
       </form>
-      <div class="list-heading"><h2>Agent 列表</h2><div class="form-actions"><button type="button" :disabled="!bearerToken || busy || loading" @click="loadList">刷新列表</button></div></div>
+      <div class="list-heading"><h2>Agent 列表 <span class="admin-list-count">{{ items.length }}</span></h2><div class="form-actions"><button type="button" :disabled="!bearerToken || busy || loading" @click="loadList">刷新列表</button></div></div>
       <p v-if="loading" class="form-note">加载中…</p>
       <p v-else-if="bearerToken && !items.length && !error" class="form-note">没有可访问的 Agent。</p>
       <ul v-if="items.length" class="agent-list">
-        <li v-for="item in items" :key="item.agent_id"><button type="button" :disabled="busy || loading" :aria-current="selected?.agent_id === item.agent_id ? 'true' : undefined" @click="openAgent(item.agent_id)"><strong>{{ item.name }}</strong><small>{{ item.agent_id }}</small></button></li>
+        <li v-for="item in items" :key="item.agent_id"><button type="button" :disabled="busy || loading" :aria-current="selected?.agent_id === item.agent_id ? 'true' : undefined" @click="openAgent(item.agent_id)"><span class="admin-list-primary"><strong>{{ item.name }}</strong><small>{{ item.agent_id }}</small></span><span class="admin-list-arrow" aria-hidden="true">→</span></button></li>
       </ul>
+      </aside>
+      <div class="admin-detail panel qa-form">
       <template v-if="selected">
         <fieldset><legend>{{ selected.name }}</legend>
-          <p class="form-note">ID: {{ selected.agent_id }} · Revision: {{ selected.revision }} · {{ selected.active_profile_id ? '已发布' : '未发布' }}</p>
+          <div class="admin-detail-meta"><span class="admin-status" :class="selected.active_profile_id ? 'published' : 'draft'">{{ selected.active_profile_id ? '已发布' : '未发布' }}</span><span>Revision {{ selected.revision }}</span><span class="admin-detail-id">ID {{ selected.agent_id }}</span></div>
           <p v-if="!selected.draft" class="form-note">此 Agent 没有可编辑的草稿。</p>
           <template v-else>
             <label>工作流<select :value="workflow" :disabled="busy || graphsLoading || !!graphError || !graphs.length" @change="changeWorkflow">
@@ -478,13 +483,15 @@ async function publish() {
           </template>
         </fieldset>
       </template>
+      <div v-else class="admin-empty"><span class="admin-empty-mark">A</span><h2>选择一个 Agent</h2><p>在左侧打开 Agent，查看并编辑它的工作流、模型和技能。</p></div>
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-.create-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.create-form label{flex:1;min-width:180px}.list-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.list-heading h2{font-size:16px;margin:0}.agent-list{list-style:none;margin:0;padding:0;border-top:1px solid #e2e9ea}.agent-list li{border-bottom:1px solid #e2e9ea}.agent-list button{width:100%;border:0;background:transparent;text-align:left;padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;color:#344852;cursor:pointer}.agent-list button:hover,.agent-list button[aria-current=true]{background:#eff8f6}.agent-list button:disabled{cursor:not-allowed;opacity:.6}.agent-list small{color:#61747a;overflow-wrap:anywhere}.qa-form textarea{font-family:monospace;line-height:1.5}.qa-form fieldset .form-actions{margin-top:12px}
-.settings-group{display:grid;gap:12px;margin:20px 0}.settings-group h2{font-size:15px;margin:0}.settings-group .form-note{margin:0}.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.settings-group textarea{font-family:inherit}
+.create-form{display:grid;gap:10px;padding-bottom:20px;border-bottom:1px solid #edf1f6}.create-form label{min-width:0}.create-form .form-actions button{width:100%}.list-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.list-heading h2{display:flex;align-items:center;gap:7px;font-size:14px;margin:0;white-space:nowrap}.list-heading .form-actions button{padding:0 9px;font-size:11px}.agent-list{list-style:none;margin:4px 0 0;padding:0}.agent-list li+li{margin-top:5px}.agent-list button{width:100%;border:1px solid transparent;border-radius:8px;background:transparent;text-align:left;padding:11px;display:flex;gap:8px;align-items:center;justify-content:space-between;color:#344852;cursor:pointer}.agent-list button:hover,.agent-list button[aria-current=true]{background:#edf2ff;border-color:#dce5fc}.agent-list button:disabled{cursor:not-allowed;opacity:.6}.admin-list-primary{display:grid;gap:5px;min-width:0}.agent-list strong{font-size:12px}.agent-list small{color:#5b6d85;font-size:10px;overflow-wrap:anywhere}.admin-list-arrow{color:#7892d5;font-size:16px}.qa-form textarea{font-family:monospace;line-height:1.5}.qa-form fieldset .form-actions{margin-top:16px}
+.settings-group{display:grid;gap:12px;margin:20px 0;padding:18px 0 0;border-top:1px solid #edf1f6}.settings-group h2{font-size:15px;margin:0;color:#354963}.settings-group .form-note{margin:0}.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.settings-group textarea{font-family:inherit}.graph-hint{padding:12px 15px;border:1px solid #e2e9f3;border-radius:8px;background:#f7f9fd}.graph-hint p{margin:5px 0}.graph-hint a{color:#4b68ce;font-weight:650}
 .skill-heading,.skill-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.skill-heading{justify-content:space-between}.skill-count{color:#61747a;background:#edf2f3;border-radius:4px;padding:2px 7px;font-size:12px}.skill-icon{width:16px;height:16px;flex:none}.add-skill{display:inline-flex;align-items:center;gap:5px}.skill-binding{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e2e9ea}.binding-info{flex:1;min-width:0;display:grid!important;grid-template-columns:minmax(0,1fr) 132px;gap:4px 12px;align-items:center;overflow-wrap:anywhere}.binding-info small{grid-column:1;color:#61747a;font-weight:normal}.binding-info .binding-version{grid-column:2;grid-row:1 / 3;margin:0}.icon-button{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0}.skill-empty{padding:12px 0}.skill-overlay{position:fixed;inset:0;z-index:1000;background:rgba(20,31,39,.45);display:flex;align-items:center;justify-content:center;padding:16px}.skill-dialog{width:min(620px,100%);max-height:min(720px,90vh);background:#fff;border-radius:6px;display:flex;flex-direction:column;box-shadow:0 16px 48px #1d2d3530}.dialog-header,.dialog-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px}.dialog-header{border-bottom:1px solid #e2e9ea}.dialog-body{padding:16px 20px;overflow:auto}.dialog-footer{border-top:1px solid #e2e9ea;color:#61747a}.skill-option{display:flex!important;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid #e2e9ea;cursor:pointer}.skill-option input{width:16px!important;height:16px;margin:3px 0 0!important;flex:none;accent-color:#177a6e}.option-details{display:grid;gap:3px;flex:1;min-width:0;overflow-wrap:anywhere}.option-details small{font-weight:normal;color:#61747a}.option-state{font-size:12px;color:#61747a;white-space:nowrap}@media(max-width:560px){.binding-info{grid-template-columns:1fr}.binding-info .binding-version{grid-column:1;grid-row:auto}.dialog-footer{flex-wrap:wrap}}
 .add-skill,.dialog-footer button,.dialog-body button,.icon-button{border:1px solid #cbd6db;border-radius:4px;background:#fff;color:#344852;font:inherit;cursor:pointer}.add-skill,.dialog-footer button,.dialog-body button{min-height:38px;padding:0 14px}.add-skill,.dialog-footer .primary-button{background:#167b6e;border-color:#167b6e;color:#fff;font-weight:600}.icon-button:hover,.dialog-footer button:not(.primary-button):hover{background:#eff8f6}.add-skill:disabled,.dialog-footer button:disabled,.icon-button:disabled{opacity:.55;cursor:not-allowed}
 </style>
