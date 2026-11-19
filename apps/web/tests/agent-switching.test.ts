@@ -10,7 +10,7 @@ import Workbench from '../src/views/Workbench.vue'
 import workbenchSource from '../src/views/Workbench.vue?raw'
 import Threads from '../src/views/Threads.vue'
 import threadsSource from '../src/views/Threads.vue?raw'
-import { api } from '../src/session'
+import { api, bearerToken } from '../src/session'
 import type { ModelProfile } from '../src/models-api'
 
 vi.mock('../src/session', async () => {
@@ -73,6 +73,7 @@ function mount(component: Vue.Component, source: string, router?: ReturnType<typ
 }
 beforeEach(() => {
   vi.resetAllMocks()
+  bearerToken.value = 'token'
   vi.stubGlobal('Document', class {})
   vi.stubGlobal('ShadowRoot', class {})
   vi.stubGlobal('crypto', { randomUUID: () => 'switch-test-key' })
@@ -195,6 +196,7 @@ it.each([[true, '模型可访问'], [false, '模型不可访问']] as const)(
 it.each(['accepted', 'failed'])('locks Agent selection and refresh until QA submission is %s', async result => {
   const pending = deferred<{ run_id: string }>()
   vi.mocked(api.createQa).mockReturnValue(pending.promise)
+  vi.mocked(api.request).mockResolvedValue({ items: [], next_cursor: null } as never)
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/', component: Workbench }, { path: '/runs/:id', name: 'run-detail', component: { render: () => null } },
   ] })
@@ -203,17 +205,18 @@ it.each(['accepted', 'failed'])('locks Agent selection and refresh until QA subm
   await flush()
   const select = find(root, 'select')
   await switchAgent(select, 'dod-agent')
+  find(root, 'button', '单次问答').props.onClick(); await flush()
   find(root, 'textarea').props['onUpdate:modelValue']('Check the incident.'); await flush()
   const submission = find(root, 'form').props.onSubmit({ preventDefault() {} })
   await flush()
   expect(select.props.disabled).toBe(true)
-  expect(find(root, 'button', '刷新 Agent').props.disabled).toBe(true)
+  expect(all(root).find(el => el.type === 'button' && el.props['aria-label'] === '刷新 Agent')!.props.disabled).toBe(true)
   expect(api.createQa).toHaveBeenCalledExactlyOnceWith({ agent_id: 'dod-agent', text: 'Check the incident.' }, 'switch-test-key')
   if (result === 'accepted') pending.resolve({ run_id: 'dod-run' })
   else pending.reject(new Error('Submission unavailable'))
   await submission; await flush()
   expect(select.props.disabled).toBe(false)
-  expect(find(root, 'button', '刷新 Agent').props.disabled).toBe(false)
+  expect(all(root).find(el => el.type === 'button' && el.props['aria-label'] === '刷新 Agent')!.props.disabled).toBe(false)
   if (result === 'accepted') expect(router.currentRoute.value.fullPath).toBe('/runs/dod-run')
   else {
     expect(contents(root)).toContain('Submission unavailable')
@@ -221,6 +224,117 @@ it.each(['accepted', 'failed'])('locks Agent selection and refresh until QA subm
     await switchAgent(select, 'writing-agent')
     expect(select.value).toBe('writing-agent')
   }
+})
+
+it('submits a multi-turn conversation and shows its persisted answer', async () => {
+  vi.mocked(api.request).mockImplementation(async (path, init) => {
+    if (init?.method === 'POST') {
+      expect(JSON.parse(init.body as string)).toEqual({ agent_id: 'dod-agent', thread_id: null, mode: 'qa',
+        input: { text: 'Hello' }, business_context: { conversation: true } })
+      return { run_id: 'run-1', thread_id: 'thread-1' } as never
+    }
+    if (path.startsWith('/v1/threads?')) return { items: [], next_cursor: null } as never
+    if (path.includes('/messages?')) return { items: [
+      { message_id: 'm1', role: 'user', input: { text: 'Hello' }, outcome: null, run_id: 'run-1' },
+      { message_id: 'm2', role: 'assistant', input: null, outcome: { summary: 'Real answer' }, run_id: 'run-1' },
+    ], next_cursor: null } as never
+    throw new Error(`Unexpected path: ${path}`)
+  })
+  vi.mocked(api.run).mockResolvedValue({ run_id: 'run-1', agent_id: 'dod-agent', thread_id: 'thread-1',
+    status: 'succeeded', phase: null, outcome: { summary: 'Real answer' }, waiting: null, created_at: '2026-11-17T00:00:00Z' } as never)
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: Workbench },
+    { path: '/runs/:id', component: { render: () => null } }] })
+  await router.push('/')
+  const root = mount(Workbench, workbenchSource, router)
+  await flush()
+  await switchAgent(find(root, 'select'), 'dod-agent')
+  find(root, 'textarea').props['onUpdate:modelValue']('Hello'); await flush()
+  await find(root, 'form').props.onSubmit({ preventDefault() {} }); await flush()
+  expect(contents(root)).toContain('Hello')
+  expect(contents(root)).toContain('Real answer')
+  expect(router.currentRoute.value.fullPath).toBe('/')
+})
+
+it('does not display an old Agent’s messages after switching while they load', async () => {
+  const pending = deferred<{ items: any[]; next_cursor: null }>()
+  const thread = { agent_id: 'dod-agent', thread_id: 'old-thread', title: 'Old conversation', status: 'succeeded',
+    last_run_id: 'old-run', created_at: '2026-11-17T00:00:00Z', updated_at: '2026-11-17T00:00:00Z' }
+  vi.mocked(api.request).mockImplementation(async path => {
+    if (path.startsWith('/v1/threads?agent_id=dod-agent')) return { items: [thread], next_cursor: null } as never
+    if (path.startsWith('/v1/threads?agent_id=writing-agent')) return { items: [], next_cursor: null } as never
+    if (path.includes('/messages?')) return await pending.promise as never
+    throw new Error(`Unexpected path: ${path}`)
+  })
+  const sidebar = Vue.reactive({ threads: [], selected: null, agent: '', loading: false, hasMore: false,
+    newThread: () => {}, openThread: (_item: any) => {}, loadMore: () => {} })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: Workbench }] })
+  await router.push('/')
+  const descriptor = parse(workbenchSource).descriptor
+  const bindings = compileScript(descriptor, { id: 'stale-message-test' }).bindings
+  const code = compile(descriptor.template!.content, { mode: 'function', prefixIdentifiers: true, bindingMetadata: bindings }).code
+  const root = node('root'), app = renderer.createApp({ ...Workbench, render: new Function('Vue', code)(Vue) })
+  const { chatSidebarKey } = await import('../src/chat-sidebar')
+  app.use(router); app.provide(chatSidebarKey, sidebar); app.provide(ssrContextKey, { modules: new Set() }); apps.push(app); app.mount(root)
+  await flush()
+  const select = find(root, 'select')
+  await switchAgent(select, 'dod-agent')
+  sidebar.openThread(thread); await flush()
+  await switchAgent(select, 'writing-agent')
+  pending.resolve({ items: [{ message_id: 'm', role: 'assistant', outcome: { summary: 'Old answer' }, input: null, run_id: 'old-run' }], next_cursor: null })
+  await flush()
+  expect(contents(root)).not.toContain('Old answer')
+  expect(sidebar.agent).toBe('writing-agent')
+})
+
+it('clears the previous identity’s conversation list as soon as the token changes', async () => {
+  const pending = deferred<any[]>()
+  vi.mocked(api.agents).mockResolvedValueOnce([{ agent_id: 'dod-agent', name: 'DoD Helper' }]).mockReturnValueOnce(pending.promise)
+  vi.mocked(api.request).mockResolvedValue({ items: [{ agent_id: 'dod-agent', thread_id: 'old-thread', title: 'Private conversation',
+    status: 'succeeded', last_run_id: null, created_at: '2026-11-17T00:00:00Z', updated_at: '2026-11-17T00:00:00Z' }], next_cursor: null } as never)
+  const sidebar = Vue.reactive({ threads: [], selected: null, agent: '', loading: false, hasMore: false,
+    newThread: () => {}, openThread: (_item: any) => {}, loadMore: () => {} })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: Workbench }] })
+  await router.push('/')
+  const descriptor = parse(workbenchSource).descriptor
+  const bindings = compileScript(descriptor, { id: 'identity-test' }).bindings
+  const code = compile(descriptor.template!.content, { mode: 'function', prefixIdentifiers: true, bindingMetadata: bindings }).code
+  const root = node('root'), app = renderer.createApp({ ...Workbench, render: new Function('Vue', code)(Vue) })
+  const { chatSidebarKey } = await import('../src/chat-sidebar')
+  app.use(router); app.provide(chatSidebarKey, sidebar); app.provide(ssrContextKey, { modules: new Set() }); apps.push(app); app.mount(root)
+  await flush()
+  expect(sidebar.threads).toHaveLength(1)
+  bearerToken.value = 'another-token'; await flush()
+  expect(sidebar.threads).toHaveLength(0)
+  expect(sidebar.agent).toBe('')
+  pending.resolve([]); await flush()
+})
+
+it('validates the knowledge time window and sends the authorized query scope', async () => {
+  vi.mocked(api.request).mockResolvedValue({ items: [], next_cursor: null } as never)
+  vi.mocked(api.createQa).mockResolvedValue({ run_id: 'knowledge-run' })
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: Workbench },
+    { path: '/runs/:id', name: 'run-detail', component: { render: () => null } }] })
+  await router.push('/')
+  const root = mount(Workbench, workbenchSource, router)
+  await flush()
+  await switchAgent(find(root, 'select'), 'dod-agent')
+  find(root, 'button', '知识问答').props.onClick(); await flush()
+  find(root, 'textarea').props['onUpdate:modelValue']('Find the answer')
+  find(find(root, 'label', '服务'), 'input').props['onUpdate:modelValue']('demo-shop')
+  find(find(root, 'label', '区域'), 'input').props['onUpdate:modelValue']('local')
+  find(find(root, 'label', '开始时间'), 'input').props['onUpdate:modelValue']('2026-11-19T10:00')
+  find(find(root, 'label', '结束时间'), 'input').props['onUpdate:modelValue']('2026-11-19T12:00')
+  await flush()
+  await find(root, 'form').props.onSubmit({ preventDefault() {} }); await flush()
+  expect(contents(root)).toContain('查询范围不能超过一小时')
+  expect(api.createQa).not.toHaveBeenCalled()
+  find(find(root, 'label', '结束时间'), 'input').props['onUpdate:modelValue']('2026-11-19T10:30'); await flush()
+  await find(root, 'form').props.onSubmit({ preventDefault() {} }); await flush()
+  expect(api.createQa).toHaveBeenCalledExactlyOnceWith({ agent_id: 'dod-agent', text: 'Find the answer', scope: {
+    service: 'demo-shop', environment: 'test', region: 'local',
+    start_at: new Date('2026-11-19T10:00').toISOString(), end_at: new Date('2026-11-19T10:30').toISOString(),
+  } }, 'switch-test-key')
+  expect(router.currentRoute.value.fullPath).toBe('/runs/knowledge-run')
 })
 
 it.each([true, false])('scopes terminal conversation completion to its Agent (switch: %s)', async switchAway => {

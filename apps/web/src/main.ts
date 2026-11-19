@@ -7,3 +7,5 @@ import './style.css'
 import './qa.css'
 
 createApp(App).use(router).use(ElButton).use(ElInput).use(ElOption).use(ElSelect).mount('#app')
+
+import "./chat.css"

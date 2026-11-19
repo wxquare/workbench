@@ -15,5 +15,6 @@ it('shows the workbench brand and links to agent management under the app base',
   expect(html).toContain('Agent 管理')
   expect(html).toContain('href="/app/agents"')
   expect(html).toContain('工作流')
+  expect(html).toContain('收起侧栏')
   expect(html).not.toContain('DoD Agent')
 })

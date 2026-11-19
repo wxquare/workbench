@@ -10,12 +10,13 @@ vi.mock('../src/session', () => ({
 }))
 
 describe('QA workbench', () => {
-  it('offers both modes and starts without knowledge scope fields', async () => {
+  it('presents the chat composer and keeps knowledge scope collapsed initially', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: Workbench }] })
     const app = createSSRApp(Workbench).use(router)
     const html = await renderToString(app)
     expect(html).toContain('请选择 Agent')
-    expect(html).toContain('纯 LLM 问答')
+    expect(html).toContain('今天，想解决什么问题？')
+    expect(html).toContain('向 Agent 提问')
     expect(html).toContain('知识问答')
     expect(html).not.toContain('查询范围')
     expect(html).not.toContain('服务名称')
