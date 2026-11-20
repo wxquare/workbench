@@ -127,3 +127,75 @@ def test_score_and_compare_offline_reports(tmp_path):
     )
     assert result.returncode == 0
     assert json.loads(comparison.read_text())['status'] == 'passed'
+
+
+def test_tool_conversation_scoring_uses_its_own_dataset_contract(tmp_path):
+    template = Path(__file__).parents[4] / 'evaluation/tool-conversation/dataset.example.json'
+    dataset = json.loads(template.read_text())
+    dataset['cases'] = dataset['cases'][:1]
+    dataset['cases'][0]['id'] = 'tool-rule'
+    dataset['cases'][0]['scenario'] = 'retrieval_required'
+    dataset_path = tmp_path / 'tool-dataset.json'
+    dataset_path.write_text(json.dumps(dataset))
+    experiment = tmp_path / 'tool-experiment'
+    experiment.mkdir()
+    summary = (
+        '以下回答基于所列工具返回的结果，未经独立校验\n\n'
+        'answer\n\n工具依据：\n- knowledge.search / call-1 / ok'
+    )
+    (experiment / 'results.jsonl').write_text(json.dumps({
+        'case_id': 'tool-rule',
+        'repeat': 0,
+        'transport_status': 'completed',
+        'run_status': 'succeeded',
+        'outcome': {
+            'completed': True,
+            'summary': summary,
+            'evidence_refs': ['ev-1'],
+            'unresolved_items': [],
+        },
+        'evidence': [{'evidence_id': 'ev-1', 'content': {'status': 'ok'}}],
+    }) + '\n')
+    report = tmp_path / 'tool-report.json'
+
+    result = run_cli(
+        'eval',
+        'score',
+        '--experiment',
+        experiment,
+        '--dataset',
+        dataset_path,
+        '--output',
+        report,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    value = json.loads(report.read_text())
+    assert value['scoring_version'] == 'tool-conversation-rules-v1'
+    assert value['metrics']['rule_rate'] == 1
+
+
+def test_tool_dataset_validation_uses_tool_fingerprint(tmp_path):
+    template = Path(__file__).parents[4] / 'evaluation/tool-conversation/dataset.example.json'
+    dataset = json.loads(template.read_text())
+    dataset['cases'] = dataset['cases'][:1]
+    path = tmp_path / 'tool-dataset.json'
+    path.write_text(json.dumps(dataset))
+
+    result = run_cli('eval', 'validate', '--dataset', path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(json.loads(result.stdout)['dataset_hash']) == 64
+
+
+def test_tool_dataset_validation_is_strict(tmp_path):
+    template = Path(__file__).parents[4] / 'evaluation/tool-conversation/dataset.example.json'
+    dataset = json.loads(template.read_text())
+    dataset['cases'] = dataset['cases'][:2]
+    dataset['cases'][0]['scenario'] = 'unknown'
+    path = tmp_path / 'invalid-tool-dataset.json'
+    path.write_text(json.dumps(dataset))
+
+    result = run_cli('eval', 'validate', '--dataset', path)
+
+    assert result.returncode == 2

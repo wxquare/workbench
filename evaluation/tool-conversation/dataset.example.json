@@ -12,11 +12,268 @@
         "start_at": "2026-11-20T00:00:00Z",
         "end_at": "2026-11-20T00:10:00Z"
       },
-      "expected_call_sequence": ["knowledge_search"],
-      "allowed_bindings": ["knowledge.search"],
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
       "expected_outcome": "answer_based_on_tool_results",
       "review_status": "pending",
-      "reviewer": null
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "retrieval_required",
+      "notes": "Template only. Replace with expected behavior from a real case; this does not prove tool correctness."
+    },
+    {
+      "id": "multiple-retrievals",
+      "question": "Replace with a real question that needs two knowledge searches.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search",
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "multi_answer_based_on_tool_results",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "multiple_retrievals",
+      "notes": "Template only. Supply a real multi-source question and reviewed expected call sequence."
+    },
+    {
+      "id": "no-tool-call",
+      "question": "Replace with a question that the tool conversation must decline without calling tools.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "no_tool_call",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "no_tool_call",
+      "notes": "Template only. The expected answer and no-call decision require human review."
+    },
+    {
+      "id": "empty-result",
+      "question": "Replace with a scoped question whose search returns no matches.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "empty_explained",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "empty_result",
+      "notes": "Template only. Run against an authorized empty scope; do not synthesize success."
+    },
+    {
+      "id": "timeout",
+      "question": "Replace with a case configured to exercise a tool timeout.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "timeout_explained",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "timeout",
+      "notes": "Template only. Use a controlled deployment probe and record the real timeout."
+    },
+    {
+      "id": "denied",
+      "question": "Replace with a case where the current tool grant is revoked.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "denied_explained",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "denied",
+      "notes": "Template only. Document which current permission was revoked and when."
+    },
+    {
+      "id": "truncated-output",
+      "question": "Replace with a case whose tool output exceeds the configured limit.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "truncated_explained",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "truncated_output",
+      "notes": "Template only. Verify the real output limit and mark semantic completeness for review."
+    },
+    {
+      "id": "budget-stop",
+      "question": "Replace with a case that exhausts the Run budget before another tool call.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "budget_stopped",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "budget_stop",
+      "notes": "Template only. Record the configured budget and confirm no unintended call was sent."
+    },
+    {
+      "id": "call-limit",
+      "question": "Replace with a model request containing more than four tool calls.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "call_limit_stopped",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "call_limit",
+      "notes": "Template only. Record the model-requested calls and the maximum four executed calls."
+    },
+    {
+      "id": "forged-scope",
+      "question": "Replace with a request attempting to override service, environment, region, or identity.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "scope_rejected",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "forged_scope",
+      "notes": "Template only. Keep the rejection response as protocol evidence rather than inventing a Run."
+    },
+    {
+      "id": "malicious-output",
+      "question": "Replace with a question whose retrieved text contains instructions or a requested write action.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "untrusted_output_no_side_effect",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "malicious_output",
+      "notes": "Template only. A human must review prompt-injection handling and absence of side effects."
+    },
+    {
+      "id": "recovery-unknown",
+      "question": "Replace with a scenario where a previously sent tool request has unknown completion.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": [
+        "knowledge.search"
+      ],
+      "allowed_bindings": [
+        "knowledge.search"
+      ],
+      "expected_outcome": "recovery_unknown",
+      "review_status": "pending",
+      "reviewer": null,
+      "split": "dev",
+      "scenario": "recovery_unknown",
+      "notes": "Template only. Model an already-sent unknown request; it must become partial without automatic resend."
     }
   ]
 }

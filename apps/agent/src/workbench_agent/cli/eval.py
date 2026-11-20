@@ -16,22 +16,48 @@ from workbench_agent.evaluation.runner import (
     _manifest,
     run_experiment,
 )
-from workbench_agent.evaluation.scoring import score_result
 import asyncio
 import hashlib
 import os
 from workbench_agent.evaluation.api_client import EvaluationAPI
 from workbench_agent.evaluation.journal import Journal
+from workbench_agent.evaluation.scoring import score_result
+from workbench_agent.evaluation.tool_conversation_eval import (
+    load_tool_dataset,
+    score_tool_result,
+    tool_dataset_fingerprint,
+)
+
+
+def _tool_dataset(path):
+    if path is None:
+        return False
+    try:
+        value = json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError, UnicodeError):
+        return False
+    return (
+        isinstance(value, dict)
+        and value.get('schema_version') == 'tool-conversation-eval-v1'
+    )
 
 
 def main(args) -> int:
     if args.eval_command == "validate":
-        dataset = load_dataset(args.dataset)
+        tool = _tool_dataset(args.dataset)
+        dataset = (
+            load_tool_dataset(args.dataset)
+            if tool else load_dataset(args.dataset)
+        )
         print(
             json.dumps(
                 {
                     "valid": True,
-                    "dataset_hash": dataset_fingerprint(dataset),
+                    "schema_version": dataset["schema_version"],
+                    "dataset_hash": (
+                        tool_dataset_fingerprint(dataset)
+                        if tool else dataset_fingerprint(dataset)
+                    ),
                     "cases": len(dataset["cases"]),
                 },
                 sort_keys=True,
@@ -39,6 +65,23 @@ def main(args) -> int:
         )
         return 0
     if args.eval_command == "run":
+        manifest_path = (
+            Path(args.resume) / 'manifest.json'
+            if args.resume else None
+        )
+        resumed_tool = (
+            manifest_path is not None
+            and manifest_path.exists()
+            and json.loads(manifest_path.read_text())
+            .get('dataset_distribution', {})
+            .get('schema_version')
+            == 'tool-conversation-eval-v1'
+        )
+        if _tool_dataset(args.dataset) or resumed_tool:
+            raise ValueError(
+                'tool conversations require the completion of A4 and versioned '
+                'tool evaluation support before live runs'
+            )
         if bool(args.resume) == bool(
             args.dataset and args.config and args.experiment_id
         ):
@@ -112,15 +155,19 @@ def main(args) -> int:
         return 0 if result['complete'] else 1
     if args.eval_command == "score":
         experiment = Path(args.experiment)
-        dataset = load_dataset(args.dataset)
+        tool = _tool_dataset(args.dataset)
+        dataset = load_tool_dataset(args.dataset) if tool else load_dataset(args.dataset)
         results = [
             json.loads(line)
             for line in (experiment / 'results.jsonl').read_text().splitlines()
             if line
         ]
-        expected_cases = select_cases(dataset, args.split)
+        expected_cases = [
+            case for case in dataset['cases']
+            if case.get('split', 'dev') == args.split
+        ] if tool else select_cases(dataset, args.split)
         scores = [
-            score_result(case, row)
+            (score_tool_result(case, row) if tool else score_result(case, row))
             for case in expected_cases
             for row in results
             if row.get('case_id') == case['id']
@@ -131,10 +178,16 @@ def main(args) -> int:
         k = args.repeats
         report = {
             'schema_version': 'eval-report-v1',
-            'dataset_hash': dataset_fingerprint(dataset),
+            'dataset_hash': (
+                tool_dataset_fingerprint(dataset)
+                if tool else dataset_fingerprint(dataset)
+            ),
             'split': args.split,
             'repeats': k,
-            'scoring_version': 'knowledge-rules-v1',
+            'scoring_version': (
+                'tool-conversation-rules-v1'
+                if tool else 'knowledge-rules-v1'
+            ),
             'metrics': summarize_repeats(
                 scores,
                 expected_cases=[case['id'] for case in expected_cases],
