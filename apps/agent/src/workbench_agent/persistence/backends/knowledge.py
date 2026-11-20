@@ -138,7 +138,7 @@ class SQLiteKnowledgeStore:
     async def gaps(self, uow, team_id, *, limit, after, status):
         table = schema.knowledge_gaps
         statement = select(table).where(table.c.team_id == team_id,
-            table.c.problem_type.in_(('kb.empty', 'kb.unanswerable', 'kb.invalid_citation')))
+            table.c.problem_type.in_(('kb.empty', 'kb.unanswerable', 'kb.invalid_citation', 'low_quality')))
         if after:
             statement = statement.where(table.c.gap_id > after)
         if status:

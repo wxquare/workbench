@@ -12,7 +12,7 @@ from workbench_agent.knowledge.models import GapDraftTemplate
 from workbench_agent.knowledge.service import KnowledgeService
 from workbench_agent.observability import redacted_content
 
-REASONS = frozenset({'kb.empty', 'kb.unanswerable', 'kb.invalid_citation'})
+REASONS = frozenset({'kb.empty', 'kb.unanswerable', 'kb.invalid_citation', 'low_quality'})
 
 
 class KnowledgeGaps:
@@ -81,6 +81,63 @@ class KnowledgeGaps:
                 'query_scope': canonical(visible_scope), 'dedup_digest': identity, 'gap_revision': 0,
                 'created_at': now, 'updated_at': now})
             return self._view(await self.store.gap(uow, guard.team_id, gap_id))
+
+    async def record_feedback_in(self, uow, auth, run, *, feedback_id):
+        """Create one low_quality gap inside the feedback UoW."""
+        if run['status'] not in TERMINAL_RUN_STATUSES:
+            return None
+        from workbench_agent.domain.context import RunContext
+        context = RunContext.model_validate_json(run['versions'])
+        if context.graph_id != GraphId.KNOWLEDGE_CITATION_REVIEW:
+            return None
+        scope = await self.backend.runs.current_scope(uow, auth.team_id, run['run_id'])
+        if not scope:
+            return None
+        identity = digest({
+            'run_id': run['run_id'],
+            'scope_id': scope['scope_id'],
+            'reason': 'low_quality',
+            'graph': GraphId.KNOWLEDGE_CITATION_REVIEW,
+        })
+        existing = await self.store.gap_by_digest(uow, auth.team_id, identity)
+        if existing:
+            return existing['gap_id']
+        message = await self.backend.runs.one(
+            uow, 'messages', team_id=auth.team_id, run_id=run['run_id'], role='user'
+        )
+        if not message:
+            raise not_found()
+        try:
+            question = json.loads(message['content_ref'])['input']['text']
+            safe, truncated = redacted_content(question, 1024)
+            summary = json.loads(safe) if safe and not truncated else '问题内容已省略'
+            current_scope = json.loads(scope['scope_json'])
+            visible_scope = {
+                key: current_scope[key]
+                for key in ('service', 'environment', 'region')
+            }
+        except (ValueError, KeyError, TypeError):
+            raise DomainError('KB_INVALID_GAP', 422) from None
+        now, gap_id = await self.backend.clock.now_ms(uow), str(uuid4())
+        await self.store.insert_gap(uow, {
+            'gap_id': gap_id,
+            'team_id': auth.team_id,
+            'run_id': run['run_id'],
+            'source_trace': canonical({
+                'scope_id': scope['scope_id'],
+                'graph': GraphId.KNOWLEDGE_CITATION_REVIEW,
+                'feedback_id': feedback_id,
+            }),
+            'problem_type': 'low_quality',
+            'review_status': 'open',
+            'summary': summary,
+            'query_scope': canonical(visible_scope),
+            'dedup_digest': identity,
+            'gap_revision': 0,
+            'created_at': now,
+            'updated_at': now,
+        })
+        return gap_id
 
     async def list(self, auth, *, limit=50, after=None, status='open'):
         async with self.backend.create_uow().begin_read() as uow:
