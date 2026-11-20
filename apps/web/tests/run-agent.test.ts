@@ -8,11 +8,16 @@ import source from '../src/views/RunDetail.vue?raw'
 import { api, bearerToken } from '../src/session'
 
 vi.mock('../src/components/RunActions.vue', () => ({ default: { render: () => null } }))
+vi.mock('../src/components/RunFeedback.vue', () => ({ default: { render: () => null } }))
+vi.mock('../src/components/RunUsage.vue', () => ({ default: { render: () => null } }))
 
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'run-1' } }) }))
 vi.mock('../src/session', async () => {
   const { ref } = await import('vue')
-  return { bearerToken: ref('token'), api: { run: vi.fn(), agents: vi.fn() } }
+  return {
+    bearerToken: ref('token'),
+    api: { run: vi.fn(), agents: vi.fn(), usage: vi.fn() },
+  }
 })
 
 interface Node { type: string; text: string; children: Node[]; parent: Node | null; props: Record<string, unknown> }
@@ -43,6 +48,7 @@ beforeEach(() => {
   bearerToken.value = 'token'
   vi.mocked(api.run).mockReset().mockResolvedValue({ run_id: 'run-1', agent_id: 'ws-2', thread_id: 'thread', status: 'succeeded', phase: null, created_at: '2026-11-16T00:00:00Z', outcome: null, waiting: null })
   vi.mocked(api.agents).mockReset()
+  vi.mocked(api.usage).mockReset().mockResolvedValue({})
 })
 
 it('shows the agent name and persisted id associated with a run', async () => {

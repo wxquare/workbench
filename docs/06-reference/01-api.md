@@ -274,9 +274,10 @@ sequenceDiagram
 | --- | --- | --- | --- | --- |
 | `GET /v1/runs/{run_id}/events` | viewer | 见第 3 章 | SSE | 422/410 |
 | `GET /v1/runs/{run_id}/evidence/{evidence_id}` | viewer + 披露校验 | - | 200 证据内容 | 404、409 `EVIDENCE_UNAVAILABLE` |
-| `POST /v1/runs/{run_id}/feedback`（幂） | viewer | `{rating: -1 或 1(严格 int), comment?≤4000}` | **201** | 422 |
+| `POST /v1/runs/{run_id}/feedback`（幂） | viewer | `{rating: -1 或 1(严格 int), reason?: irrelevant/citation_error/stale/other, comment?≤4000}`；负反馈可创建知识缺口，正反馈不能带 reason | **201** | 422 |
 | `GET /v1/runs/{run_id}/feedback` | viewer | `limit`、`after` | 200 | 404 |
 | `GET /v1/usage` | operator | Query 必填 `run_id` | 200 预算/用量快照 | 404 |
+| `GET /v1/stats/summary` | maintainer | `start_at`、`end_at`（带时区，窗口 >0 且 ≤90 天）、可选 `agent_id` | 200 stats-v1 汇总；只统计当前可见 Agent | 403/404/422 |
 | `GET /v1/artifacts/{artifact_id}/url` | viewer | - | 200 `{url,expires_in:60,sha256,size}` | 409 `ARTIFACT_CHANGED`/`ARTIFACT_UNAVAILABLE`；503 `OBJECT_STORAGE_UNAVAILABLE` |
 | `POST /v1/runs/{run_id}/uploads` | operator | `{kind, sha256, size(0..MAX_BYTES, 严格 int)}` | **201** `{artifact_id,status,sha256,size}`（无需幂等键） | 422 `INVALID_UPLOAD` |
 | `POST /v1/uploads/{artifact_id}/complete`（幂） | operator | 请求体为原始文件字节（流式）；可选 Header `Upload-Replay: true`（体必须为空，仅重放回执） | **202** 上传任务回执 | 413 `UPLOAD_TOO_LARGE`；409 `IDEMPOTENCY_CONFLICT`/`UPLOAD_REPLAY_NOT_FOUND`；422 `UPLOAD_DIGEST_MISMATCH`/`UPLOAD_REPLAY_BODY_FORBIDDEN`；503 `UPLOAD_STAGING_*` |

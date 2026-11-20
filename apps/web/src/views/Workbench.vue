@@ -7,6 +7,7 @@ import { createQaSubmission, isRunActive, missingQaFields, validQaWindow, type Q
 import { listMessages, listThreads, submitConversation, type ThreadItem, type ThreadMessage } from '../threads-api'
 import { chatSidebarKey, emptyChatSidebar } from '../chat-sidebar'
 import KnowledgeAnswer from '../components/KnowledgeAnswer.vue'
+import RunFeedback from '../components/RunFeedback.vue'
 
 const router = useRouter(), sidebar = inject(chatSidebarKey, reactive(emptyChatSidebar()))
 const agents = ref<Agent[]>([]), agent = ref(''), question = ref('')
@@ -153,7 +154,7 @@ onUnmounted(() => { agentGeneration++; listGeneration++; threadGeneration++; mes
       <p v-if="selected && !messages.length && !running" class="chat-empty">暂无消息。</p>
       <article v-for="item in messages" :key="item.message_id" :class="item.role === 'user' ? 'chat-user' : 'chat-assistant'">
         <template v-if="item.role === 'user'">{{ item.input?.text || '' }}</template>
-        <template v-else><div class="assistant-heading"><MagicStick /> {{ selectedAgent }}</div><KnowledgeAnswer v-if="item.outcome?.knowledge_answer && item.run_id" :run-id="item.run_id" :answer="item.outcome.knowledge_answer" /><p v-else>{{ item.outcome?.summary || '' }}</p><router-link v-if="item.run_id" :to="`/runs/${item.run_id}`">任务详情 ↗</router-link></template>
+        <template v-else><div class="assistant-heading"><MagicStick /> {{ selectedAgent }}</div><KnowledgeAnswer v-if="item.outcome?.knowledge_answer && item.run_id" :run-id="item.run_id" :answer="item.outcome.knowledge_answer" /><p v-else>{{ item.outcome?.summary || '' }}</p><RunFeedback v-if="item.run_id" :run-id="item.run_id" terminal /><router-link v-if="item.run_id" :to="`/runs/${item.run_id}`">任务详情 ↗</router-link></template>
       </article>
       <div v-if="running" class="chat-status" role="status">{{ runStatus === 'waiting_input' ? '等待补充信息' : runStatus === 'waiting_approval' ? '等待审批' : '正在生成回答…' }} <router-link v-if="runId" :to="`/runs/${runId}`">查看任务详情 ↗</router-link></div>
       <router-link v-else-if="runId && error" class="chat-status" :to="`/runs/${runId}`">查看任务详情 ↗</router-link>

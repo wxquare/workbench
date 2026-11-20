@@ -1,4 +1,5 @@
 import type { ApiClient } from './api'
+import type { UsageSummary } from './usage'
 
 export interface RunItem {
   run_id: string
@@ -9,6 +10,7 @@ export interface RunItem {
   title: string
   mode: string | null
   created_at: string
+  usage_summary?: UsageSummary
 }
 export interface RunPage { items: RunItem[]; next_cursor: string | null }
 export function listRuns(client: ApiClient, agent: string, options: { query?: string; status?: string; after?: string } = {}): Promise<RunPage> {

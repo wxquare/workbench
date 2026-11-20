@@ -11,7 +11,7 @@ export interface RunOutcome { summary: string; completed?: boolean; unresolved_i
 export interface WaitingView { name: string; kind: string; actor?: string; interrupt_id: string; revision: number; expires_at_ms: number; created_at_ms: number; schema: Record<string, unknown>; approval_id?: string; args_hash?: string; expected_scope_id?: string }
 export type ResumeResponse = { kind: "user_input"; values: Record<string, string> } | { kind: "approval"; approval_id: string; decision: "approve" | "reject"; expected_args_hash: string }
 export interface ResumeBody { interrupt_id: string; expected_revision: number; response: ResumeResponse }
-export interface RunView { run_id: string; agent_id: string; thread_id: string; status: string; phase: string | null; created_at: string; outcome: RunOutcome | null; revision: number; waiting: WaitingView | null; links?: Record<string, string> }
+export interface RunView { run_id: string; agent_id: string; thread_id: string; status: string; phase: string | null; created_at: string; outcome: RunOutcome | null; revision: number; waiting: WaitingView | null; usage?: import('./usage').UsageSummary | null; links?: Record<string, string> }
 export interface AcceptedRun { run_id: string }
 
 export class ApiError extends Error {
@@ -66,6 +66,7 @@ export class ApiClient {
   }
   evidence(runId: string, evidenceId: string): Promise<unknown> { return this.request(`/v1/runs/${encodeURIComponent(runId)}/evidence/${encodeURIComponent(evidenceId)}`) }
   run(id: string): Promise<RunView> { return this.request(`/v1/runs/${encodeURIComponent(id)}`) }
+  usage(id: string): Promise<import('./usage').UsageSummary> { return this.request(`/v1/usage?run_id=${encodeURIComponent(id)}`) }
 }
 
 export function createQaSubmission(client: ApiClient, makeKey = () => crypto.randomUUID()) {

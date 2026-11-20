@@ -11,6 +11,7 @@ import Skills from './views/Skills.vue'
 import Knowledge from './views/Knowledge.vue'
 import KnowledgeEntry from './views/KnowledgeEntry.vue'
 import Placeholder from './views/Placeholder.vue'
+import Statistics from './views/Statistics.vue'
 
 export default createRouter({
   history: createWebHistory('/app/'),
@@ -27,6 +28,7 @@ export default createRouter({
     { path: '/skills', name: 'skills', component: Skills },
     { path: '/knowledge', name: 'knowledge', component: Knowledge },
     { path: '/knowledge/:id/versions/:version', name: 'knowledge-version', component: KnowledgeEntry },
-    { path: '/:section(tools|schedules|incidents|statistics)', name: 'section', component: Placeholder },
+    { path: '/statistics', name: 'statistics', component: Statistics },
+    { path: '/:section(tools|schedules|incidents)', name: 'section', component: Placeholder },
   ],
 })

@@ -24,6 +24,7 @@ async def test_run_inventory_paginates_filters_and_isolates_agents(platform, cli
     combined = page['items'] + second.json()['items']
     assert {item['run_id'] for item in combined} == set(ids)
     assert {item['title'] for item in combined} == {'alpha question', 'beta question', 'gamma question'}
+    assert all('usage_summary' in item for item in combined)
     assert second.json()['next_cursor'] is None
 
     filtered = await client.get(path, params={'agent_id': platform.agent_id, 'q': 'beta', 'status': 'queued'})

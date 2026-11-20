@@ -78,3 +78,41 @@ class SQLiteRunStore:
 
     async def has_actions(self,uow,team_id,run_id):
         return (await uow.execute(select(schema.actions.c.action_id).where(schema.actions.c.team_id==team_id,schema.actions.c.run_id==run_id).limit(1))).first() is not None
+
+    async def usage_summaries(self, uow, team_id, run_ids):
+        if not run_ids:
+            return {}
+        records = (await uow.execute(select(
+            schema.usage_records.c.run_id,
+            schema.usage_records.c.amount_micros,
+            schema.usage_records.c.currency,
+            schema.usage_records.c.status,
+            schema.usage_records.c.usage_pending,
+            schema.usage_records.c.cost_pending,
+        ).where(schema.usage_records.c.team_id == team_id,
+                 schema.usage_records.c.run_id.in_(run_ids)))).mappings().all()
+        result = {
+            run_id: {
+                'amount_micros': 0,
+                'currency': None,
+                'known_costs': {},
+                'usage_pending': False,
+                'cost_pending': False,
+            }
+            for run_id in run_ids
+        }
+        for row in records:
+            value = result[row['run_id']]
+            value['usage_pending'] |= bool(row['usage_pending'])
+            value['cost_pending'] |= bool(row['cost_pending']) or row['amount_micros'] is None
+            if row['amount_micros'] is not None and row['currency']:
+                value['known_costs'][row['currency']] = (
+                    value['known_costs'].get(row['currency'], 0) + row['amount_micros']
+                )
+        for run_id, value in result.items():
+            known = set(value['known_costs'])
+            value['currency'] = next(iter(known)) if len(known) == 1 else None
+            value['amount_micros'] = sum(value['known_costs'].values()) if len(known) == 1 else None
+            if len(known) > 1:
+                value['cost_pending'] = True
+        return result

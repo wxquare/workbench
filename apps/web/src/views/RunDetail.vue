@@ -14,6 +14,9 @@ import { buildInputResume, buildApprovalResume } from '../run-detail-state'
 import { createRunActions } from '../run-actions'
 import { listMessages } from '../threads-api'
 import KnowledgeAnswer from '../components/KnowledgeAnswer.vue'
+import RunFeedback from '../components/RunFeedback.vue'
+import RunUsage from '../components/RunUsage.vue'
+import type { UsageSummary } from '../usage'
 
 const route = useRoute()
 const runId = computed(() => String(route.params.id))
@@ -51,12 +54,25 @@ watch(() => [run.value?.thread_id, run.value?.run_id, bearerToken.value], async 
 function submitInput(region: string) { if (waiting.value?.kind === 'input') void actions.resume(buildInputResume(waiting.value, region)) }
 function decide(decision: 'approve' | 'reject') { if (waiting.value?.kind === 'approval') void actions.resume(buildApprovalResume(waiting.value, decision)) }
 const agents = ref<Agent[]>([])
+const usage = ref<UsageSummary | null>(null)
 let agentGeneration = 0
 watch(bearerToken, async () => {
   const current = ++agentGeneration
   if (!bearerToken.value) { agents.value = []; return }
   try { const value = await api.agents(); if (current === agentGeneration) agents.value = value }
   catch { if (current === agentGeneration) agents.value = [] }
+}, { immediate: true })
+let usageGeneration = 0
+watch(() => [run.value?.run_id, bearerToken.value], async () => {
+  const current = ++usageGeneration, id = run.value?.run_id
+  usage.value = null
+  if (!id || !bearerToken.value) return
+  try {
+    const value = await api.usage(id)
+    if (current === usageGeneration) usage.value = value
+  } catch {
+    if (current === usageGeneration) usage.value = null
+  }
 }, { immediate: true })
 const labels: Record<string, string> = { queued: '排队中', running: '执行中', finalizing: '整理结果中', succeeded: '已完成', failed: '失败', cancelled: '已取消', expired: '已过期', timed_out: '已超时', waiting_input: '等待输入', waiting_approval: '等待审批', cancelling: '取消中', partial: '部分完成' }
 </script>
@@ -82,7 +98,9 @@ const labels: Record<string, string> = { queued: '排队中', running: '执行�
         <div v-if="run.outcome.knowledge_gaps?.length" class="result-section"><h3>知识缺口</h3><ul><li v-for="item in run.outcome.knowledge_gaps" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.evidence_refs?.length" class="result-section"><h3>证据 ID</h3><ul><li v-for="item in run.outcome.evidence_refs" :key="item">{{ item }}</li></ul></div>
       </template><p v-else class="form-note">尚无已保存的结果。</p>
+      <RunFeedback :run-id="run.run_id" :terminal="!['queued', 'running', 'finalizing', 'cancelling', 'waiting_input', 'waiting_approval'].includes(run.status)" />
     </section></div><aside class="detail-secondary"><section class="panel info-panel"><h2>任务信息</h2><dl><div><dt>状态</dt><dd>{{ labels[run.status] ?? run.status }}</dd></div><div><dt>阶段</dt><dd>{{ run.phase ?? '—' }}</dd></div><div class="agent-info"><dt>Agent</dt><dd>{{ agentName(run.agent_id, agents) }}<small v-if="agentName(run.agent_id, agents) !== run.agent_id">{{ run.agent_id }}</small></dd></div><div><dt>创建时间</dt><dd>{{ new Date(run.created_at).toLocaleString() }}</dd></div></dl><router-link v-if="run.links?.original_run" :to="{ name: 'run-detail', params: { id: run.links.original_run.split('/').pop() } }">查看原任务</router-link><router-link v-if="run.links?.knowledge_gap" :to="{ name: 'knowledge', query: { gap: run.links.knowledge_gap.split('/').pop() } }">查看知识缺口</router-link></section></aside></div>
+    <RunUsage v-if="usage" :usage="usage" />
   </template>
 </template>
 

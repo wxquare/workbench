@@ -113,7 +113,9 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     app.include_router(threads.router)
     app.include_router(teams.router)
     from workbench_agent.api import graphs
+    from workbench_agent.api import statistics
     app.include_router(graphs.router)
+    app.include_router(statistics.router)
     app.include_router(agents.router)
     app.include_router(model_profiles.router)
     app.include_router(team_model_profiles.router)

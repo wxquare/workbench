@@ -20,7 +20,7 @@ const manage = [
   { label: '工作流', path: '/graphs', icon: Connection }, { label: 'Skills', path: '/skills', icon: Collection }, { label: '知识库', path: '/knowledge', icon: Reading }, { label: '工具连接', path: '/tools', icon: Connection },
   { label: '定时任务', path: '/schedules', icon: Timer }, { label: '数据统计', path: '/statistics', icon: DataAnalysis },
 ]
-const active = computed(() => route.path.startsWith('/runs') ? '/runs' : route.path.startsWith('/knowledge') ? '/knowledge' : route.path.startsWith('/graphs') ? '/graphs' : route.path)
+const active = computed(() => route.path.startsWith('/runs') ? '/runs' : route.path.startsWith('/knowledge') ? '/knowledge' : route.path.startsWith('/graphs') ? '/graphs' : route.path.startsWith('/statistics') ? '/statistics' : route.path)
 function applyToken() { setBearerToken(tokenInput.value); if (bearerToken.value) identityOpen.value = false }
 </script>
 <template>

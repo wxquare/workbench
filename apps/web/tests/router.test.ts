@@ -29,3 +29,7 @@ it('provides graph catalog and detail routes', () => {
   expect(router.resolve({ name: 'graphs' }).href).toBe('/app/graphs')
   expect(router.resolve({ name: 'graph-detail', params: { id: 'sop.conditional' } }).href).toBe('/app/graphs/sop.conditional')
 })
+
+it('provides the authorized statistics route', () => {
+  expect(router.resolve({name: 'statistics'}).href).toBe('/app/statistics')
+})

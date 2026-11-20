@@ -38,9 +38,13 @@ class InventoryService:
             rows = (await uow.execute(select(r.c.run_id, r.c.thread_id, r.c.agent_id,
                 r.c.status, r.c.phase, r.c.created_at, question.label('title'), mode.label('mode'))
                 .where(*filters).order_by(r.c.created_at.desc(), r.c.run_id.desc()).limit(limit + 1))).mappings().all()
+            summaries = await self.backend.runs.usage_summaries(
+                uow, auth.team_id, [row['run_id'] for row in rows[:limit]]
+            )
         items = [{'run_id': row['run_id'], 'thread_id': row['thread_id'], 'agent_id': row['agent_id'],
             'status': row['status'], 'phase': row['phase'], 'title': (row['title'] or '')[:200],
-            'mode': row['mode'], 'created_at': timestamp(row['created_at'])} for row in rows[:limit]]
+            'mode': row['mode'], 'created_at': timestamp(row['created_at']),
+            'usage_summary': summaries.get(row['run_id'], {})} for row in rows[:limit]]
         return {'items': items, 'next_cursor': items[-1]['run_id'] if len(rows) > limit else None}
 
     async def threads(self, auth, agent_id, *, limit, after=None):

@@ -4,6 +4,7 @@ import { Search } from '@element-plus/icons-vue'
 import { api, bearerToken } from '../session'
 import { agentName, type Agent } from '../api'
 import { listRuns, type RunItem } from '../runs-api'
+import { formatUsageCost } from '../usage'
 
 const agents = ref<Agent[]>([]), agent = ref('')
 const query = ref(''), status = ref(''), runs = ref<RunItem[]>([])
@@ -65,8 +66,8 @@ watch([agent, status], () => void load())
       <el-input v-model="query" :prefix-icon="Search" placeholder="搜索问题或任务 ID" clearable aria-label="搜索任务" @keyup.enter="load()" />
       <button type="button" :disabled="loading || !agent" @click="load()">搜索</button>
     </div>
-    <div class="table-wrap"><table><thead><tr><th>任务</th><th>Agent</th><th>类型</th><th>状态</th><th>创建时间</th></tr></thead><tbody>
-      <tr v-for="run in runs" :key="run.run_id"><td><router-link :to="`/runs/${run.run_id}`" class="run-name">{{ run.title || '未命名任务' }}</router-link><div class="run-id">{{ run.run_id }}</div></td><td>{{ agentName(run.agent_id, agents) }}</td><td>{{ run.mode ?? '—' }}</td><td>{{ labels[run.status] ?? run.status }}</td><td>{{ new Date(run.created_at).toLocaleString() }}</td></tr>
+    <div class="table-wrap"><table><thead><tr><th>任务</th><th>Agent</th><th>类型</th><th>状态</th><th>费用</th><th>创建时间</th></tr></thead><tbody>
+      <tr v-for="run in runs" :key="run.run_id"><td><router-link :to="`/runs/${run.run_id}`" class="run-name">{{ run.title || '未命名任务' }}</router-link><div class="run-id">{{ run.run_id }}</div></td><td>{{ agentName(run.agent_id, agents) }}</td><td>{{ run.mode ?? '—' }}</td><td>{{ labels[run.status] ?? run.status }}</td><td>{{ run.usage_summary ? formatUsageCost(run.usage_summary) : '—' }}</td><td>{{ new Date(run.created_at).toLocaleString() }}</td></tr>
     </tbody></table><div v-if="!loading && !runs.length && agent && !error" class="empty">暂无任务</div></div>
     <p v-if="loading" class="form-note">正在加载任务…</p>
     <button v-if="cursor" type="button" :disabled="loading" @click="load(true)">加载更多</button>

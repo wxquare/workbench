@@ -18,7 +18,7 @@ export interface SearchHit { entry_id: string; version: number; chunk: KBChunk; 
 export interface SearchScope { service: string; environment: string; region: string }
 export interface SearchPreview { matches: SearchHit[]; warnings: string[] }
 export interface KnowledgeGap {
-  gap_id: string; run_id: string; problem_type: 'kb.empty' | 'kb.unanswerable' | 'kb.invalid_citation'
+  gap_id: string; run_id: string; problem_type: 'kb.empty' | 'kb.unanswerable' | 'kb.invalid_citation' | 'low_quality'
   review_status: 'open' | 'resolved' | 'dismissed'; summary: string; gap_revision: number
   query_scope: SearchScope | null; resolved_entry_id: string | null; resolved_version: number | null
   replay_run_id: string | null; verification_status: string | null; note: string | null; created_at: number; updated_at: number

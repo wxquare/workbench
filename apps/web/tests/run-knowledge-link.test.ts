@@ -6,8 +6,10 @@ import { expect, it, vi } from 'vitest'
 import RunDetail from '../src/views/RunDetail.vue'
 import source from '../src/views/RunDetail.vue?raw'
 vi.mock('vue-router', () => ({ useRoute: () => ({ params: { id: 'replay' } }) }))
-vi.mock('../src/session', async () => { const { ref } = await import('vue'); return { bearerToken: ref('token'), api: { agents: vi.fn().mockResolvedValue([]), request: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) } } })
+vi.mock('../src/session', async () => { const { ref } = await import('vue'); return { bearerToken: ref('token'), api: { agents: vi.fn().mockResolvedValue([]), usage: vi.fn().mockResolvedValue({}), request: vi.fn().mockResolvedValue({ items: [], next_cursor: null }) } } })
 vi.mock('../src/components/RunActions.vue', () => ({ default: { render: () => null } }))
+vi.mock('../src/components/RunFeedback.vue', () => ({ default: { render: () => null } }))
+vi.mock('../src/components/RunUsage.vue', () => ({ default: { render: () => null } }))
 vi.mock('../src/composables/useRunDetail', async () => {
   const { ref } = await import('vue')
   return { useRunDetail: () => ({ run: ref({ run_id: 'replay', status: 'succeeded', created_at: 0, links: { knowledge_gap: '/v1/kb/gaps/gap-123' } }), error: ref(''), loading: ref(false), connection: ref('closed'), draft: ref(''), waiting: ref(null), refresh: vi.fn(), applyRunView: vi.fn() }) }

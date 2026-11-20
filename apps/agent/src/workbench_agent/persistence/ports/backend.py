@@ -14,9 +14,11 @@ from workbench_agent.persistence.ports.usage import UsageStore
 from workbench_agent.persistence.ports.tools import ToolStore
 from workbench_agent.persistence.ports.runner_cleanup import RunnerCleanupStore
 from workbench_agent.persistence.ports.knowledge import KnowledgeStore
+from workbench_agent.persistence.ports.statistics import StatisticsStore
 
 class StorageBackend(Protocol):
     knowledge: KnowledgeStore
+    statistics: StatisticsStore
     runner_cleanup: RunnerCleanupStore
     tools: ToolStore
     usage: UsageStore

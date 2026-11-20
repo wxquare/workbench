@@ -170,7 +170,7 @@ flowchart TB
 | FR-09 | SOP 和巡检 | 版本化工作流、变量、分支、有限并行、定时与手动触发 | 🟡 | 顺序执行与条件分支、定时调度已实现；无并行，无页面 |
 | FR-10 | 任务生命周期 | 排队、异步、SSE、取消、等待输入/确认、恢复、持久化 | 🟡 | 网页已实现实时流、取消、补充输入与 Run 级审批；待手工验收 |
 | FR-11 | 业务结果 | Duty Event、DoD 跟进、Jira、SeaTalk 通知 | 🟡 | 事件、审批、动作台账与本地模拟回执可用；真实发送器默认关闭 |
-| FR-12 | 运营与评估 | Run 详情、用量、反馈、知识缺口、基础统计 | 🟡 | 任务详情、知识缺口页面、用量/反馈接口与离线评估命令存在；统计页为占位 |
+| FR-12 | 运营与评估 | Run 详情、用量、反馈、知识缺口、基础统计 | 🟡 | 任务详情、反馈入口、知识缺口、用量费用和基础统计页已接入；真实业务基线与正式生产验收仍待完成 |
 | FR-13 | 可替换存储 | SQLite 首版，MySQL/PostgreSQL 后续 | 🟡 | SQLite 已运行并有恢复测试；MySQL/PostgreSQL 未实现 |
 
 FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套真实知识源、监控/日志源与代码仓库，当前均未完成。下面按细项拆分，使进展可见。
@@ -216,9 +216,9 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-11.2 | 动作审批与不确定结果对账 | 🟡 | api/actions、delivery/reconcile；仅本地模拟器回执 |
 | FR-11.3 | 真实 Jira / SeaTalk / DoD 交付 | ⏳ | M3 验收：真实发送器默认关闭；connectors/dod 仅骨架 |
 | FR-12.1 | 任务详情（结果、证据 ID、状态） | ✅ | web 的 RunDetail 页 |
-| FR-12.2 | 用量与费用查询 | 🟡 | api/usage；网页未展示 |
-| FR-12.3 | 用户反馈 | 🟡 | api/feedback、evaluation/feedback；网页无入口 |
-| FR-12.4 | 基础统计页 | ⏳ | web 路由 statistics 为 Placeholder |
+| FR-12.2 | 用量与费用查询 | ✅ | 详情显示逐 Run 用量，任务列表批量显示费用；未知计费与多币种分开表达 |
+| FR-12.3 | 用户反馈 | ✅ | 详情和聊天回答共用反馈组件；知识负反馈在同一事务内生成去重缺口 |
+| FR-12.4 | 基础统计页 | ✅ | stats-v1 授权聚合；按当前可见 Agent、终态分母、上海自然日趋势 |
 | FR-12.5 | 离线人工质量评估 | ✅ | cli/evaluate、evaluation/report |
 | FR-13.1 | SQLite 存储、检查点、备份恢复 | ✅ | persistence、cli/backup；M1 验收 AT-25–28 |
 | FR-13.2 | MySQL / PostgreSQL | ⏳ | 路线图 M5；源码无适配器 |
@@ -468,8 +468,8 @@ flowchart TB
 | 页面 | 状态 | 已有功能 | 缺口 | 状态依据 |
 | --- | --- | --- | --- | --- |
 | 工作台 | ✅ | 选择 Agent、选择问答方式、提交问题 | 提交成功不代表模型已完成 | views/Workbench.vue |
-| 任务记录 | ✅ | 真实任务列表，按 Agent、状态筛选，游标分页 | 无费用、产物列 | views/Runs.vue |
-| 任务详情 | 🟡 | 状态、结果、证据 ID、所属 Agent、实时流、取消和 Run 级等待处理 | 外部 Action 审批、证据详情、时间线、费用待实现 | views/RunDetail.vue |
+| 任务记录 | ✅ | 真实任务列表，按 Agent、状态筛选，游标分页，批量费用摘要 | 产物列 | views/Runs.vue |
+| 任务详情 | 🟡 | 状态、结果、证据 ID、所属 Agent、实时流、取消、等待处理、用量与反馈 | 外部 Action 审批、证据详情、时间线 | views/RunDetail.vue |
 | 会话 | ✅ | 会话列表、新建、查看消息、连续追问，冲突与不兼容提示 | 无会话重命名与归档 | views/Threads.vue |
 | Agent 管理 | ✅ | 创建、草稿编辑、保存、发布；工作流/模型/提示词/偏好/上下文/预算；添加与移除 Skill、选版本 | 仓库、工具绑定无表单 | views/Agents.vue |
 | 模型配置 | ✅ | 模型草稿、发布版本、探针 | 密钥由部署提供，页面不管理凭据值 | views/Models.vue |
@@ -477,7 +477,7 @@ flowchart TB
 | 工具连接 | ⏳ | 占位 | 全部 | views/Placeholder.vue |
 | 定时任务 | ⏳ | 占位（后端接口已有） | 计划、历史、手动触发 UI | views/Placeholder.vue |
 | 事件中心 | ⏳ | 占位（后端接口已有） | 事件结论、证据、跟进 UI | views/Placeholder.vue |
-| 数据统计 | ⏳ | 占位 | 任务、费用、反馈、知识缺口 | views/Placeholder.vue |
+| 数据统计 | ✅ | stats-v1 汇总、费用完整性、缺口与日趋势 | 更多维度和导出 | views/Statistics.vue |
 | 示例任务详情 | 演示 | 显示"示例任务，非真实数据" | 不属于真实记录 | views/DemoRunDetail.vue |
 
 页面统计：✅ 6、🟡 1、⏳ 4（另有 1 个演示页）。后端接口存在不代表页面完成。

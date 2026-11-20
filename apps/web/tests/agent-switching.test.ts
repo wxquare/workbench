@@ -13,6 +13,7 @@ import threadsSource from '../src/views/Threads.vue?raw'
 import { api, bearerToken } from '../src/session'
 import type { ModelProfile } from '../src/models-api'
 
+vi.mock('../src/components/RunFeedback.vue', () => ({ default: { render: () => null } }))
 vi.mock('../src/session', async () => {
   const { ref } = await import('vue')
   return { bearerToken: ref('token'), api: { agents: vi.fn(), request: vi.fn(), run: vi.fn(), createQa: vi.fn() } }
