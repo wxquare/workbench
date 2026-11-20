@@ -6,6 +6,7 @@ import { api, bearerToken } from '../session'
 import { AgentApi, parseAgentDraft, agentError, type AvailableModel, type Draft, type ModelRef, type AgentDetail } from '../agents-api'
 import { SkillApi, type Skill } from '../skills-api'
 import { GraphApi, type GraphSummary } from '../graphs-api'
+import { ToolApi, type ToolSummary } from '../tools-api'
 
 const items = ref<Agent[]>([])
 const selected = ref<AgentDetail | null>(null)
@@ -19,7 +20,9 @@ const skillDialog = ref<HTMLElement | null>(null)
 const skillService = new SkillApi(api)
 const graphService = new GraphApi(api)
 const graphs = ref<GraphSummary[]>([]), graphError = ref(''), graphsLoading = ref(false)
-let graphGeneration = 0
+const toolService = new ToolApi(api)
+const tools = ref<ToolSummary[]>([]), toolError = ref(''), toolsLoading = ref(false)
+let graphGeneration = 0, toolGeneration = 0
 const loading = ref(false), busy = ref(false), stale = ref(false)
 const invalidNumbers = ref<Record<string, string>>({})
 const dirty = computed(() => editor.value !== baseline.value || Object.keys(invalidNumbers.value).length > 0)
@@ -82,6 +85,26 @@ async function loadGraphs() {
   } catch (e) { if (current === graphGeneration) { graphs.value = []; graphError.value = `加载工作流失败：${agentError(e)}` } }
   finally { if (current === graphGeneration) graphsLoading.value = false }
 }
+async function loadTools(current = generation) {
+  const agent = selected.value?.agent_id
+  const request = ++toolGeneration
+  if (!agent) { toolsLoading.value = false; return }
+  toolsLoading.value = true; toolError.value = ''
+  try {
+    const result = await toolService.bindings(agent)
+    if (!Array.isArray(result.items)) throw new Error('工具列表格式无效。')
+    if (current === generation) {
+      if (request === toolGeneration && selected.value?.agent_id === agent) tools.value = result.items
+    }
+  } catch (e) {
+    if (current === generation && request === toolGeneration) {
+      tools.value = []
+      toolError.value = `加载工具失败：${agentError(e)}`
+    }
+  } finally {
+    if (current === generation && request === toolGeneration) toolsLoading.value = false
+  }
+}
 function refKey(value: unknown): string {
   if (!value || typeof value !== 'object') return ''
   const ref = value as Partial<ModelRef>
@@ -130,6 +153,7 @@ async function openAgent(id: string, force = false) {
   invalidNumbers.value = {}
   models.value = []; modelError.value = ''; modelsLoading.value = false
   skills.value = []; skillError.value = ''; skillsLoading.value = false
+  tools.value = []; toolError.value = ''; toolsLoading.value = false
   skillDialogOpen.value = false; skillSearch.value = ''; pendingSkills.value = []
   stale.value = false
   error.value = notice.value = ''
@@ -140,6 +164,7 @@ async function openAgent(id: string, force = false) {
       showDetail(detail)
       await loadModels(current)
       await loadSkills(current)
+      await loadTools(current)
     }
   } catch (e) { if (current === generation) error.value = agentError(e) }
   finally { if (current === generation) loading.value = false }
@@ -157,6 +182,9 @@ async function loadSkills(current = generation) {
 }
 
 const skillRefs = computed<ModelRef[]>(() => Array.isArray(currentDraft.value?.skills) ? currentDraft.value.skills as ModelRef[] : [])
+const toolRefs = computed<ModelRef[]>(() => Array.isArray(currentDraft.value?.tools) ? currentDraft.value.tools as ModelRef[] : [])
+const availableKnowledgeTools = computed(() => tools.value.filter(tool =>
+  tool.latest_ref && tool.read_only === true && tool.tool_name === 'knowledge_search'))
 const boundSkills = computed(() => skillRefs.value.map(ref => ({ ref, skill: skills.value.find(skill =>
   skill.versions.some(version => refKey(version) === refKey(ref))) })))
 const filteredSkills = computed(() => {
@@ -215,6 +243,22 @@ function removeUnknownSkill(ref: ModelRef) {
   if (!currentDraft.value) return
   editor.value = JSON.stringify({ ...currentDraft.value, skills: skillRefs.value.filter(item => refKey(item) !== refKey(ref)) }, null, 2)
 }
+function toolBound(tool: ToolSummary): boolean {
+  return !!tool.latest_ref && toolRefs.value.some(ref => refKey(ref) === refKey(tool.latest_ref))
+}
+function toggleTool(tool: ToolSummary, checked: boolean) {
+  if (!currentDraft.value || !tool.latest_ref) return
+  const refs = toolRefs.value.filter(ref => refKey(ref) !== refKey(tool.latest_ref))
+  if (checked) refs.push({ ...tool.latest_ref })
+  editor.value = JSON.stringify({ ...currentDraft.value, tools: refs }, null, 2)
+}
+function removeUnknownTool(ref: ModelRef) {
+  if (!currentDraft.value) return
+  editor.value = JSON.stringify({
+    ...currentDraft.value,
+    tools: toolRefs.value.filter(item => refKey(item) !== refKey(ref)),
+  }, null, 2)
+}
 
 async function loadModels(current = generation) {
   modelsLoading.value = true; modelError.value = ''
@@ -230,17 +274,19 @@ watch(bearerToken, () => {
   ++generation
   ++operation
   ++graphGeneration
+  ++toolGeneration
   graphs.value = []; graphError.value = ''; graphsLoading.value = false
   service = new AgentApi(api)
   items.value = []; selected.value = null; editor.value = baseline.value = ''; name.value = ''
   invalidNumbers.value = {}
   models.value = []; modelError.value = ''; modelsLoading.value = false
   skills.value = []; skillError.value = ''; skillsLoading.value = false
+  tools.value = []; toolError.value = ''; toolsLoading.value = false
   skillDialogOpen.value = false; skillSearch.value = ''; pendingSkills.value = []
   error.value = notice.value = ''; stale.value = false; loading.value = busy.value = false
   if (bearerToken.value) { void loadList(); void loadGraphs() }
 }, { immediate: true })
-onUnmounted(() => { ++generation; ++operation; ++graphGeneration })
+onUnmounted(() => { ++generation; ++operation; ++graphGeneration; ++toolGeneration })
 
 async function createAgent() {
   const trimmed = name.value.trim()
@@ -429,6 +475,22 @@ async function publish() {
             <div v-if="modelError" class="form-actions"><button type="button" :disabled="busy || modelsLoading" @click="loadModels()">重试加载模型</button></div>
             <p class="form-note">从团队已发布模型中选择。模型参数在 <a href="/app/models" @click="confirmNavigation">模型配置</a> 中维护。</p>
             <div class="settings-group">
+              <div class="skill-heading"><h2>工具配置 <span class="skill-count">{{ toolRefs.length }}</span></h2><a href="/app/tools" @click="confirmNavigation">管理工具</a></div>
+              <p class="form-note">只可绑定已发布、只读的 knowledge_search。固定版本会随 Agent 草稿保存；发布 Agent 后生效。</p>
+              <p v-if="toolsLoading" class="form-note">加载已发布工具中…</p>
+              <p v-else-if="toolError" class="form-error" role="alert">{{ toolError }}</p>
+              <p v-else-if="!availableKnowledgeTools.length" class="form-note skill-empty">没有可用的已发布 knowledge_search。</p>
+              <label v-for="tool in availableKnowledgeTools" :key="tool.alias" class="skill-option">
+                <input type="checkbox" :checked="toolBound(tool)" :disabled="busy" @change="toggleTool(tool, eventChecked($event))" />
+                <span class="option-details"><strong>{{ tool.alias }}</strong><small>knowledge_search · 只读 · 固定版本 {{ tool.latest_ref?.version }}</small></span>
+                <span class="option-state">{{ toolBound(tool) ? '已绑定' : '未绑定' }}</span>
+              </label>
+              <div v-for="ref in toolRefs.filter(ref => !tools.some(tool => tool.latest_ref && refKey(tool.latest_ref) === refKey(ref)))" :key="refKey(ref)" class="skill-binding">
+                <div class="binding-info"><strong>无法解析的工具版本</strong><small>{{ ref.resource_id }} · 版本 {{ ref.version }}</small></div>
+                <button type="button" class="icon-button" :disabled="busy" :aria-label="`移除工具 ${ref.resource_id}`" @click="removeUnknownTool(ref)"><Delete class="skill-icon" /></button>
+              </div>
+            </div>
+            <div class="settings-group">
               <div class="skill-heading"><h2>技能配置 <span class="skill-count">{{ skillRefs.length }}</span></h2><div class="skill-actions"><a href="/app/skills" @click="confirmNavigation">管理 Skills</a><button ref="skillAddButton" type="button" class="primary-button add-skill" :disabled="busy || !currentDraft" @click="openSkillDialog"><Plus class="skill-icon" />添加 Skill</button></div></div>
               <p class="form-note">保存并发布 Agent 后，新任务使用所选技能版本。</p>
               <p v-if="skillsLoading" class="form-note">加载技能中…</p>
@@ -464,13 +526,13 @@ async function publish() {
             </div>
             <div class="settings-group">
               <h2>上下文管理</h2>
-              <div class="settings-grid"><label>对话历史轮数<input type="number" min="0" max="8" step="1" :value="numberValue('conversation_history_turns')" :disabled="busy || !currentDraft || workflow !== 'conversation.multi_turn'" @input="updateNumber('conversation_history_turns', eventValue($event))" /></label></div>
-              <p class="form-note">模型最多参考最近的历史对话轮数；每轮包含一个问题和回答。设为 0 时不参考历史，不会删除会话记录。仅适用于多轮对话。</p>
+              <div class="settings-grid"><label>对话历史轮数<input type="number" min="0" max="8" step="1" :value="numberValue('conversation_history_turns')" :disabled="busy || !currentDraft || !['conversation.multi_turn', 'conversation.tool_use'].includes(workflow)" @input="updateNumber('conversation_history_turns', eventValue($event))" /></label></div>
+              <p class="form-note">模型最多参考最近的历史对话轮数；每轮包含一个问题和回答。设为 0 时不参考历史，不会删除会话记录。仅适用于多轮对话和工具对话。</p>
             </div>
             <div class="settings-group">
               <h2>预算上限</h2>
               <div class="settings-grid"><label v-for="limit in budgetFields" :key="limit.key">{{ limit.label }}<input type="number" min="1" step="1" :value="numberValue(limit.key, true)" :disabled="busy || !currentDraft" @input="updateNumber(limit.key, eventValue($event), true)" /></label></div>
-              <p class="form-note">留空表示未设置上限。工具调用上限不启用工具。</p>
+              <p class="form-note">留空表示未设置上限。实际工具调用还受已发布工具绑定和工作流约束。</p>
             </div>
             <label>配置草稿 JSON<textarea v-model="editor" rows="18" spellcheck="false" :disabled="busy" @input="invalidNumbers = {}" /></label>
             <p class="form-note">省略的已有字段会保留；使用空数组或可空字段的 null 明确清除。发布前请先保存草稿。</p>

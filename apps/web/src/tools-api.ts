@@ -23,6 +23,8 @@ export interface ToolBinding {
 export interface ToolSummary {
   alias: string
   draft_revision: number | null
+  tool_name: string | null
+  read_only: boolean | null
   latest_ref: ModelRef | null
 }
 interface Client {

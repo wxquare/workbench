@@ -16,9 +16,11 @@ const catalog = [
   ['sop.conditional', 'SOP 巡检'], ['knowledge.scoped_excerpt', '知识摘录'],
   ['rca.synthetic', '合成告警诊断'], ['rca.proposal', '合成告警诊断（提案）'],
   ['rca.batch_proposal', '合成告警诊断（批量提案）'], ['knowledge.citation_review', '知识问答（引用审查）'],
-].map(([graph_id, title]) => ({ graph_id, title, summary: title + '摘要', status: graph_id.startsWith('conversation.') ? 'recommended' : 'experimental',
+  ['conversation.tool_use', '工具对话'],
+].map(([graph_id, title]) => ({ graph_id, title, summary: title + '摘要', status: graph_id === 'conversation.tool_use' ? 'experimental' : graph_id.startsWith('conversation.') ? 'recommended' : 'experimental',
   agents_using: 0, capabilities: { modes: [], entrypoints: graph_id.startsWith('rca.') ? ['synthetic_alert'] : ['manual'],
-    uses_tools: false, uses_history: false, needs_knowledge_tool: graph_id.startsWith('knowledge.'),
+    uses_tools: graph_id === 'conversation.tool_use', uses_history: graph_id === 'conversation.tool_use',
+    needs_knowledge_tool: graph_id.startsWith('knowledge.') || graph_id === 'conversation.tool_use',
     needs_workflow: graph_id.startsWith('sop.'), may_interrupt: false, verified_answers: false } }))
 
 vi.mock('../src/session', async () => {
@@ -78,6 +80,53 @@ beforeEach(() => {
 })
 
 describe('Agent management', () => {
+  it('binds the published knowledge tool version without publishing the Agent', async () => {
+    bearerToken.value = 'token'
+    const toolRef = {
+      resource_id: 'knowledge-tool',
+      version: '1',
+      content_hash: 'e'.repeat(64),
+    }
+    vi.mocked(api.agents).mockResolvedValue([{ agent_id: 'ws', name: 'Operations' }])
+    vi.mocked(api.request).mockImplementation(async (path, init) => {
+      if (path.startsWith('/v1/skills?')) return { items: [], next_cursor: null } as never
+      if (path.includes('/model-profiles')) return { items: [], next_cursor: null } as never
+      if (path.startsWith('/v1/agents/ws/tool-bindings?')) return {
+        items: [{
+          alias: 'knowledge.search',
+          draft_revision: null,
+          tool_name: 'knowledge_search',
+          read_only: true,
+          latest_ref: toolRef,
+        }],
+        next_cursor: null,
+      } as never
+      if (init?.method === 'PATCH') return {
+        agent_id: 'ws',
+        revision: 4,
+        draft: JSON.parse(init.body as string),
+      } as never
+      return { ...detail, draft: { ...draft, graph_id: 'conversation.tool_use' } } as never
+    })
+    vi.stubGlobal('crypto', { randomUUID: () => 'test-key' })
+    const root = node('root'), app = renderer.createApp(clientComponent())
+    app.provide(ssrContextKey, { modules: new Set() }); app.mount(root)
+    await flush(); find(root, 'button', 'Operations').props.onClick(); await flush()
+
+    expect(contents(root)).toContain('knowledge.search')
+    expect(contents(root)).toContain('固定版本 1')
+    field(root, 'knowledge.search', 'input').props.onChange({
+      target: { checked: true },
+    }); await flush()
+    expect(field(root, '对话历史轮数', 'input').props.disabled).toBe(false)
+    find(root, 'button', '保存草稿').props.onClick(); await flush()
+
+    const patch = vi.mocked(api.request).mock.calls.find(([, init]) => init?.method === 'PATCH')!
+    expect(JSON.parse(patch[1]!.body as string).tools).toEqual([toolRef])
+    expect(vi.mocked(api.request).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+    app.unmount()
+  })
+
   it('keeps skill order when changing a version', async () => {
     bearerToken.value = 'token'
     const old = { resource_id: 'old', version: '1', content_hash: 'b'.repeat(64) }

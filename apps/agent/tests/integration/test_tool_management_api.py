@@ -80,12 +80,43 @@ async def test_http_binding_management_rejects_write_binding(platform, client):
 
 
 @pytest.mark.asyncio
+async def test_binding_list_exposes_only_publish_projections_needed_by_agent_editor(
+    platform, client
+):
+    from workbench_agent.domain.tools import ToolBinding
+    from workbench_agent.tools.registry import ToolRegistry
+
+    binding = ToolBinding(
+        alias='knowledge.search',
+        provider='mcp',
+        tool_name='knowledge_search',
+        server='local',
+        credential_scope='reader',
+        permission='knowledge.read',
+        input_schema={'type': 'object'},
+    )
+    await ToolRegistry(platform.backend).publish(
+        platform.auth, platform.agent_id, binding, key='binding-list'
+    )
+    response = await client.get(
+        f'/v1/agents/{platform.agent_id}/tool-bindings?limit=100'
+    )
+
+    assert response.status_code == 200
+    item = response.json()['items'][0]
+    assert item['alias'] == 'knowledge.search'
+    assert item['tool_name'] == 'knowledge_search'
+    assert item['read_only'] is True
+    assert item['latest_ref']['version'] == '1'
+
+
+@pytest.mark.asyncio
 async def test_tool_discovery_worker_filters_unlisted_tools(platform):
     from workbench_agent.domain.admin_jobs import AdminAuth
     from workbench_agent.jobs.admin import AdminJobService
     from workbench_agent.jobs.worker import ExecutorRegistry, Worker
-    from workbench_agent.tools.mcp import ToolCatalog
     from workbench_agent.tools.management import ToolDiscovery
+    from workbench_agent.tools.mcp import ToolCatalog
 
     job = await AdminJobService(platform.backend).submit(
         AdminAuth(platform.auth.team_id, platform.agent_id, platform.auth.subject, True),

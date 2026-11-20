@@ -126,6 +126,20 @@ class ToolManagement:
                     {
                         'alias': alias,
                         'draft_revision': draft['revision'] if draft else None,
+                        'tool_name': (
+                            json.loads(matching[0]['schema']).get('tool_name')
+                            if matching else (
+                                json.loads(draft['payload']).get('tool_name')
+                                if draft else None
+                            )
+                        ),
+                        'read_only': (
+                            json.loads(matching[0]['schema']).get('read_only')
+                            if matching else (
+                                json.loads(draft['payload']).get('read_only')
+                                if draft else None
+                            )
+                        ),
                         'latest_ref': (
                             {
                                 'resource_id': matching[0]['binding_id'],
@@ -211,6 +225,7 @@ class ToolDiscovery:
 
     async def execute(self, claim: ClaimedAdminJob):
         import asyncio
+
         from workbench_agent.domain.identity import AuthContext
         payload = json.loads(claim.payload)
         matches = [
