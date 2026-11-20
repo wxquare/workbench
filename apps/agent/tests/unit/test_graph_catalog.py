@@ -7,7 +7,7 @@ def test_catalog_covers_each_installed_graph_with_meaningful_metadata():
     assert {item.graph_id for item in specs} == {
         'sop.conditional', 'rca.synthetic', 'rca.proposal', 'rca.batch_proposal',
         'knowledge.scoped_excerpt', 'conversation.single_turn', 'conversation.multi_turn',
-        'knowledge.citation_review'}
+        'knowledge.citation_review', 'conversation.tool_use'}
     for spec in specs:
         assert spec.title and spec.one_liner and spec.when_to_use and spec.when_not_to_use and spec.steps_text
         assert spec.status in ('recommended', 'experimental')

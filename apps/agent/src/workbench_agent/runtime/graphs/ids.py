@@ -10,6 +10,7 @@ class GraphId(StrEnum):
     KNOWLEDGE_SCOPED_EXCERPT = 'knowledge.scoped_excerpt'
     CONVERSATION_SINGLE_TURN = 'conversation.single_turn'
     CONVERSATION_MULTI_TURN = 'conversation.multi_turn'
+    CONVERSATION_TOOL_USE = 'conversation.tool_use'
     KNOWLEDGE_CITATION_REVIEW = 'knowledge.citation_review'
 
 

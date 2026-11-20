@@ -6,7 +6,7 @@ from workbench_agent.runtime.graphs.registry import foundation_worker_registry
 
 async def test_only_retained_graphs_are_installed(platform):
     registry = foundation_worker_registry(platform.backend)
-    assert set(registry.capabilities().graph_ids) == {'sop.conditional', 'rca.synthetic', 'rca.proposal', 'rca.batch_proposal', 'knowledge.scoped_excerpt', 'conversation.single_turn', 'conversation.multi_turn', 'knowledge.citation_review'}
+    assert set(registry.capabilities().graph_ids) == {'sop.conditional', 'rca.synthetic', 'rca.proposal', 'rca.batch_proposal', 'knowledge.scoped_excerpt', 'conversation.single_turn', 'conversation.multi_turn', 'knowledge.citation_review', 'conversation.tool_use'}
     graphs = next(iter(registry._executors.values())).registry
     for number in range(1, 12):
         with pytest.raises(ValueError):

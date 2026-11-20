@@ -47,6 +47,39 @@ async def test_all_catalog_graphs_can_be_saved_and_published(platform, client, g
     assert published.json()['graph_id'] == graph_id
 
 
+async def test_tool_graph_requires_its_explicit_knowledge_binding(platform, client):
+    from workbench_agent.domain.tools import ToolBinding
+    from workbench_agent.tools.registry import ToolRegistry
+    url = '/v1/agents/' + platform.agent_id
+    original = (await client.get(url)).json()
+    binding = ToolBinding(
+        alias='knowledge.search',
+        provider='mcp',
+        tool_name='knowledge_search',
+        server='local',
+        credential_scope='read',
+        permission='knowledge.read',
+        input_schema={'type': 'object'},
+    )
+    ref = await ToolRegistry(platform.backend).publish(
+        platform.auth, platform.agent_id, binding, key='graph-tool'
+    )
+    saved = await client.patch(
+        url,
+        json={
+            **original['draft'],
+            'graph_id': 'conversation.tool_use',
+            'allowed_modes': ['qa'],
+            'tools': [ref.model_dump(mode='json')],
+        },
+        headers={
+            'If-Match': str(original['revision']),
+            'Idempotency-Key': str(uuid4()),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+
+
 @pytest.mark.parametrize('graph_id', ['rca.synthetic', 'rca.proposal', 'rca.batch_proposal'])
 async def test_rca_graphs_reject_ordinary_manual_runs(platform, client, graph_id):
     from integration.test_graph_catalog_api import publish_graph

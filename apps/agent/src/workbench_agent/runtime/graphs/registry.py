@@ -49,7 +49,16 @@ class FoundationExecutor:
                 if any(task.interrupts for task in snapshot.tasks): return saved.config
                 initial=None
             # Persist authority before any tool dispatch for these graphs.
-            if version in (GraphId.SOP_CONDITIONAL, GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL, GraphId.CONVERSATION_SINGLE_TURN, GraphId.CONVERSATION_MULTI_TURN, GraphId.KNOWLEDGE_CITATION_REVIEW):
+            if version in (
+                GraphId.SOP_CONDITIONAL,
+                GraphId.RCA_SYNTHETIC,
+                GraphId.RCA_PROPOSAL,
+                GraphId.RCA_BATCH_PROPOSAL,
+                GraphId.CONVERSATION_SINGLE_TURN,
+                GraphId.CONVERSATION_MULTI_TURN,
+                GraphId.KNOWLEDGE_CITATION_REVIEW,
+                GraphId.CONVERSATION_TOOL_USE,
+            ):
                 await graph.ainvoke(initial,config,context=execution,durability='sync')
             else:
                 await graph.ainvoke(initial,config,context=execution)
@@ -93,6 +102,8 @@ def foundation_worker_registry(backend, *, supported_graph_ids=None):
     graphs.register(GraphId.CONVERSATION_MULTI_TURN, CONVERSATION_QA_STATE_VERSION, build_conversation_qa(saver))
     from workbench_agent.runtime.graphs.knowledge_qa import build_knowledge_qa, STATE_SCHEMA_VERSION as KNOWLEDGE_QA_STATE_VERSION
     graphs.register(GraphId.KNOWLEDGE_CITATION_REVIEW, KNOWLEDGE_QA_STATE_VERSION, build_knowledge_qa(saver))
+    from workbench_agent.runtime.graphs.tool_conversation import build_tool_conversation, STATE_SCHEMA_VERSION as TOOL_USE_STATE_VERSION
+    graphs.register(GraphId.CONVERSATION_TOOL_USE, TOOL_USE_STATE_VERSION, build_tool_conversation(saver))
     from workbench_agent.runtime.graphs.rca_synthetic import build_rca as build_synthetic
     graphs.register(GraphId.RCA_SYNTHETIC, 'dod-state-v13', build_synthetic(saver))
     from workbench_agent.runtime.graphs.rca_proposal import build_rca as build_proposal
@@ -107,6 +118,7 @@ def foundation_worker_registry(backend, *, supported_graph_ids=None):
     registry.register(GraphId.CONVERSATION_SINGLE_TURN,FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register(GraphId.CONVERSATION_MULTI_TURN,FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register(GraphId.KNOWLEDGE_CITATION_REVIEW,FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
+    registry.register(GraphId.CONVERSATION_TOOL_USE,FoundationExecutor(graphs,saver,provider),ResultProjector(backend,FoundationProgressProjector(backend,saver)))
     registry.register(GraphId.RCA_SYNTHETIC,InterruptExecutor(graphs,saver,provider),ResultProjector(backend,InterruptProgressProjector(backend,saver)))
     registry.register(GraphId.RCA_PROPOSAL,InterruptExecutor(graphs,saver,provider),ResultProjector(backend,InterruptProgressProjector(backend,saver)))
     registry.register(GraphId.RCA_BATCH_PROPOSAL,InterruptExecutor(graphs,saver,provider),ResultProjector(backend,InterruptProgressProjector(backend,saver)))

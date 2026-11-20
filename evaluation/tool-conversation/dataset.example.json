@@ -1,0 +1,22 @@
+{
+  "schema_version": "tool-conversation-eval-v1",
+  "dataset_kind": "business",
+  "cases": [
+    {
+      "id": "retrieval-required",
+      "question": "Replace with a real question that requires knowledge_search.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "expected_call_sequence": ["knowledge_search"],
+      "allowed_bindings": ["knowledge.search"],
+      "expected_outcome": "answer_based_on_tool_results",
+      "review_status": "pending",
+      "reviewer": null
+    }
+  ]
+}

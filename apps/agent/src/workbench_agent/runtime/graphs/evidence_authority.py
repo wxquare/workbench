@@ -59,7 +59,11 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
                 if context.graph_id in (GraphId.SOP_CONDITIONAL, GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL): expert = 'diagnosis'
-                elif context.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW): expert = 'knowledge'
+                elif context.graph_id in (
+                    GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+                    GraphId.KNOWLEDGE_CITATION_REVIEW,
+                    GraphId.CONVERSATION_TOOL_USE,
+                ): expert = 'knowledge'
                 else: continue
                 authority = (expert, binding.permission)
             else:
@@ -131,7 +135,14 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
 
 async def sanitize_v8_outcome(backend, uow, claim, outcome):
     """Discard inaccessible evidence and text atomically before projection."""
-    if claim.context.graph_id not in (GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL, GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW):
+    if claim.context.graph_id not in (
+        GraphId.RCA_SYNTHETIC,
+        GraphId.RCA_PROPOSAL,
+        GraphId.RCA_BATCH_PROPOSAL,
+        GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+        GraphId.KNOWLEDGE_CITATION_REVIEW,
+        GraphId.CONVERSATION_TOOL_USE,
+    ):
         return outcome
     if not outcome.evidence_refs and not (claim.context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW and outcome.completed):
         return outcome

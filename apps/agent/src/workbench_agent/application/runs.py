@@ -128,10 +128,32 @@ class RunService:
                 if request.expected_revision is not None and (thread is None or thread['revision'] != request.expected_revision):
                     raise DomainError('REVISION_CONFLICT', 409)
                 profile = await self.profiles.published(uow, auth, agent_id)
-                if request.business_context.get('conversation') is True and profile.graph_id != GraphId.CONVERSATION_MULTI_TURN:
+                if (
+                    request.business_context.get('conversation') is True
+                    and profile.graph_id not in (
+                        GraphId.CONVERSATION_MULTI_TURN,
+                        GraphId.CONVERSATION_TOOL_USE,
+                    )
+                ):
                     raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
-                if profile.graph_id == GraphId.CONVERSATION_MULTI_TURN and (request.mode != 'qa' or 'query_scope' in request.business_context):
+                if profile.graph_id in (
+                    GraphId.CONVERSATION_MULTI_TURN,
+                    GraphId.CONVERSATION_TOOL_USE,
+                ) and request.mode != 'qa':
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+                if (
+                    profile.graph_id == GraphId.CONVERSATION_MULTI_TURN
+                    and 'query_scope' in request.business_context
+                ):
+                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+                if profile.graph_id == GraphId.CONVERSATION_TOOL_USE:
+                    from workbench_agent.domain.query_scope import validate_qa_scope
+                    try:
+                        validate_qa_scope(request.business_context.get('query_scope'))
+                    except ValueError:
+                        raise DomainError('INVALID_SCOPE', 422) from None
+                    if request.business_context.get('conversation') is not True:
+                        raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
                 if request.business_context.get('conversation') is True and thread is not None:
                     from sqlalchemy import case, func, select
                     from workbench_agent.persistence import schema
@@ -145,7 +167,11 @@ class RunService:
                     incompatible = (await uow.execute(select(schema.runs.c.run_id).where(
                         schema.runs.c.team_id == auth.team_id, schema.runs.c.agent_id == agent_id,
                         schema.runs.c.thread_id == thread['thread_id'], schema.runs.c.status == 'succeeded',
-                        func.coalesce(graph, '').not_in((GraphId.CONVERSATION_SINGLE_TURN, GraphId.CONVERSATION_MULTI_TURN))).limit(1))).first()
+                        func.coalesce(graph, '').not_in((
+                            GraphId.CONVERSATION_SINGLE_TURN,
+                            GraphId.CONVERSATION_MULTI_TURN,
+                            GraphId.CONVERSATION_TOOL_USE,
+                        ))).limit(1))).first()
                     if incompatible:
                         raise DomainError('CONVERSATION_HISTORY_INCOMPATIBLE', 409)
                 if profile.graph_id in (GraphId.RCA_SYNTHETIC,GraphId.RCA_PROPOSAL,GraphId.RCA_BATCH_PROPOSAL) and not (_ingress_capability is _SYNTHETIC_ALERT_V2 and _uow is not None and auth.identity_kind == 'connector' and source_connector and request.mode == 'rca'):
@@ -153,7 +179,11 @@ class RunService:
                 query_scope = None
                 if profile.graph_id == GraphId.CONVERSATION_SINGLE_TURN and (request.mode != 'qa' or 'query_scope' in request.business_context):
                     raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if profile.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW):
+                if profile.graph_id in (
+                    GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+                    GraphId.KNOWLEDGE_CITATION_REVIEW,
+                    GraphId.CONVERSATION_TOOL_USE,
+                ):
                     if request.mode != 'qa':
                         raise DomainError('WORKFLOW_UNAVAILABLE', 409)
                     query_scope = request.business_context.get('query_scope')

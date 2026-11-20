@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onUnmounted, reactive, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowUp, MagicStick, Reading, Refresh } from '@element-plus/icons-vue'
+import { ArrowUp, Connection, MagicStick, Reading, Refresh } from '@element-plus/icons-vue'
 import { api, bearerToken } from '../session'
 import { createQaSubmission, isRunActive, missingQaFields, validQaWindow, type QaRequest, type Agent } from '../api'
 import { listMessages, listThreads, submitConversation, type ThreadItem, type ThreadMessage } from '../threads-api'
@@ -11,7 +11,7 @@ import RunFeedback from '../components/RunFeedback.vue'
 
 const router = useRouter(), sidebar = inject(chatSidebarKey, reactive(emptyChatSidebar()))
 const agents = ref<Agent[]>([]), agent = ref(''), question = ref('')
-const mode = ref<'conversation' | 'single' | 'knowledge'>('conversation')
+const mode = ref<'conversation' | 'single' | 'knowledge' | 'tool'>('conversation')
 const service = ref(''), region = ref(''), environment = ref('test'), start = ref(''), end = ref('')
 const threads = ref<ThreadItem[]>([]), selected = ref<string | null>(null), messages = ref<ThreadMessage[]>([]), cursor = ref<string | null>(null)
 const loadingAgents = ref(false), loadingThreads = ref(false), submitting = ref(false), running = ref(false), error = ref('')
@@ -105,18 +105,23 @@ async function submit() {
   if (submitting.value || running.value || loadingAgents.value || !bearerToken.value) return
   error.value = ''
   const missing = missingQaFields({ agent: agent.value, question: question.value, service: service.value,
-    region: region.value, start: start.value, end: end.value }, mode.value === 'knowledge' ? 'knowledge' : 'llm')
+    region: region.value, start: start.value, end: end.value }, mode.value === 'conversation' || mode.value === 'single' ? 'llm' : 'knowledge')
   if (missing.length) { error.value = `请填写：${missing.join('、')}。`; return }
   const text = question.value.trim(), current = threadGeneration
   if (mode.value !== 'conversation') {
     const request: QaRequest = { agent_id: agent.value, text }
-    if (mode.value === 'knowledge') {
+    if (mode.value === 'knowledge' || mode.value === 'tool') {
       const from = new Date(start.value), to = new Date(end.value)
       if (!validQaWindow(from, to)) { error.value = '结束时间必须晚于开始时间，且查询范围不能超过一小时。'; return }
       request.scope = { service: service.value.trim(), environment: environment.value, region: region.value.trim(), start_at: from.toISOString(), end_at: to.toISOString() }
     }
     submitting.value = true
-    try { const accepted = await submitQa(request); if (current === threadGeneration) await router.push({ name: 'run-detail', params: { id: accepted.run_id } }) }
+    try {
+      const accepted = mode.value === 'tool'
+        ? await submitConversation(api, agent.value, null, text, key || (key = crypto.randomUUID()))
+        : await submitQa(request)
+      if (current === threadGeneration) await router.push({ name: 'run-detail', params: { id: accepted.run_id } })
+    }
     catch (e) { if (current === threadGeneration) showError(e) }
     finally { if (current === threadGeneration) submitting.value = false }
     return
@@ -163,13 +168,13 @@ onUnmounted(() => { agentGeneration++; listGeneration++; threadGeneration++; mes
       <p v-if="!bearerToken" class="chat-notice">请先在身份凭据中提供 Bearer Token。</p>
       <p v-if="bearerToken && !loadingAgents && !agents.length && !error" class="chat-notice">没有可访问的 Agent，请先在 Agent 管理中配置。</p>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-      <fieldset v-if="mode === 'knowledge'" class="chat-scope"><legend>知识查询范围</legend><div class="chat-scope-grid">
+      <fieldset v-if="mode === 'knowledge' || mode === 'tool'" class="chat-scope"><legend>{{ mode === 'tool' ? '工具对话查询范围' : '知识查询范围' }}</legend><div class="chat-scope-grid">
         <label>服务<input v-model="service" placeholder="服务名称" /></label><label>环境<select v-model="environment"><option value="test">test</option><option value="uat">uat</option><option value="live">live</option></select></label><label>区域<input v-model="region" placeholder="区域" /></label>
         <label>开始时间<input v-model="start" type="datetime-local" /></label><label>结束时间<input v-model="end" type="datetime-local" /></label>
       </div><p>时间按设备本地时区输入，最长一小时；查询范围必须符合授权配置。</p></fieldset>
       <form class="chat-composer" novalidate @submit.prevent="submit">
         <label class="sr-only" for="chat-question">问题</label><textarea id="chat-question" v-model="question" rows="3" :disabled="submitting || running" placeholder="向 Agent 提问，或描述你想完成的任务…" @keydown="onKeydown"></textarea>
-        <div class="composer-toolbar"><div class="mode-switch" aria-label="问答方式"><button type="button" :aria-pressed="mode === 'conversation'" :disabled="submitting || running" @click="mode = 'conversation'">多轮对话</button><button type="button" :aria-pressed="mode === 'single'" :disabled="submitting || running" @click="mode = 'single'">单次问答</button><button type="button" :aria-pressed="mode === 'knowledge'" :disabled="submitting || running" @click="mode = 'knowledge'"><Reading /> 知识问答</button></div>
+        <div class="composer-toolbar"><div class="mode-switch" aria-label="问答方式"><button type="button" :aria-pressed="mode === 'conversation'" :disabled="submitting || running" @click="mode = 'conversation'">多轮对话</button><button type="button" :aria-pressed="mode === 'single'" :disabled="submitting || running" @click="mode = 'single'">单次问答</button><button type="button" :aria-pressed="mode === 'knowledge'" :disabled="submitting || running" @click="mode = 'knowledge'"><Reading /> 知识问答</button><button type="button" :aria-pressed="mode === 'tool'" :disabled="submitting || running" @click="mode = 'tool'"><Connection /> 工具对话</button></div>
           <label class="agent-picker"><span class="sr-only">选择 Agent</span><select v-model="agent" :disabled="loadingAgents || submitting || !bearerToken"><option value="">{{ loadingAgents ? '加载中…' : '请选择 Agent' }}</option><option v-for="item in agents" :key="item.agent_id" :value="item.agent_id">{{ item.name }}</option></select></label>
           <button class="chat-refresh" type="button" aria-label="刷新 Agent" title="刷新 Agent" :disabled="submitting || loadingAgents || !bearerToken" @click="loadAgents"><Refresh /></button>
           <button class="chat-send" type="submit" aria-label="发送问题" :disabled="!bearerToken || submitting || running || loadingAgents || !question.trim()"><ArrowUp /></button>
@@ -180,7 +185,7 @@ onUnmounted(() => { agentGeneration++; listGeneration++; threadGeneration++; mes
         <button type="button" :disabled="submitting || running" @click="question = '帮我梳理问题的排查思路。'">梳理问题排查思路</button>
         <button type="button" :disabled="submitting || running" @click="question = '帮我写一段清晰的回复。'">写一段清晰的回复</button>
       </div>
-      <p class="chat-footnote">{{ mode === 'conversation' ? '多轮对话需要 Agent 绑定对话（多轮）工作流。' : mode === 'single' ? '单次问答不使用会话历史，结果在任务详情中显示。' : '知识问答需要知识问答工作流，将新建任务并在任务详情中显示结果。' }} Enter 发送 · Shift + Enter 换行</p>
+      <p class="chat-footnote">{{ mode === 'conversation' ? '多轮对话需要 Agent 绑定对话（多轮）工作流。' : mode === 'single' ? '单次问答不使用会话历史，结果在任务详情中显示。' : mode === 'tool' ? '实验工具对话：首批仅 knowledge_search，回答未经独立校验。' : '知识问答需要知识问答工作流，将新建任务并在任务详情中显示结果。' }} Enter 发送 · Shift + Enter 换行</p>
     </div>
   </section>
 </template>

@@ -171,7 +171,11 @@ class Worker:
         if self._active_tool_claims.get(id(claim)) is not claim or claim.guard.worker_id!=self.worker_id:
             raise PermissionError('Worker does not own active claim')
         execution=Execution(self.backend,claim,self.connector_policy,self.tool_permissions)
-        if claim.context.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW):
+        if claim.context.graph_id in (
+            GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+            GraphId.KNOWLEDGE_CITATION_REVIEW,
+            GraphId.CONVERSATION_TOOL_USE,
+        ):
             execution._expert_name = 'coordinator'
         execution._tool_owner=self
         self._tool_executions[id(execution)]=(execution,execution.tool_permissions,execution._expert_name,execution.claim)
@@ -185,8 +189,17 @@ class Worker:
     def expert_execution(self, parent, name):
         """Issue narrowly scoped child authority only for a live pinned coordinator Run."""
         if (not self._owns_tool_execution(parent) or parent._expert_name != 'coordinator'
-                or parent.claim.context.graph_id not in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW) or name not in {'knowledge', 'code'}
-                or parent.claim.context.graph_id in (GraphId.KNOWLEDGE_SCOPED_EXCERPT, GraphId.KNOWLEDGE_CITATION_REVIEW) and name != 'knowledge'):
+                or parent.claim.context.graph_id not in (
+                    GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+                    GraphId.KNOWLEDGE_CITATION_REVIEW,
+                    GraphId.CONVERSATION_TOOL_USE,
+                )
+                or name not in {'knowledge', 'code'}
+                or parent.claim.context.graph_id in (
+                    GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+                    GraphId.KNOWLEDGE_CITATION_REVIEW,
+                    GraphId.CONVERSATION_TOOL_USE,
+                ) and name != 'knowledge'):
             raise PermissionError('trusted coordinator required')
         child = Execution(self.backend, parent.claim, self.connector_policy, self.tool_permissions,
                           cancelled=parent.cancelled)

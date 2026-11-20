@@ -55,7 +55,7 @@ class ProfileService:
         return int(ref.version)
 
     async def validate_refs(self, uow, auth, agent_id, draft):
-        from workbench_agent.runtime.graphs.ids import ALL_GRAPH_IDS
+        from workbench_agent.runtime.graphs.ids import ALL_GRAPH_IDS, GraphId
         if draft.graph_id not in ALL_GRAPH_IDS:
             raise DomainError('GRAPH_UNAVAILABLE', 422)
         for ref in (draft.default_model, *(binding.ref for binding in draft.role_models)):
@@ -95,6 +95,23 @@ class ProfileService:
                 version = str(row['commit_sha'] if resource == 'repo_snapshots' else row['version'])
                 if version != ref.version:
                     raise not_found()
+        if draft.graph_id == GraphId.CONVERSATION_TOOL_USE:
+            if not draft.tools or len(draft.tools) > 4:
+                raise DomainError('TOOL_BINDINGS_INVALID', 422)
+            aliases = set()
+            for ref in draft.tools:
+                row = await self.store.one(
+                    uow, 'tool_bindings', team_id=auth.team_id,
+                    binding_id=ref.resource_id,
+                )
+                data = json.loads(row['schema'])
+                if (
+                    row['alias'] in aliases
+                    or data.get('read_only') is not True
+                    or data.get('tool_name') != 'knowledge_search'
+                ):
+                    raise DomainError('TOOL_BINDINGS_INVALID', 422)
+                aliases.add(row['alias'])
 
     async def _advance(self, uow, agent, **values):
         revision = agent['revision'] + 1

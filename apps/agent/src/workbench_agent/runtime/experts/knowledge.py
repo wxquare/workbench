@@ -104,41 +104,23 @@ def _schema_model(name, schema):
 
     PolicyToolExecutor always applies the authoritative published schema again.
     """
-    if schema.get('type') != 'object' or schema.get('additionalProperties', True) is not False:
-        raise ValueError('tool schema must be a closed object')
+    from workbench_agent.tools.model_schema import validate_model_schema
+    validate_model_schema(schema)
     props, required = schema.get('properties', {}), set(schema.get('required', ()))
     fields = {}
     kinds = {'string': str, 'integer': int, 'number': float, 'boolean': bool}
     for key, spec in props.items():
-        if not isinstance(key, str) or not key.isidentifier() or key == 'tool_call_id' or spec.get('type') not in kinds:
+        if not isinstance(key, str) or spec.get('type') not in kinds:
             raise ValueError('unsupported expert tool schema')
         cls = kinds[spec['type']]
         fields[key] = (cls, ...) if key in required else (cls | None, None)
-    if not required <= set(fields):
-        raise ValueError('invalid required schema')
     fields['tool_call_id'] = (Annotated[str, InjectedToolCallId], ...)
     return create_model(name, **fields)
 
 
 def model_tool_schema(tool_name, published_schema):
-    from workbench_agent.tools.mcp import BUSINESS_TOOLS
-    if tool_name == 'SRE-Log-Query':
-        return {'type': 'object', 'properties': {'query': {'type': 'string'}, 'limit': {'type': 'integer'}},
-                'required': ['query'], 'additionalProperties': False}
-    if tool_name == 'Common-DoD-GetInfo':
-        return {'type': 'object', 'properties': {}, 'required': [], 'additionalProperties': False}
-    local_schemas = {
-        'knowledge_search': ({'query': {'type':'string'}, 'scene': {'type':'string'}, 'limit': {'type':'integer'}}, ['query','scene']),
-        'metrics_query': ({'template_id': {'type':'string'}, 'step_seconds': {'type':'integer'}}, ['template_id']),
-        'logs_search': ({'keyword': {'type':'string'}, 'trace_id': {'type':'string'}, 'limit': {'type':'integer'}}, []),
-        'trace_get': ({'trace_id': {'type':'string'}}, ['trace_id']),
-    }
-    if tool_name in local_schemas:
-        properties,required=local_schemas[tool_name]
-        return {'type':'object','properties':properties,'required':required,'additionalProperties':False}
-    if tool_name in BUSINESS_TOOLS:
-        raise ValueError('business tool scope mapping unavailable')
-    return published_schema
+    from workbench_agent.tools.model_schema import project_model_schema
+    return project_model_schema(tool_name, published_schema)
 
 
 class KnowledgeExpert:

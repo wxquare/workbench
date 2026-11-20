@@ -84,6 +84,12 @@ knowledge_nodes = {
     'record_gap': node('记录知识缺口', 'validate', '记录来源或回答存在的缺口。', ('校验和审查结果',), ('知识缺口',)),
     'compose_outcome': node('整理结果', 'finish', '根据引用和审查状态整理回答。', ('回答', '校验结果', '知识缺口'), ('回答结果',)),
 }
+tool_conversation_nodes = {
+    'prepare': node('准备工具对话', 'prepare', '固定查询范围、只读 knowledge_search 绑定与模型配置。', ('问题', '查询范围', '工具版本'), ('初始状态',)),
+    'model': node('选择回答或工具', 'model', '模型可生成回答或请求最多四次知识检索。', ('问题', '工具结果', '历史'), ('回答', '工具调用'), ('模型调用',)),
+    'tools': node('执行只读工具', 'tool', '经 Worker 权限、预算和工具台账执行 knowledge_search。', ('工具调用', '查询范围'), ('工具结果', '证据'), ('工具调用',)),
+    'compose': node('整理未校验回答', 'finish', '固定免责声明，列出工具依据、失败和未解决项。', ('模型回答', '工具结果'), ('工具对话结果',)),
+}
 
 RCA_NOTE = '仅合成告警入口；当前适配器仅供本地集成测试，不支持生产告警接入。'
 EXPERIMENTAL_NOTE = '实验工作流需要 Worker 显式配置此工作流的能力。'
@@ -106,6 +112,11 @@ _specs = (
         GraphCapabilities(('rca',), ('synthetic_alert',), uses_tools=True, may_interrupt=True), {**rca_nodes, 'propose': proposal_node}, {}, ('读取告警并确定范围。', '收集基线。', '生成批量操作提案并汇总结果。'), (EXPERIMENTAL_NOTE, RCA_NOTE)),
     GraphSpec(GraphId.KNOWLEDGE_CITATION_REVIEW, '知识问答（引用审查）', '检索知识并检查来源引用与支持关系。', '验证知识来源及引用的实验场景。', '真实来源和范围隔离尚未验收的环境。', 'experimental',
         GraphCapabilities(('qa',), ('manual',), uses_tools=True, needs_knowledge_tool=True, verified_answers=True), knowledge_nodes, {}, ('检索范围内的知识来源。', '起草回答并校验引用、有效期与支持关系。', '记录缺口并整理结果。'), (EXPERIMENTAL_NOTE, '真实知识源和范围隔离尚未验收，完成核对后才能在真实环境启用。', '需要知识工具、查询范围及来源有效期。')),
+    GraphSpec(GraphId.CONVERSATION_TOOL_USE, '工具对话', '在完整范围内使用只读 knowledge_search 回答，并展示未经独立校验的依据。', '需要用已发布知识工具辅助回答的实验对话。', '跨业务工具或需要已验证结论的场景。', 'experimental',
+        GraphCapabilities(('qa',), ('manual',), uses_tools=True, uses_history=True, needs_knowledge_tool=True), tool_conversation_nodes,
+        {('model','tools'):'模型请求已发布只读工具', ('model','compose'):'无需工具或达到限制', ('tools','model'):'工具结果返回模型'},
+        ('固定查询范围和只读知识工具。', '模型选择回答或 knowledge_search。', '执行最多四次工具调用并整理未校验结果。'),
+        (EXPERIMENTAL_NOTE, '首批仅 knowledge_search；回答未经独立校验。')),
 )
 _by_id = {spec.graph_id: spec for spec in _specs}
 
@@ -131,10 +142,12 @@ def graph_structure(graph_id):
     from workbench_agent.runtime.graphs.rca_proposal import build_rca as build_proposal
     from workbench_agent.runtime.graphs.rca_batch import build_rca as build_batch
     from workbench_agent.runtime.graphs.knowledge_qa import build_knowledge_qa
+    from workbench_agent.runtime.graphs.tool_conversation import build_tool_conversation
     builders = {GraphId.CONVERSATION_SINGLE_TURN: build_direct_qa, GraphId.CONVERSATION_MULTI_TURN: build_conversation_qa,
         GraphId.KNOWLEDGE_SCOPED_EXCERPT: build_dod, GraphId.SOP_CONDITIONAL: lambda saver: build_sop(saver, version=GraphId.SOP_CONDITIONAL),
         GraphId.RCA_SYNTHETIC: build_synthetic, GraphId.RCA_PROPOSAL: build_proposal,
-        GraphId.RCA_BATCH_PROPOSAL: build_batch, GraphId.KNOWLEDGE_CITATION_REVIEW: build_knowledge_qa}
+        GraphId.RCA_BATCH_PROPOSAL: build_batch, GraphId.KNOWLEDGE_CITATION_REVIEW: build_knowledge_qa,
+        GraphId.CONVERSATION_TOOL_USE: build_tool_conversation}
     structure = builders[spec.graph_id](None).get_graph()
     nodes = []
     for node_id in structure.nodes:
