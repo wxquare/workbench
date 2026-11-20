@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-ADMIN_JOB_KINDS = frozenset({"skill_import","repo_sync","model_probe","tool_probe","artifact_upload"})
+ADMIN_JOB_KINDS = frozenset({"skill_import","repo_sync","model_probe","tool_probe","tool_discovery","artifact_upload"})
 
 @dataclass(frozen=True)
 class AdminAuth:

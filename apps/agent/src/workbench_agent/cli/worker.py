@@ -67,6 +67,15 @@ async def run_worker(settings,*,once=False,registry=None):
         from workbench_agent.tools.probe import ToolProbe
         probes={(b.team_id,b.agent_id,b.server,b.credential_scope,name):args for b in settings.service.mcp_connections for name,args in b.probe_requests.items()}
         registry.register_admin('tool_probe',ToolProbe(backend,configured_adapter(settings.service.mcp_connections,SecretProvider()),probe_requests=probes).execute)
+        from workbench_agent.tools.management import ToolDiscovery
+        registry.register_admin(
+            'tool_discovery',
+            ToolDiscovery(
+                backend,
+                configured_adapter(settings.service.mcp_connections, SecretProvider()),
+                settings.service.mcp_connections,
+            ).execute,
+        )
         if settings.service.model_credential_bindings or managed_secrets:
             from workbench_agent.runtime.models.invoker import ModelInvoker
             model_factory=ModelFactory(ModelCredentialPolicy(settings.service.model_credential_bindings),managed_secrets)

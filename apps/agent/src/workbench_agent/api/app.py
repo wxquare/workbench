@@ -83,7 +83,7 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     from workbench_agent.api import events
     app.state.events=RunEventStore(backend,event_hints)
     from workbench_agent.application.artifacts import ArtifactService
-    from workbench_agent.api import artifacts, tool_bindings, evidence, skills, skill_library, repositories, uploads, knowledge, kb_internal
+    from workbench_agent.api import artifacts, tool_bindings, tool_connections, evidence, skills, skill_library, repositories, uploads, knowledge, kb_internal
     from workbench_agent.knowledge.internal_auth import KBInternalAccess
     app.state.knowledge_access = KBInternalAccess(settings.knowledge, resolve_env_reference)
     app.state.artifacts=ArtifactService(backend,artifact_signer)
@@ -104,6 +104,7 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
     app.include_router(kb_internal.router)
     app.include_router(evidence.router)
     app.include_router(tool_bindings.router)
+    app.include_router(tool_connections.router)
     app.include_router(artifacts.router)
     app.include_router(events.router)
     from workbench_agent.api import feedback, usage

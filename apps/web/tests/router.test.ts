@@ -33,3 +33,7 @@ it('provides graph catalog and detail routes', () => {
 it('provides the authorized statistics route', () => {
   expect(router.resolve({name: 'statistics'}).href).toBe('/app/statistics')
 })
+
+it('provides the authorized tool management route', () => {
+  expect(router.resolve({name: 'tools'}).href).toBe('/app/tools')
+})

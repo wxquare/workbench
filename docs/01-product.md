@@ -166,7 +166,7 @@ flowchart TB
 | FR-05 | Agent 协作 | 主图 + Knowledge/Diagnosis/Code 专家，按需调用，共用预算 | 🟡 | 专家与多专家流程存在；无并行与完整证据合成 |
 | FR-06 | Skill 和知识 | 导入、校验、版本、发布/回滚、按需加载、知识检索 | 🟡 | Skill 共享库可用；内置知识库支持条目、版本和检索；Skill 仅加载 SKILL.md 文本 |
 | FR-07 | Agent 执行 | 仓库快照、文件读取、脚本执行、受控环境、产物 | 🟡 | 快照读取与 Runner 代码存在；真实容器/对象存储未验收 |
-| FR-08 | 工具 | MCP 发现/调用、Schema 校验、身份注入、台账 | 🟡 | MCP 客户端与治理已实现；企业真实上游未接入，工具连接页为占位 |
+| FR-08 | 工具 | MCP 发现/调用、Schema 校验、身份注入、台账 | 🟡 | MCP 客户端与治理已实现；授权连接和只读工具管理已接入页面，企业真实上游与工具对话未验收 |
 | FR-09 | SOP 和巡检 | 版本化工作流、变量、分支、有限并行、定时与手动触发 | 🟡 | 顺序执行与条件分支、定时调度已实现；无并行，无页面 |
 | FR-10 | 任务生命周期 | 排队、异步、SSE、取消、等待输入/确认、恢复、持久化 | 🟡 | 网页已实现实时流、取消、补充输入与 Run 级审批；待手工验收 |
 | FR-11 | 业务结果 | Duty Event、DoD 跟进、Jira、SeaTalk 通知 | 🟡 | 事件、审批、动作台账与本地模拟回执可用；真实发送器默认关闭 |
@@ -203,7 +203,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-07.2 | Runner 脚本执行与产物 | 🟡 | runner/service；M2 验收：真实容器与对象存储未验收 |
 | FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions |
 | FR-08.2 | MCP Server 只读工具 | 🟡 | apps/mcp-server（四类只读工具）；仅合成上游 |
-| FR-08.3 | 工具连接管理页 | ⏳ | web 路由 tools 为 Placeholder |
+| FR-08.3 | 工具连接管理页 | ✅ | admin 查看授权连接、后台发现、保存/探测/发布只读绑定 |
 | FR-09.1 | SOP 固定工作流（依赖、条件、输出校验） | ✅ | runtime/graphs/sop、sop_graph（sop.conditional） |
 | FR-09.2 | 有限并行 | ⏳ | 实现为 DAG 拓扑序串行 |
 | FR-09.3 | 定时与手动触发 | 🟡 | api/schedules、jobs/scheduler；页面为 Placeholder |
@@ -474,7 +474,7 @@ flowchart TB
 | Agent 管理 | ✅ | 创建、草稿编辑、保存、发布；工作流/模型/提示词/偏好/上下文/预算；添加与移除 Skill、选版本 | 仓库、工具绑定无表单 | views/Agents.vue |
 | 模型配置 | ✅ | 模型草稿、发布版本、探针 | 密钥由部署提供，页面不管理凭据值 | views/Models.vue |
 | Skills | ✅ | 查询、创建、草稿保存、发布、历史版本查看、未保存提示 | 仅单文档 Markdown；无多文件包、远端拉取 | views/Skills.vue |
-| 工具连接 | ⏳ | 占位 | 全部 | views/Placeholder.vue |
+| 工具连接 | ✅ | admin 按 Agent 查看部署授权连接、发现工具、维护只读绑定 | 跨业务工具和工具对话 | views/Tools.vue |
 | 定时任务 | ⏳ | 占位（后端接口已有） | 计划、历史、手动触发 UI | views/Placeholder.vue |
 | 事件中心 | ⏳ | 占位（后端接口已有） | 事件结论、证据、跟进 UI | views/Placeholder.vue |
 | 数据统计 | ✅ | stats-v1 汇总、费用完整性、缺口与日趋势 | 更多维度和导出 | views/Statistics.vue |
