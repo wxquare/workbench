@@ -466,7 +466,6 @@ class WorkerSettings(ConfigModel):
     supported_graph_ids: list[str] = Field(default_factory=lambda: [
         GraphId.CONVERSATION_SINGLE_TURN,
         GraphId.CONVERSATION_MULTI_TURN,
-        GraphId.CONVERSATION_TOOL_USE,
     ])
     expert_concurrency_per_run: Literal[2] = 2
     tool_concurrency_per_run: Literal[4] = 4

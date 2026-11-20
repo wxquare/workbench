@@ -283,6 +283,7 @@ sequenceDiagram
 | `GET /v1/agents/{agent_id}/tool-bindings` | admin | `limit`、`after` | 200 分页工具绑定摘要 | 403/404 |
 | `GET /v1/agents/{agent_id}/tool-bindings/{alias}` | admin | - | 200 草稿、revision、版本摘要 | 403/404 |
 | `GET /v1/agents/{agent_id}/tool-bindings/{alias}/versions/{version}` | admin | - | 200 精确 binding 与 VersionRef | 403/404 |
+| `conversation.tool_use` Run | operator | 需 `mode=qa`、`business_context.conversation=true` 和完整 `query_scope`；Profile 引用 1–4 个已发布只读 `knowledge_search` binding | 202/409/422 | 工具回答固定标注“未经独立校验” |
 | `GET /v1/artifacts/{artifact_id}/url` | viewer | - | 200 `{url,expires_in:60,sha256,size}` | 409 `ARTIFACT_CHANGED`/`ARTIFACT_UNAVAILABLE`；503 `OBJECT_STORAGE_UNAVAILABLE` |
 | `POST /v1/runs/{run_id}/uploads` | operator | `{kind, sha256, size(0..MAX_BYTES, 严格 int)}` | **201** `{artifact_id,status,sha256,size}`（无需幂等键） | 422 `INVALID_UPLOAD` |
 | `POST /v1/uploads/{artifact_id}/complete`（幂） | operator | 请求体为原始文件字节（流式）；可选 Header `Upload-Replay: true`（体必须为空，仅重放回执） | **202** 上传任务回执 | 413 `UPLOAD_TOO_LARGE`；409 `IDEMPOTENCY_CONFLICT`/`UPLOAD_REPLAY_NOT_FOUND`；422 `UPLOAD_DIGEST_MISMATCH`/`UPLOAD_REPLAY_BODY_FORBIDDEN`；503 `UPLOAD_STAGING_*` |

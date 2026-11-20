@@ -319,6 +319,7 @@ Run 是历史事实，删除或停用 Agent 不应改写历史 Run 的受理快�
 | conversation.single_turn | 直接模型问答（单轮） | START → answer → END |
 | conversation.multi_turn | 多轮直接问答 | START → answer → END（加载有界历史） |
 | knowledge.citation_review | 知识问答与引用审查 | prepare → retrieve → draft_answer → validate_citations → review_support → record_gap → compose_outcome |
+| conversation.tool_use | 实验工具对话 | prepare → model → tools → model → compose |
 
 ![工作流目标架构](assets/03-workflow.svg)
 

@@ -201,7 +201,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-06.4 | 按需加载脚本与参考资料 | ⏳ | skill_management/loader 与 conversation_qa 仅加载 SKILL.md |
 | FR-07.1 | 固定仓库快照与文件读取 | 🟡 | execution/snapshots、api/repositories；真实仓库未验收 |
 | FR-07.2 | Runner 脚本执行与产物 | 🟡 | runner/service；M2 验收：真实容器与对象存储未验收 |
-| FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions |
+| FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions；实验工具对话首批仅 knowledge_search |
 | FR-08.2 | MCP Server 只读工具 | 🟡 | apps/mcp-server（四类只读工具）；仅合成上游 |
 | FR-08.3 | 工具连接管理页 | ✅ | admin 查看授权连接、后台发现、保存/探测/发布只读绑定 |
 | FR-09.1 | SOP 固定工作流（依赖、条件、输出校验） | ✅ | runtime/graphs/sop、sop_graph（sop.conditional） |
@@ -474,7 +474,7 @@ flowchart TB
 | Agent 管理 | ✅ | 创建、草稿编辑、保存、发布；工作流/模型/提示词/偏好/上下文/预算；添加与移除 Skill、选版本 | 仓库、工具绑定无表单 | views/Agents.vue |
 | 模型配置 | ✅ | 模型草稿、发布版本、探针 | 密钥由部署提供，页面不管理凭据值 | views/Models.vue |
 | Skills | ✅ | 查询、创建、草稿保存、发布、历史版本查看、未保存提示 | 仅单文档 Markdown；无多文件包、远端拉取 | views/Skills.vue |
-| 工具连接 | ✅ | admin 按 Agent 查看部署授权连接、发现工具、维护只读绑定 | 跨业务工具和工具对话 | views/Tools.vue |
+| 工具连接 | ✅ | admin 按 Agent 查看部署授权连接、发现工具、维护只读绑定 | 跨业务工具 | views/Tools.vue |
 | 定时任务 | ⏳ | 占位（后端接口已有） | 计划、历史、手动触发 UI | views/Placeholder.vue |
 | 事件中心 | ⏳ | 占位（后端接口已有） | 事件结论、证据、跟进 UI | views/Placeholder.vue |
 | 数据统计 | ✅ | stats-v1 汇总、费用完整性、缺口与日趋势 | 更多维度和导出 | views/Statistics.vue |

@@ -15,7 +15,7 @@ async def publish_graph(platform, auth, agent_id, graph_id):
 async def test_catalog_is_public_to_team_members_and_describes_sop(platform, client):
     response = await client.get('/v1/graphs')
     assert response.status_code == 200
-    assert len(response.json()['items']) == 8
+    assert len(response.json()['items']) == 9
     detail = await client.get('/v1/graphs/sop.conditional')
     assert detail.status_code == 200
     assert any(edge['source'] == edge['target'] == 'step' and edge['label'] for edge in detail.json()['edges'])
