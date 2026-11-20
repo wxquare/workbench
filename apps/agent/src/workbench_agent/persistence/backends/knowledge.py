@@ -74,6 +74,14 @@ class SQLiteKnowledgeStore:
         tokens = re.findall(r'[\u4e00-\u9fff]+|[A-Za-z0-9_./-]+', query)[:32]
         if not tokens:
             return []
+        # Scope is already enforced below. OR-ing its repeated labels into
+        # content search turns a topic query into a listing of the whole service.
+        scope_terms = {getattr(scope, key).casefold() for key in ('service', 'environment', 'region')}
+        question_terms = {'是什么', '是什么意思', '怎么', '如何', '多久', '一般'}
+        content_tokens = [token for token in tokens
+                          if token.casefold() not in scope_terms and token not in question_terms]
+        # A scope-only query still has its original, authorized listing behavior.
+        tokens = content_tokens or tokens
         long_tokens = []
         for token in tokens:
             if len(token) >= 3:

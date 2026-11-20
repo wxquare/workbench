@@ -98,7 +98,7 @@ async def test_invalid_scope_rolls_back_admission(platform, client, scope):
     assert await platform.count_rows('run_jobs') == 0
 
 
-@pytest.mark.parametrize('scenario', ['answer', 'fabricated', 'rejected', 'revoked', 'recovery', 'empty', 'unavailable', 'tamper', 'gap_recovery', 'model_recovery', 'unanswerable', 'budget', 'model_error', 'revoked_tool', 'revoked_checkpoint', 'changed_scope', 'grant_removed', 'grant_source', 'grant_scope', 'grant_removed_dispatch', 'grant_source_dispatch', 'grant_scope_dispatch', 'empty_source_swap', 'empty_source_recovery', 'legacy_empty_recovery', 'expired_source', 'missing_source_time'])
+@pytest.mark.parametrize('scenario', ['answer', 'truncated_then_complete', 'byte_truncated_then_complete', 'fabricated', 'rejected', 'revoked', 'recovery', 'empty', 'unavailable', 'tamper', 'gap_recovery', 'model_recovery', 'unanswerable', 'budget', 'model_error', 'revoked_tool', 'revoked_checkpoint', 'changed_scope', 'grant_removed', 'grant_source', 'grant_scope', 'grant_removed_dispatch', 'grant_source_dispatch', 'grant_scope_dispatch', 'empty_source_swap', 'empty_source_recovery', 'legacy_empty_recovery', 'expired_source', 'missing_source_time'])
 async def test_public_run_to_independent_worker(platform, client, monkeypatch, scenario):
     import httpx
     from support.mcp import mcp_server_source
@@ -122,6 +122,10 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
             calls.append(request)
             if scenario in ('empty', 'gap_recovery', 'empty_source_swap', 'empty_source_recovery', 'legacy_empty_recovery'): return {'matches': []}
             if scenario == 'unavailable': raise RuntimeError('unavailable')
+            if scenario in ('truncated_then_complete', 'byte_truncated_then_complete') and len(calls) == 1:
+                return {'matches': [{'source_id': 'partial-guide', 'title': 'Partial',
+                    'content': 'TRUNCATED_ONLY_CONTENT' * (200 if scenario == 'byte_truncated_then_complete' else 1), 'source_uri': None,
+                    'updated_at': '2020-01-01T00:00:00Z'}], 'truncated': scenario == 'truncated_then_complete'}
             return {'matches': [{'source_id': 'guide-1', 'title': 'Guide',
                 'content': 'Check the queue before retrying.', 'source_uri': None, 'updated_at': (None if scenario == 'missing_source_time' else '1900-01-01T00:00:00Z' if scenario == 'expired_source' else '2020-01-01T00:00:00Z')}]}
     runtime.executor.gateways['kb'] = Gateway()
@@ -147,7 +151,8 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
             catalog = await adapter.discover('local', 'read', team_id=platform.auth.team_id, agent_id=platform.agent_id)
             schema = catalog.tools[catalog.names.index('knowledge_search')].inputSchema
             binding = ToolBinding(alias='kb.search', provider='mcp', tool_name='knowledge_search',
-                server='local', credential_scope='read', permission='knowledge.read', input_schema=schema)
+                server='local', credential_scope='read', permission='knowledge.read', input_schema=schema,
+                max_output_bytes=2048 if scenario == 'byte_truncated_then_complete' else 65536)
             ref = await ToolRegistry(platform.backend).publish(platform.auth, platform.agent_id, binding, key='qa-tool')
             await publish_qa(platform, (ref,))
             rules = {'users': {platform.auth.subject: ['knowledge.read']},
@@ -189,6 +194,16 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                         return AIMessage(content=json.dumps(body), usage_metadata=usage)
                     if any(isinstance(m, ToolMessage) for m in messages):
                         delivered_tool_messages.extend(m.content for m in messages if isinstance(m, ToolMessage))
+                        if scenario in ('truncated_then_complete', 'byte_truncated_then_complete'):
+                            tool_messages = [m for m in messages if isinstance(m, ToolMessage)]
+                            assert all('TRUNCATED_ONLY_CONTENT' not in m.content for m in tool_messages)
+                            if len(tool_messages) == 1:
+                                feedback = json.loads(tool_messages[0].content)
+                                assert feedback['status'] == 'unavailable'
+                                assert feedback['error']['code'] == 'KNOWLEDGE_RESULTS_TRUNCATED'
+                                return AIMessage(content='', tool_calls=[{'name': 'kb_search',
+                                    'args': {'query': 'queue', 'scene': 'qa'},
+                                    'id': 'narrow-call', 'type': 'tool_call'}], usage_metadata=usage)
                         return AIMessage(content='Check the queue before retrying.', usage_metadata=usage)
                     return AIMessage(content='', tool_calls=[{'name': 'kb_search', 'args': {'query': 'retry', 'scene': 'qa'},
                         'id': 'call-1', 'type': 'tool_call'}], usage_metadata=usage)
@@ -310,11 +325,13 @@ async def test_public_run_to_independent_worker(platform, client, monkeypatch, s
                 if scenario != 'scheduler_recovery':
                     assert await worker.run_once() == 'projected'
                 result = (await client.get('/v1/runs/' + run_id)).json()
-                if scenario in ('answer', 'revoked', 'recovery', 'tamper', 'grant_removed', 'grant_source', 'grant_scope'):
+                if scenario in ('answer', 'truncated_then_complete', 'byte_truncated_then_complete', 'revoked', 'recovery', 'tamper', 'grant_removed', 'grant_source', 'grant_scope'):
                     assert result['status'] == 'succeeded', json.dumps(result, ensure_ascii=False)
                     assert result['outcome']['knowledge_answer']['review_kind'] == 'model_reviewed'
                     assert result['outcome']['knowledge_answer']['claims'][0]['citations'][0]['quote'] == 'Check the queue before retrying.'
-                    assert len(calls) == 1
+                    assert len(calls) == (2 if scenario in ('truncated_then_complete', 'byte_truncated_then_complete') else 1)
+                    if scenario in ('truncated_then_complete', 'byte_truncated_then_complete'):
+                        assert len(result['outcome']['evidence_refs']) == 1
                     if scenario in ('grant_removed', 'grant_source', 'grant_scope'):
                         change_grant(scenario.split('_')[1])
                         hidden = (await client.get('/v1/runs/' + run_id)).json()['outcome']

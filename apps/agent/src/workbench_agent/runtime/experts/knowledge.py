@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 import json
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid5
 
 from langchain.agents import create_agent
@@ -18,6 +18,7 @@ from langchain_core.tools import InjectedToolCallId, StructuredTool
 from pydantic import PrivateAttr, create_model
 
 from workbench_agent.jobs.worker import CapabilityBlocked
+from workbench_agent.domain.tools import ToolError, ToolResult
 from workbench_agent.runtime.models.invoker import ModelInvoker
 from workbench_agent.tools.policy import PolicyToolExecutor
 
@@ -113,6 +114,12 @@ def _schema_model(name, schema):
         if not isinstance(key, str) or spec.get('type') not in kinds:
             raise ValueError('unsupported expert tool schema')
         cls = kinds[spec['type']]
+        if 'enum' in spec:
+            values = spec['enum']
+            if (not isinstance(values, list) or not values or len(values) > 32
+                    or any(type(value) is not cls for value in values)):
+                raise ValueError('invalid expert tool enum')
+            cls = Literal[tuple(values)]
         fields[key] = (cls, ...) if key in required else (cls | None, None)
     fields['tool_call_id'] = (Annotated[str, InjectedToolCallId], ...)
     return create_model(name, **fields)
@@ -155,8 +162,24 @@ class KnowledgeExpert:
                     raise PermissionError('expert subtask authority required')
                 invocation = str(uuid5(UUID(subtask), 'tool:' + tool_call_id))
                 result = await executor.execute(execution.claim.context, execution.guard, invocation, _ref, arguments, max_logical_calls=4)
+                if (execution.claim.context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW
+                        and result.status == 'ok' and isinstance(result.data, dict)
+                        and (result.data.get('truncated') is True
+                             or result.data.get('meta', {}).get('truncated') is True)):
+                    # Keep the original receipt for audit, but never forward
+                    # incomplete source content as authorized model evidence.
+                    result = ToolResult(status='unavailable',
+                        error=ToolError(code='KNOWLEDGE_RESULTS_TRUNCATED'))
                 return result.model_dump_json()
-            self.tools.append(StructuredTool(name=name, description='Read-only scoped tool', args_schema=schema, coroutine=call))
+            description = 'Read-only scoped tool'
+            if execution.claim.context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW:
+                description = (
+                    'Read-only knowledge search. Use specific topic keywords; service, environment '
+                    'and region are already enforced. If KNOWLEDGE_RESULTS_TRUNCATED is returned, '
+                    'issue a narrower query or increase limit up to 10. This is a new query, '
+                    'not a retry of the same arguments.'
+                )
+            self.tools.append(StructuredTool(name=name, description=description, args_schema=schema, coroutine=call))
 
     async def invoke(self, task: ExpertTask):
         if not task.task_id or not task.instruction:

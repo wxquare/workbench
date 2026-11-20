@@ -40,3 +40,35 @@ def test_closed_scalar_schema_is_accepted():
         },
         'required': ['query'],
     })
+
+
+def test_knowledge_expert_advertises_and_enforces_query_scene_enum():
+    from langchain_core.utils.function_calling import convert_to_openai_tool
+    from pydantic import ValidationError
+    from workbench_agent.runtime.experts.knowledge import _schema_model
+
+    published = {
+        'type': 'object',
+        'properties': {
+            'query': {'type': 'string'},
+            'scene': {'type': 'string', 'enum': ['qa', 'alert']},
+            'scope': {'type': 'object'},
+        },
+    }
+    schema = _schema_model('KnowledgeSearch', project_model_schema('knowledge_search', published))
+    declaration = convert_to_openai_tool(schema)['function']['parameters']
+    assert declaration['properties']['scene']['enum'] == ['qa', 'alert']
+    assert 'scope' not in declaration['properties']
+    schema.model_validate({'query': 'PENDING', 'scene': 'qa', 'tool_call_id': 'call-1'})
+    with pytest.raises(ValidationError):
+        schema.model_validate({'query': 'PENDING', 'scene': 'checkout', 'tool_call_id': 'call-2'})
+
+
+def test_knowledge_projection_preserves_upstream_scene_restriction():
+    from workbench_agent.runtime.experts.knowledge import _schema_model
+
+    published = {'type': 'object', 'properties': {
+        'scene': {'type': 'string', 'enum': ['qa']},
+    }}
+    schema = _schema_model('QAOnlySearch', project_model_schema('knowledge_search', published))
+    assert schema.model_json_schema()['properties']['scene'].get('const') == 'qa'

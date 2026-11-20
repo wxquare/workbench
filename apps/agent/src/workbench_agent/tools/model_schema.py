@@ -36,11 +36,12 @@ def validate_model_schema(schema: dict) -> None:
 
 def project_model_schema(tool_name: str, published_schema: dict) -> dict:
     if tool_name == 'knowledge_search':
+        scene = published_schema.get('properties', {}).get('scene', {})
         return {
             'type': 'object',
             'properties': {
                 'query': {'type': 'string'},
-                'scene': {'type': 'string'},
+                'scene': {'type': 'string', 'enum': scene.get('enum', ['qa', 'alert'])},
                 'limit': {'type': 'integer'},
             },
             'required': ['query', 'scene'],

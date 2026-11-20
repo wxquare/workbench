@@ -941,6 +941,10 @@ cd apps/agent
 
 知识模块位于 `apps/agent/src/workbench_agent/knowledge/`，管理与内部查询路由分别在 `api/knowledge.py`、`api/kb_internal.py`，SQLite 实现在 `persistence/backends/knowledge.py`。新问答图为 `runtime/graphs/knowledge_qa.py`（`knowledge.citation_review`），不改变旧 `knowledge.scoped_excerpt` 的 partial 语义。配置 Agent 时须选择对应图、配置已发布工具绑定和授权，并确保 Worker 支持该图版本。
 
+知识工具的模型参数投影须保留已发现 Schema 中的 `scene` 枚举，避免模型把服务名误填为查询场景。`knowledge.citation_review` 的专家工具反馈会把上游截断或本机字节上限截断的结果转换为无正文、无引用的 `KNOWLEDGE_RESULTS_TRUNCATED` 不可用反馈；原始回执仍保留供审计，模型可缩小查询并使用后续完整证据。当前权限、范围、引用与新鲜度校验继续执行，不能通过接受截断证据来绕过。
+
+SQLite 知识检索在存在内容关键词时，会从查询分词中移除与当前 service/environment/region 完全相同的范围词及独立中文问句词，避免 OR 检索把主题查询扩展为整个服务的知识列表。只有范围词的查询仍保留原行为；SQL 的团队、发布版本与范围过滤继续执行。知识引用专家会优先使用具体主题词，遇到截断时缩小查询或将 limit 提高至 10；截断结果本身不能作为完整证据使用。
+
 `tests/integration/test_kb_mcp_chain.py` 覆盖真实 MCP 协议链路，相关迁移、检索、缺口、恢复、问答和 UI 测试分别位于 `test_kb_*` 与 `apps/web/tests/knowledge-*`。测试使用受控数据和模型替身，不能据此宣称真实模型表现或业务质量已验证。
 
 ## 知识问答 v19 离线评估
