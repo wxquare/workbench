@@ -1,0 +1,6 @@
+{
+  "max_rule_rate_drop": 0.05,
+  "max_latency_p95_growth": 0.25,
+  "fail_on_new_unauthorized_access": true,
+  "fail_on_new_unanswerable_conclusion": true
+}

@@ -127,7 +127,39 @@ async def collect_case(
         case['id'],
         repeat,
     )
-    events = _event_rows(journal, request_key)
+    events = [
+        event
+        for event in journal.events()
+        if event.get('request_key') == request_key
+        or (
+            event.get('case_id') == case['id']
+            and event.get('repeat') == repeat
+        )
+    ]
+    recovered = None
+    request_events = _event_rows(journal, request_key)
+    if request_events:
+        latest_event = request_events[-1]
+        if isinstance(latest_event.get('row'), dict):
+            recovered = latest_event['row']
+    if recovered is None:
+        recovered = next(
+            (
+                event['row']
+                for event in reversed(events)
+                if isinstance(event.get('row'), dict)
+            ),
+            None,
+        )
+    recovered_map = experiment.get('recovered_rows', {})
+    if isinstance(recovered_map, dict):
+        mapped = recovered_map.get((case['id'], repeat))
+        if mapped is None:
+            mapped = recovered_map.get(f"{case['id']}:{repeat}")
+        if mapped is not None:
+            recovered = mapped
+    if isinstance(recovered, dict):
+        events.append({'row': recovered})
     row = next(
         (
             event['row']
@@ -146,6 +178,8 @@ async def collect_case(
             journal.append(
                 {
                     'event': 'case_result',
+                    'case_id': case['id'],
+                    'repeat': repeat,
                     'request_key': request_key,
                     'row': row,
                 }
@@ -163,8 +197,11 @@ async def collect_case(
         journal.append(
             {
                 'event': 'create_sent',
+                'case_id': case['id'],
+                'repeat': repeat,
                 'request_key': request_key,
                 'request_body_hash': hash_json(body),
+                'row': row,
             }
         )
         try:
@@ -178,6 +215,8 @@ async def collect_case(
                 journal.append(
                     {
                         'event': 'create_response',
+                        'case_id': case['id'],
+                        'repeat': repeat,
                         'request_key': request_key,
                         'status': error.status,
                         'error_code': error.code,
@@ -193,6 +232,8 @@ async def collect_case(
             journal.append(
                 {
                     'event': 'create_uncertain',
+                    'case_id': case['id'],
+                    'repeat': repeat,
                     'request_key': request_key,
                     'error_code': error.code,
                     'row': row,
@@ -209,6 +250,8 @@ async def collect_case(
             journal.append(
                 {
                     'event': 'create_uncertain',
+                    'case_id': case['id'],
+                    'repeat': repeat,
                     'request_key': request_key,
                     'error_code': type(error).__name__,
                     'row': row,
@@ -224,6 +267,8 @@ async def collect_case(
             journal.append(
                 {
                     'event': 'create_invalid',
+                    'case_id': case['id'],
+                    'repeat': repeat,
                     'request_key': request_key,
                     'row': row,
                 }
@@ -236,6 +281,8 @@ async def collect_case(
         journal.append(
             {
                 'event': 'create_response',
+                'case_id': case['id'],
+                'repeat': repeat,
                 'request_key': request_key,
                 'status': 202,
                 'row': row,
@@ -260,6 +307,8 @@ async def collect_case(
         journal.append(
             {
                 'event': 'provenance_error',
+                'case_id': case['id'],
+                'repeat': repeat,
                 'request_key': request_key,
                 'error_code': code,
                 'row': row,
@@ -288,6 +337,8 @@ async def collect_case(
             journal.append(
                 {
                     'event': 'budget_stop',
+                    'case_id': case['id'],
+                    'repeat': repeat,
                     'request_key': request_key,
                     'amount_micros': amount,
                     'budget_micros': budget,
@@ -303,6 +354,8 @@ async def collect_case(
         journal.append(
             {
                 'event': 'budget_stop',
+                'case_id': case['id'],
+                'repeat': repeat,
                 'request_key': request_key,
                 'error_code': str(error),
                 'row': row,
@@ -314,6 +367,8 @@ async def collect_case(
         journal.append(
             {
                 'event': 'usage_error',
+                'case_id': case['id'],
+                'repeat': repeat,
                 'request_key': request_key,
                 'error_code': error.code,
             }
@@ -332,6 +387,8 @@ async def collect_case(
                 journal.append(
                     {
                         'event': 'run_error',
+                        'case_id': case['id'],
+                        'repeat': repeat,
                         'request_key': request_key,
                         'error_code': error.code,
                         'row': row,
@@ -358,6 +415,8 @@ async def collect_case(
             journal.append(
                 {
                     'event': 'case_result',
+                    'case_id': case['id'],
+                    'repeat': repeat,
                     'request_key': request_key,
                     'row': row,
                 }
@@ -373,6 +432,8 @@ async def collect_case(
         journal.append(
             {
                 'event': 'case_result',
+                'case_id': case['id'],
+                'repeat': repeat,
                 'request_key': request_key,
                 'row': row,
             }
@@ -401,6 +462,8 @@ async def collect_case(
     journal.append(
         {
             'event': 'case_result',
+            'case_id': case['id'],
+            'repeat': repeat,
             'request_key': request_key,
             'row': row,
         }

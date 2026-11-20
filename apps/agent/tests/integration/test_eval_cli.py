@@ -76,3 +76,54 @@ def test_legacy_evaluate_still_works(tmp_path):
     result = run_cli('evaluate', '--dataset', fixture, '--output', output)
     assert result.returncode == 1
     assert json.loads(output.read_text())['release_passed'] is False
+
+
+def test_score_and_compare_offline_reports(tmp_path):
+    dataset_path = tmp_path / 'dataset.json'
+    dataset_path.write_text(json.dumps(dataset()))
+    experiment = tmp_path / 'experiment'
+    experiment.mkdir()
+    rows = []
+    for item in dataset()['cases']:
+        rows.append({
+            'case_id': item['id'],
+            'repeat': 0,
+            'transport_status': 'completed',
+            'run_status': 'succeeded',
+            'outcome': {
+                'summary': 'fact retry' if item['answerable'] else 'Insufficient evidence.',
+                'knowledge_answer': {'claims': [
+                    {'text': 'fact retry', 'citations': [{
+                        'evidence_ref': 'ev',
+                        'source_id': 'kb:entry@1#chunk',
+                        'quote': 'fact retry',
+                    }]}
+                ]} if item['answerable'] else [],
+            },
+            'evidence': [{'evidence_id': 'ev', 'content': {'content': 'fact retry'}}],
+            'usage': {'amount_micros': 0, 'currency': 'USD', 'cost_pending': False},
+            'reviewed_unanswerable': not item['answerable'],
+        })
+    (experiment / 'results.jsonl').write_text(
+        ''.join(json.dumps(row) + '\n' for row in rows)
+    )
+    report = tmp_path / 'report.json'
+    result = run_cli(
+        'eval', 'score', '--experiment', experiment,
+        '--dataset', dataset_path, '--output', report,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    input_data = json.loads(report.read_text())
+    assert input_data['metrics']['complete'] is True
+    second = tmp_path / 'second'
+    second.mkdir()
+    (second / 'report.json').write_text(report.read_text())
+    comparison = tmp_path / 'comparison.json'
+    policy = Path(__file__).parents[4] / 'evaluation/knowledge/regression-policy.json'
+    result = run_cli(
+        'eval', 'compare', '--baseline', second,
+        '--candidate', second, '--policy', policy,
+        '--output', comparison,
+    )
+    assert result.returncode == 0
+    assert json.loads(comparison.read_text())['status'] == 'passed'
