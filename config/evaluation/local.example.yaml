@@ -1,0 +1,27 @@
+# Copy to config/evaluation/local.yaml and replace the example identity before use.
+# Keep the API token in the named environment variable; never write it here.
+api_base_url: http://127.0.0.1:8000
+token_env: WORKBENCH_BASELINE_TOKEN
+agent_id: 11111111-1111-1111-1111-111111111111
+agent_config_path: config/local/agent.yaml
+mcp_config_path: config/local/mcp-server.yaml
+dataset_path: evaluation/knowledge/dataset.local.json
+seed_manifest_path: evaluation/knowledge/seed-manifest.local.json
+seed_namespace: local-baseline
+expected_profile_ref: null
+expected_model_refs: []
+expected_graph_id: knowledge.citation_review
+output_root: artifacts/evaluation
+request_timeout_seconds: 30
+case_timeout_seconds: 300
+limits:
+  model_calls: 8
+  tool_calls: 20
+  tokens: 80000
+  wall_seconds: 180
+pricing:
+  currency: null
+  pricing_version: null
+  input_micros_per_million: null
+  output_micros_per_million: null
+experiment_budget_micros: null

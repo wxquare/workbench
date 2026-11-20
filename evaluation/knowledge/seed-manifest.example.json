@@ -1,0 +1,22 @@
+{
+  "schema_version": "knowledge-seed-v1",
+  "seeds": [
+    {
+      "seed_id": "replace-with-stable-id",
+      "provenance": {
+        "source": "URL, document owner, title, and source date"
+      },
+      "draft": {
+        "title": "Replace with the reviewed title",
+        "kind": "faq",
+        "body_md": "Replace this with reviewed Markdown. The hard limit is 16 KiB.",
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "tags": [],
+        "aliases": [],
+        "review_by": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "knowledge-eval-v1",
+  "dataset_kind": "business",
+  "cases": [
+    {
+      "id": "answerable-001",
+      "question": "Replace with a real business question.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:00:00Z",
+        "end_at": "2026-11-20T00:10:00Z"
+      },
+      "scenario": "answerable",
+      "answerable": true,
+      "expected_source_ids": [
+        "kb:entry-id@version#chunk-id"
+      ],
+      "must_include": [
+        "Required business fact or condition"
+      ],
+      "review_status": "pending",
+      "reviewer": null
+    },
+    {
+      "id": "no-answer-001",
+      "question": "Replace with a question the corpus should not answer.",
+      "query_scope": {
+        "service": "replace-with-service",
+        "environment": "test",
+        "region": "replace-with-region",
+        "start_at": "2026-11-20T00:10:00Z",
+        "end_at": "2026-11-20T00:20:00Z"
+      },
+      "scenario": "no_answer",
+      "answerable": false,
+      "expected_source_ids": [],
+      "must_include": [],
+      "review_status": "pending",
+      "reviewer": null
+    }
+  ]
+}
