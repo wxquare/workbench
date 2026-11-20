@@ -36,6 +36,17 @@ class ToolManagement:
                     'credential_scope': item.credential_scope,
                     'read_tools': list(item.read_tools),
                     'status': 'configured',
+                    'tool_conversation_tools': list(
+                        item.tool_conversation_allowed_tools
+                    ),
+                    'mapping_policies': [
+                        {
+                            key: value
+                            for key, value in policy.model_dump(mode='json').items()
+                            if key != 'model_input_schema'
+                        }
+                        for policy in item.mapping_policies
+                    ],
                 }
                 for item in self._connections(auth, agent_id)
             ],
@@ -140,6 +151,10 @@ class ToolManagement:
                                 if draft else None
                             )
                         ),
+                        'tool_conversation_compatible': (
+                            self._binding_compatible(matching[0], auth, agent_id)
+                            if matching else False
+                        ),
                         'latest_ref': (
                             {
                                 'resource_id': matching[0]['binding_id'],
@@ -154,6 +169,19 @@ class ToolManagement:
             'items': items,
             'next_cursor': items[-1]['alias'] if len(page) > limit else None,
         }
+
+    def _binding_compatible(self, row, auth, agent_id):
+        data = json.loads(row['schema'])
+        return (
+            data.get('tool_name') == 'knowledge_search'
+            or any(
+                data.get('tool_name') in item.tool_conversation_allowed_tools
+                and item.mapping_policy_for(data.get('tool_name')) is not None
+                for item in self._connections(auth, agent_id)
+                if item.server == data.get('server')
+                and item.credential_scope == data.get('credential_scope')
+            )
+        )
 
     async def get_binding(self, auth, agent_id, alias):
         async with self.backend.create_uow().begin_read() as uow:
@@ -286,6 +314,9 @@ class ToolDiscovery:
         tools = []
         total = 0
         allowed = set(deployment.read_tools)
+        conversation_allowed = set(
+            getattr(deployment, 'tool_conversation_allowed_tools', ())
+        )
         for raw in catalog.tools:
             item = raw if isinstance(raw, dict) else raw.model_dump()
             name = item.get('name')
@@ -307,6 +338,13 @@ class ToolDiscovery:
                     'description': description,
                     'schema': schema,
                     'read_only': True,
+                    'tool_conversation_compatible': (
+                        name == 'knowledge_search'
+                        or (
+                            name in conversation_allowed
+                            and deployment.mapping_policy_for(name) is not None
+                        )
+                    ),
                 }
             )
         return json.dumps(

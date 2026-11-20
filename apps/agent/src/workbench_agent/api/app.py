@@ -73,6 +73,7 @@ def create_app(settings, *, backend=None, verifier=None, artifact_signer=None, e
 
     app = FastAPI(lifespan=lifespan)
     app.state.backend, app.state.settings = backend, settings
+    backend._mcp_connections = settings.service.mcp_connections
     app.state.identity = IdentityResolver(backend, verifier, connectors=settings.service.connector_identities)
     app.state.profiles, app.state.contexts, app.state.teams = ProfileService(backend), ContextResolver(backend), TeamService(backend, settings=settings)
     from workbench_agent.connectors.managed_model_secrets import configured_managed_model_secrets

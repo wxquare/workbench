@@ -11,6 +11,12 @@ from workbench_agent.tools.management import ToolManagement
 
 router=APIRouter(prefix='/v1/agents/{agent_id}/tool-bindings')
 
+def registry(request):
+    return ToolRegistry(
+        request.app.state.backend,
+        mcp_connections=request.app.state.settings.service.mcp_connections,
+    )
+
 def management(request):
     return ToolManagement(request.app.state.backend,request.app.state.settings.service.mcp_connections)
 
@@ -40,11 +46,18 @@ async def draft(agent_id:UUID,alias:str,body:ToolBinding,request:Request,auth=De
     if alias!=body.alias: raise DomainError('INVALID_REQUEST',422)
     if not body.read_only:
         raise DomainError('WRITE_BINDING_HTTP_DISABLED',422)
-    return await ToolRegistry(request.app.state.backend).save_draft(auth,str(agent_id),body,expected_revision=expected,key=idempotency_key)
+    return await registry(request).save_draft(
+        auth,
+        str(agent_id),
+        body,
+        expected_revision=expected,
+        key=idempotency_key,
+        managed=True,
+    )
 
 @router.post('/{alias}/publish',status_code=201)
 async def publish(agent_id:UUID,alias:str,request:Request,auth=Depends(authenticate),expected:int=Depends(revision),idempotency_key:str=Header()):
-    ref=await ToolRegistry(request.app.state.backend).publish_draft(auth,str(agent_id),alias,expected_revision=expected,key=idempotency_key)
+    ref=await registry(request).publish_draft(auth,str(agent_id),alias,expected_revision=expected,key=idempotency_key)
     return ref.model_dump(mode='json')
 
 @router.post('/{alias}/probe',status_code=202)

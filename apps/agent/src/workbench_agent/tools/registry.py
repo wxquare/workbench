@@ -29,10 +29,60 @@ def validate_tool_schema(schema):
     walk(schema)
 
 class ToolRegistry:
-    def __init__(self,backend):
+    def __init__(self,backend,*,mcp_connections=()):
         self.backend=backend
+        self.mcp_connections=tuple(mcp_connections)
         self.profiles=ProfileService(backend)
-    async def publish(self,auth,agent_id,binding:ToolBinding,*,key):
+
+    def validate_managed_binding(self, auth, agent_id, binding):
+        if binding.argument_mapping is None:
+            return
+        matches = [
+            item for item in self.mcp_connections
+            if item.team_id == auth.team_id
+            and item.agent_id == agent_id
+            and item.server == binding.server
+            and item.credential_scope == binding.credential_scope
+            and binding.tool_name in item.read_tools
+        ]
+        policy = (
+            matches[0].mapping_policy_for(binding.tool_name)
+            if len(matches) == 1 else None
+        )
+        if policy is None:
+            raise DomainError('TOOL_MAPPING_DENIED', 422)
+        from workbench_agent.tools.scope_mapping import validate_mapping
+        try:
+            validate_mapping(
+                binding.argument_mapping,
+                binding.input_schema,
+                policy.model_dump(mode='json'),
+            )
+        except (ValueError, TypeError):
+            raise DomainError('TOOL_MAPPING_DENIED', 422) from None
+
+    def policy_allows(self, auth, agent_id, binding):
+        return any(
+            item.team_id == auth.team_id
+            and item.agent_id == agent_id
+            and item.server == binding.server
+            and item.credential_scope == binding.credential_scope
+            and binding.tool_name in item.read_tools
+            and binding.tool_name in item.tool_conversation_allowed_tools
+            and item.mapping_policy_for(binding.tool_name) is not None
+            for item in self.mcp_connections
+        )
+    async def publish(
+        self,
+        auth,
+        agent_id,
+        binding: ToolBinding,
+        *,
+        key,
+        managed=False,
+    ):
+        if managed or binding.argument_mapping is not None:
+            self.validate_managed_binding(auth, agent_id, binding)
         data=binding.model_dump(mode='json')
         for schema in (binding.input_schema,binding.output_schema):
             if schema is not None:
@@ -53,7 +103,9 @@ class ToolRegistry:
             result=await self.profiles.idempotency.execute(uow,auth,agent_id,'tool.publish',key,data,operation,status=201)
             return VersionRef.model_validate(result.body)
 
-    async def save_draft(self,auth,agent_id,binding,*,expected_revision,key):
+    async def save_draft(self,auth,agent_id,binding,*,expected_revision,key,managed=False):
+        if managed:
+            self.validate_managed_binding(auth, agent_id, binding)
         data=binding.model_dump(mode='json')
         async with self.backend.create_uow().begin_write() as uow:
             await self.profiles.agent(uow,auth,agent_id,'admin')
@@ -78,6 +130,7 @@ class ToolRegistry:
                 if not row: raise DomainError('DRAFT_REQUIRED',409)
                 if row['revision']!=expected_revision: raise DomainError('REVISION_CONFLICT',409)
                 binding=ToolBinding.model_validate_json(row['payload']); data=binding.model_dump(mode='json')
+                self.validate_managed_binding(auth, agent_id, binding)
                 for value in (binding.input_schema,binding.output_schema):
                     if value is not None:
                         try:

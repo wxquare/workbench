@@ -94,6 +94,20 @@ class ModelCredentialBinding(ConfigModel):
             raise ValueError('credential binding endpoint requires HTTPS')
         return value
 
+class MappingPolicyBinding(ConfigModel):
+    tool_name: str = Field(min_length=1, max_length=128)
+    mapping_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    schema_hash: str | None = Field(
+        default=None,
+        pattern=r'^[0-9a-f]{64}$',
+    )
+    model_input_fields: tuple[str, ...] = ()
+    query_scope_fields: tuple[str, ...] = ()
+    grant_fields: tuple[str, ...] = ()
+    context_fields: tuple[str, ...] = ()
+    protected_targets: tuple[tuple[str, ...], ...] = ()
+
+
 class MCPConnectionBinding(ConfigModel):
     server: str = Field(min_length=1,max_length=128)
     credential_scope: str = Field(min_length=1,max_length=128)
@@ -104,11 +118,20 @@ class MCPConnectionBinding(ConfigModel):
     read_tools: tuple[str,...] = Field(min_length=1)
     probe_requests: dict[str,dict] = Field(default_factory=dict)
     scope_grants: tuple[dict,...] = ()
+    mapping_policies: tuple[MappingPolicyBinding,...] = ()
+    tool_conversation_allowed_tools: tuple[str,...] = ()
     allow_loopback_http: bool = False
 
     @model_validator(mode="after")
     def validate_probes(self):
         if set(self.probe_requests)-set(self.read_tools): raise ValueError("probe tool is not authorized")
+        policy_tools = [value.tool_name for value in self.mapping_policies]
+        if len(policy_tools) != len(set(policy_tools)):
+            raise ValueError('duplicate mapping policy')
+        if set(policy_tools) - set(self.read_tools):
+            raise ValueError('mapping policy tool is not authorized')
+        if set(self.tool_conversation_allowed_tools) - set(policy_tools):
+            raise ValueError('tool conversation tool requires a mapping policy')
         from ipaddress import ip_address
         parsed=urlsplit(self.endpoint)
         if parsed.scheme=='http':
@@ -116,6 +139,13 @@ class MCPConnectionBinding(ConfigModel):
             except ValueError: loopback=False
             if not self.allow_loopback_http or not loopback: raise ValueError('HTTP MCP requires explicitly enabled numeric loopback')
         return self
+
+    def mapping_policy_for(self, tool_name: str):
+        matches = [
+            value for value in self.mapping_policies
+            if value.tool_name == tool_name
+        ]
+        return matches[0] if len(matches) == 1 else None
 
     @field_validator('team_id','agent_id')
     @classmethod

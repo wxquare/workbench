@@ -222,3 +222,24 @@ def test_utc_scope_cannot_expand_grant_or_use_ambiguous_naive_iso():
     ):
         with pytest.raises(PermissionError):
             build_dod_arguments('logs_search',{},scope,GRANT,CONTEXT)
+
+
+def test_legacy_mapping_hash_is_frozen_for_existing_bindings():
+    from workbench_agent.application.idempotency import digest
+    from workbench_agent.domain.tools import ToolBinding
+
+    value = ToolBinding(
+        alias='local.knowledge_search',
+        provider='mcp',
+        tool_name='knowledge_search',
+        server='local',
+        credential_scope='read',
+        permission='read',
+        input_schema={'type': 'object'},
+        output_schema=None,
+        read_only=True,
+        timeout_seconds=10,
+        max_output_bytes=65536,
+    ).model_dump(mode='json')
+    assert 'argument_mapping' not in value
+    assert digest(value) == 'ff50b51f749d62a8b736667368d0cc19cde86cbb6486d7b529ac0c18ece1d5c8'

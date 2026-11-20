@@ -3,6 +3,7 @@ from enum import StrEnum
 from typing import Any
 from pydantic import Field
 from workbench_agent.domain.profiles import FrozenModel, VersionRef
+from workbench_agent.tools.scope_mapping import ArgumentMapping
 
 class ToolStatus(StrEnum):
     OK='ok'
@@ -25,6 +26,10 @@ class ToolBinding(FrozenModel):
     read_only: bool = True
     timeout_seconds: float = Field(default=10,gt=0,le=60)
     max_output_bytes: int = Field(default=65536,ge=64,le=1048576)
+    argument_mapping: ArgumentMapping | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 class ToolError(FrozenModel):
     code: str

@@ -99,16 +99,29 @@ class ProfileService:
             if not draft.tools or len(draft.tools) > 4:
                 raise DomainError('TOOL_BINDINGS_INVALID', 422)
             aliases = set()
+            from workbench_agent.tools.registry import ToolRegistry
+            registry = ToolRegistry(
+                self.backend,
+                mcp_connections=getattr(self.backend, '_mcp_connections', ()),
+            )
             for ref in draft.tools:
                 row = await self.store.one(
                     uow, 'tool_bindings', team_id=auth.team_id,
                     binding_id=ref.resource_id,
                 )
                 data = json.loads(row['schema'])
+                from workbench_agent.domain.tools import ToolBinding
+                binding = ToolBinding.model_validate(data)
                 if (
                     row['alias'] in aliases
                     or data.get('read_only') is not True
-                    or data.get('tool_name') != 'knowledge_search'
+                    or not (
+                        data.get('tool_name') == 'knowledge_search'
+                        or (
+                            binding.argument_mapping is not None
+                            and registry.policy_allows(auth, agent_id, binding)
+                        )
+                    )
                 ):
                     raise DomainError('TOOL_BINDINGS_INVALID', 422)
                 aliases.add(row['alias'])

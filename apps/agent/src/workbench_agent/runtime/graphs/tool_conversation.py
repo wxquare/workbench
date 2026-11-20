@@ -156,6 +156,21 @@ async def _authorized_history(execution, *, limit: int):
         return selected
 
 
+def _conversation_tool_allowed(backend, context, binding):
+    if binding.argument_mapping is None:
+        return binding.tool_name == 'knowledge_search'
+    return any(
+        item.team_id == context.team_id
+        and item.agent_id == context.agent_id
+        and item.server == binding.server
+        and item.credential_scope == binding.credential_scope
+        and binding.tool_name in item.read_tools
+        and binding.tool_name in item.tool_conversation_allowed_tools
+        and item.mapping_policy_for(binding.tool_name) is not None
+        for item in getattr(backend, '_mcp_connections', ())
+    )
+
+
 async def _load_bindings(execution):
     import json
 
@@ -185,7 +200,11 @@ async def _load_bindings(execution):
             if (
                 binding is None
                 or not binding.read_only
-                or binding.tool_name != 'knowledge_search'
+                or not _conversation_tool_allowed(
+                    execution.backend,
+                    context,
+                    binding,
+                )
             ):
                 raise DomainError('TOOL_BINDINGS_INVALID', 422)
             result.append({
@@ -195,7 +214,11 @@ async def _load_bindings(execution):
                 'credential_scope': binding.credential_scope,
                 'permission': binding.permission,
                 'tool_name': binding.tool_name,
-                'schema': project_model_schema(binding.tool_name, binding.input_schema),
+                'schema': (
+                    binding.argument_mapping.model_input_schema
+                    if binding.argument_mapping is not None
+                    else project_model_schema(binding.tool_name, binding.input_schema)
+                ),
             })
     return result
 
@@ -389,7 +412,7 @@ def build_tool_conversation(saver):
                         invocation,
                         VersionRef.model_validate(ref),
                         call.get('args') or {},
-                        expected_tool='knowledge_search',
+                        expected_tool=binding['tool_name'],
                         max_logical_calls=MAX_TOOL_CALLS,
                         expected_scope_id=scope['scope_id'],
                     )

@@ -2,6 +2,8 @@
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Callable
+import hashlib
+import json
 import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -14,6 +16,8 @@ class TrustedConnection:
     credential_scope: str
     read_tools: frozenset[str] = frozenset()
     scope_grants: tuple = ()
+    mapping_policies: tuple = ()
+    tool_conversation_allowed_tools: frozenset[str] = frozenset()
 
 class ConnectionPolicy:
     def __init__(self,bindings): self._bindings=bindings if callable(bindings) else lambda: bindings
@@ -25,8 +29,21 @@ def configured_connection_policy(bindings):
     """Read deployment grants on each check, without opening a connection."""
     provider = bindings if callable(bindings) else lambda: bindings
     def current():
-        return [TrustedConnection(b.team_id, b.agent_id, b.server, b.credential_scope,
-            frozenset(b.read_tools), tuple(b.scope_grants)) for b in provider()]
+        return [TrustedConnection(
+            b.team_id,
+            b.agent_id,
+            b.server,
+            b.credential_scope,
+            frozenset(b.read_tools),
+            tuple(b.scope_grants),
+            tuple(
+                value.model_dump(mode='json')
+                if hasattr(value, 'model_dump')
+                else value
+                for value in b.mapping_policies
+            ),
+            frozenset(b.tool_conversation_allowed_tools),
+        ) for b in provider()]
     return ConnectionPolicy(current)
 
 
@@ -191,7 +208,56 @@ class MCPAdapter:
         self.policy.require(team_id,agent_id,connection_ref,credential_scope)
         async with self.session_factory(connection_ref,credential_scope) as session:
             return await _catalog(session)
-    def prepare(self,connection_ref,credential_scope,tool_name,args,*,team_id,agent_id,query_scope,correlation=None):
+    def prepare(
+        self,
+        connection_ref,
+        credential_scope,
+        tool_name,
+        args,
+        *,
+        team_id,
+        agent_id,
+        query_scope,
+        correlation=None,
+        argument_mapping=None,
+        full_schema=None,
+    ):
+        if argument_mapping is not None:
+            if tool_name in BUSINESS_TOOLS:
+                raise PermissionError('MCP_MAPPING_CONFLICT')
+            from workbench_agent.tools.scope_mapping import bind_arguments, validate_mapping
+            matching=[]
+            for rule in self.policy._bindings():
+                if (rule.team_id,rule.agent_id,rule.server,rule.credential_scope)==(team_id,agent_id,connection_ref,credential_scope) and tool_name in rule.read_tools:
+                    for policy in rule.mapping_policies:
+                        if isinstance(policy,dict) and policy.get('tool_name')==tool_name:
+                            matching.append((rule,policy))
+            if len(matching)!=1 or full_schema is None: raise PermissionError('MCP_MAPPING_POLICY_UNAVAILABLE')
+            rule,policy=matching[0]
+            if (
+                policy.get('schema_hash') is not None
+                and policy.get('schema_hash')
+                != hashlib.sha256(
+                    json.dumps(
+                        full_schema,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(',', ':'),
+                    ).encode('utf-8')
+                ).hexdigest()
+            ):
+                raise PermissionError('MCP_SCHEMA_NOT_APPROVED')
+            try:
+                validate_mapping(argument_mapping,full_schema,policy)
+            except ValueError as error:
+                raise PermissionError(str(error)) from None
+            grants=[]
+            for grant in rule.scope_grants:
+                try:
+                    grants.append(bind_arguments(argument_mapping,args,query_scope=query_scope,grant=grant,context=correlation or {}))
+                except PermissionError: continue
+            if len(grants)!=1: raise PermissionError('MCP_SCOPE_MAPPING_UNAVAILABLE')
+            return grants[0]
         if tool_name not in BUSINESS_TOOLS: return args
         for rule in self.policy._bindings():
             if (rule.team_id,rule.agent_id,rule.server,rule.credential_scope)==(team_id,agent_id,connection_ref,credential_scope) and tool_name in rule.read_tools:
@@ -202,13 +268,29 @@ class MCPAdapter:
                     except PermissionError: pass
         raise PermissionError('MCP_SCOPE_MAPPING_UNAVAILABLE')
 
-    async def call(self,connection_ref,credential_scope,tool_name,args,*,team_id,agent_id,expected_schema=None,query_scope=None,correlation=None,expected_business_scope=None,expected_knowledge_scope=None):
+    async def call(self,connection_ref,credential_scope,tool_name,args,*,team_id,agent_id,expected_schema=None,query_scope=None,correlation=None,expected_business_scope=None,expected_knowledge_scope=None,argument_mapping=None):
         if tool_name in {'SRE-Log-Query','SRE-Log-TraceQuery'} and any(key in args for key in ('session_key','smart_thread_id','smart_user_id','parameter_template_id','instantiated_parameters')):
             raise PermissionError('MCP_UNSAFE_ARGUMENT')
-        args=self.prepare(connection_ref,credential_scope,tool_name,args,team_id=team_id,agent_id=agent_id,query_scope=query_scope,correlation=correlation)
-        if expected_knowledge_scope is not None and args.get('scope') != expected_knowledge_scope:
+        prepare_options={
+            'team_id':team_id,
+            'agent_id':agent_id,
+            'query_scope':query_scope,
+            'correlation':correlation,
+        }
+        prepare_options.update(
+            argument_mapping=argument_mapping,
+            full_schema=expected_schema if argument_mapping is not None else None,
+        )
+        prepared=self.prepare(
+            connection_ref,
+            credential_scope,
+            tool_name,
+            args,
+            **prepare_options,
+        )
+        if expected_knowledge_scope is not None and prepared.get('scope') != expected_knowledge_scope:
             raise ScopeMappingChanged('MCP_SCOPE_CHANGED')
-        if expected_business_scope is not None and dod_business_identity(args, query_scope) != tuple(expected_business_scope):
+        if expected_business_scope is not None and dod_business_identity(prepared, query_scope) != tuple(expected_business_scope):
             raise ScopeMappingChanged('MCP_SCOPE_CHANGED')
         self.policy.require(team_id,agent_id,connection_ref,credential_scope,tool_name)
         mismatch=False
@@ -221,7 +303,7 @@ class MCPAdapter:
                     tool=catalog.tools[catalog.names.index(tool_name)]
                     schema=tool.get('inputSchema') if isinstance(tool,dict) else tool.inputSchema
                     mismatch=schema!=expected_schema
-            if not mismatch: result=await session.call_tool(tool_name,args)
+            if not mismatch: result=await session.call_tool(tool_name,prepared)
         if mismatch: raise SchemaChanged()
         return result
 
@@ -250,14 +332,24 @@ def configured_adapter(bindings,secrets):
     rules=[]
     reviewed=BUSINESS_TOOLS
     for b in bindings:
-        if set(b.read_tools)-reviewed: raise ValueError('unreviewed MCP tool')
+        mapped=set(b.tool_conversation_allowed_tools)
+        if set(b.read_tools)-reviewed-mapped: raise ValueError('unreviewed MCP tool')
         key=(b.server,b.credential_scope)
         if key in endpoints and (endpoints[key]!=b.endpoint or references[key]!=b.secret_ref):
             raise ValueError('conflicting MCP deployment connection')
         endpoints[key]=b.endpoint
         references[key]=b.secret_ref
         if b.endpoint.startswith('http://') and b.allow_loopback_http: loopback_http.add(key)
-        rules.append(TrustedConnection(b.team_id,b.agent_id,b.server,b.credential_scope,frozenset(b.read_tools),tuple(b.scope_grants)))
+        rules.append(TrustedConnection(
+            b.team_id,
+            b.agent_id,
+            b.server,
+            b.credential_scope,
+            frozenset(b.read_tools),
+            tuple(b.scope_grants),
+            [value.model_dump(mode='json') for value in b.mapping_policies],
+            frozenset(b.tool_conversation_allowed_tools),
+        ))
     def headers(server,scope):
         return {'Authorization':'Bearer '+secrets.resolve(references[(server,scope)])}
     return MCPAdapter(StreamableSessionFactory(endpoints,headers,loopback_http=loopback_http),ConnectionPolicy(rules))

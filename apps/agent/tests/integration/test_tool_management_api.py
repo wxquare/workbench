@@ -11,11 +11,23 @@ def deployment(team_id, agent_id):
     return SimpleNamespace(
         server='local',
         credential_scope='reader',
-        read_tools=('knowledge_search',),
+        read_tools=('knowledge_search', 'test_read_counter'),
         team_id=team_id,
         agent_id=agent_id,
         endpoint='https://private.example.invalid/mcp',
         secret_ref='env://PRIVATE_TOKEN',
+        mapping_policies=(
+            SimpleNamespace(
+                tool_name='test_read_counter',
+                model_dump=lambda mode='json': {
+                    'tool_name': 'test_read_counter',
+                    'mapping_hash': 'a' * 64,
+                    'model_input_fields': ['query'],
+                    'protected_targets': [['scope', 'team']],
+                },
+            ),
+        ),
+        tool_conversation_allowed_tools=('test_read_counter',),
     )
 
 
@@ -29,8 +41,15 @@ async def test_connection_projection_is_admin_scoped_and_redacted(platform, clie
     assert result['items'] == [{
         'server': 'local',
         'credential_scope': 'reader',
-        'read_tools': ['knowledge_search'],
+        'read_tools': ['knowledge_search', 'test_read_counter'],
         'status': 'configured',
+        'tool_conversation_tools': ['test_read_counter'],
+        'mapping_policies': [{
+            'tool_name': 'test_read_counter',
+            'mapping_hash': 'a' * 64,
+            'model_input_fields': ['query'],
+            'protected_targets': [['scope', 'team']],
+        }],
     }]
     assert 'private.example' not in str(result)
     assert 'PRIVATE_TOKEN' not in str(result)
@@ -107,6 +126,7 @@ async def test_binding_list_exposes_only_publish_projections_needed_by_agent_edi
     assert item['alias'] == 'knowledge.search'
     assert item['tool_name'] == 'knowledge_search'
     assert item['read_only'] is True
+    assert item['tool_conversation_compatible'] is True
     assert item['latest_ref']['version'] == '1'
 
 
@@ -155,5 +175,6 @@ async def test_tool_discovery_worker_filters_unlisted_tools(platform):
     )
     assert 'knowledge_search' in result.result_ref
     assert 'hidden_write' not in result.result_ref
+    assert '"tool_conversation_compatible":true' in result.result_ref
     assert 'private.example' not in result.result_ref
     assert 'PRIVATE_TOKEN' not in result.result_ref

@@ -68,6 +68,38 @@ async def test_tool_conversation_admits_scoped_published_knowledge_search(
 
 
 @pytest.mark.asyncio
+async def test_configured_mapped_tool_requires_its_current_policy(platform, client):
+    from workbench_agent.settings import MCPConnectionBinding
+    from workbench_agent.tools.registry import ToolRegistry
+    from test_scope_mapping_policy import binding, connection
+
+    deployment = connection(platform)
+    registry = ToolRegistry(
+        platform.backend,
+        mcp_connections=(deployment,),
+    )
+    ref = await registry.publish(
+        platform.auth,
+        platform.agent_id,
+        binding(),
+        key='admit-configured-tool',
+    )
+    platform.backend._mcp_connections = (deployment,)
+    await publish_profile(platform, (ref,))
+    payload = make_run_payload(platform.agent_id)
+    payload['business_context'] = {
+        'conversation': True,
+        'query_scope': SCOPE,
+    }
+    accepted = await client.post(
+        '/v1/runs',
+        json=payload,
+        headers={'Idempotency-Key': 'admit-configured-run'},
+    )
+    assert accepted.status_code == 202, accepted.text
+
+
+@pytest.mark.asyncio
 async def test_tool_conversation_requires_scope_and_read_only_supported_binding(
     platform, client
 ):

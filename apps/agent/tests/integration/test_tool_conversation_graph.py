@@ -211,6 +211,18 @@ async def setup_tool_run(platform, client, monkeypatch, model):
         platform.settings.storage.database_url.get_secret_value(),
         tool_permissions=permissions,
     )
+    from workbench_agent.settings import MCPConnectionBinding
+    deployment = MCPConnectionBinding.model_validate({
+        'server': 'local',
+        'credential_scope': 'read',
+        'team_id': platform.auth.team_id,
+        'agent_id': platform.agent_id,
+        'endpoint': 'https://example.invalid/mcp',
+        'secret_ref': 'env://QA_TEST_MCP',
+        'read_tools': ['knowledge_search'],
+        'scope_grants': [GRANT],
+    })
+    backend._mcp_connections = (deployment,)
     backend._mcp_connection_policy = policy
     backend._diagnosis_factory = lambda execution: (
         ModelInvoker(backend, Factory(), object(), execution=execution),

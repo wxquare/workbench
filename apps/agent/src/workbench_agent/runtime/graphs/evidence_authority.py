@@ -4,7 +4,8 @@ import json
 from workbench_agent.application.idempotency import digest
 from workbench_agent.domain.profiles import VersionRef
 from workbench_agent.tools.policy import load_published_binding
-from workbench_agent.tools.mcp import DOD_MCP_TOOLS
+from workbench_agent.tools.mcp import ConnectionPolicy, DOD_MCP_TOOLS
+from workbench_agent.tools.scope_mapping import validate_mapping
 
 
 async def authorized_sources(backend, uow, guard, context, references, expected_scope=None, *, include_truncated=False):
@@ -39,6 +40,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
         if receipt.get('scope_id') != scope_id:
             continue
         try:
+            binding = None
             if receipt.get('kind') == 'snapshot-evidence-v1':
                 ref = VersionRef.model_validate(receipt['snapshot'])
                 if (ref not in context.repositories or invocation['tool_version'] != ref.resource_id
@@ -50,7 +52,7 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 if ref not in context.tools or invocation['tool_version'] != ref.resource_id:
                     continue
                 binding_row = await backend.configuration.one(uow, 'tool_bindings', team_id=context.team_id,
-                    binding_id=ref.resource_id, agent_id=context.agent_id,
+                    binding_id=ref.resource_id,
                     version=int(ref.version), hash=ref.content_hash)
                 if not binding_row:
                     continue
@@ -58,6 +60,47 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 binding = load_published_binding(raw) if digest(raw) == ref.content_hash else None
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
+                if binding.argument_mapping is not None:
+                    current_scope = json.loads(scope['scope_json'])
+                    policy = getattr(backend, '_mcp_connection_policy', None)
+                    if not isinstance(policy, ConnectionPolicy):
+                        continue
+                    signed = []
+                    for rule in policy._bindings():
+                        if (
+                            rule.team_id == context.team_id
+                            and rule.agent_id == context.agent_id
+                            and rule.server == binding.server
+                            and rule.credential_scope == binding.credential_scope
+                            and binding.tool_name in rule.read_tools
+                        ):
+                            for item in rule.mapping_policies:
+                                if (
+                                    isinstance(item, dict)
+                                    and item.get('tool_name') == binding.tool_name
+                                ):
+                                    signed.append(item)
+                    if len(signed) != 1:
+                        continue
+                    try:
+                        validate_mapping(
+                            binding.argument_mapping,
+                            binding.input_schema,
+                            signed[0],
+                        )
+                    except (ValueError, TypeError):
+                        continue
+                    if not any(
+                        binding.tool_name in rule.tool_conversation_allowed_tools
+                        for rule in policy._bindings()
+                        if (
+                            rule.team_id == context.team_id
+                            and rule.agent_id == context.agent_id
+                            and rule.server == binding.server
+                            and rule.credential_scope == binding.credential_scope
+                        )
+                    ):
+                        continue
                 if context.graph_id in (
                     GraphId.KNOWLEDGE_SCOPED_EXCERPT,
                     GraphId.KNOWLEDGE_CITATION_REVIEW,
@@ -84,6 +127,13 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
             if row['quality'] == 'truncated' and (not include_truncated or not truncated):
                 continue
             value = json.loads(payload['payload'])
+            if (
+                binding is not None
+                and binding.argument_mapping is not None
+                and not truncated
+                and digest(value) != row['summary']
+            ):
+                continue
             if context.graph_id == GraphId.KNOWLEDGE_CITATION_REVIEW:
                 # Knowledge receipts bind the frozen scope but carry no time window.
                 # Verify the immutable payload and each upstream reference again.

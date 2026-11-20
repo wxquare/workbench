@@ -136,10 +136,37 @@ class PolicyToolExecutor:
             if expected_scope_id is not None and scope_id != expected_scope_id:
                 raise DomainError('STALE_QUERY_SCOPE',409)
             values=json.loads(scope['scope_json'])
-            if binding.tool_name in BUSINESS_TOOLS:
+            if binding.tool_name in BUSINESS_TOOLS or binding.argument_mapping is not None:
                 if not isinstance(self.transport,MCPAdapter): return ToolResult(status='denied',error=ToolError(code='TOOL_SCOPE_UNAVAILABLE'))
                 try:
-                    bound_args=self.transport.prepare(binding.server,binding.credential_scope,binding.tool_name,args,team_id=context.team_id,agent_id=context.agent_id,query_scope=values,correlation={'run_id':guard.run_id,'invocation_id':invocation_id,'query_scope_ref':scope_id})
+                    prepare_options={
+                        'team_id':context.team_id,
+                        'agent_id':context.agent_id,
+                        'query_scope':values,
+                        'correlation':{
+                            'run_id':guard.run_id,
+                            'invocation_id':invocation_id,
+                            'query_scope_ref':scope_id,
+                        },
+                    }
+                    if binding.argument_mapping is not None:
+                        prepare_options.update(
+                            argument_mapping=binding.argument_mapping,
+                            full_schema=binding.input_schema,
+                        )
+                    elif binding.tool_name in DOD_MCP_TOOLS:
+                        prepare_options['correlation'] = {
+                            'run_id': guard.run_id,
+                            'invocation_id': invocation_id,
+                            'query_scope_ref': scope_id,
+                        }
+                    bound_args=self.transport.prepare(
+                        binding.server,
+                        binding.credential_scope,
+                        binding.tool_name,
+                        args,
+                        **prepare_options,
+                    )
                 except PermissionError:
                     return ToolResult(status='denied',error=ToolError(code='TOOL_SCOPE_UNAVAILABLE'))
                 if expected_business_scope is not None:
@@ -153,10 +180,15 @@ class PolicyToolExecutor:
             else:
                 if not validate_arguments(binding,args): return ToolResult(status='invalid_input',error=ToolError(code='INVALID_INPUT'))
                 if not arguments_within_scope(args,values): return ToolResult(status='denied',error=ToolError(code='SCOPE_DENIED'))
-            expected_knowledge_scope = bound_args['scope'] if context.graph_id in (
-                GraphId.KNOWLEDGE_CITATION_REVIEW,
-                GraphId.CONVERSATION_TOOL_USE,
-            ) and binding.tool_name == 'knowledge_search' else None
+            expected_knowledge_scope = (
+                bound_args['scope']
+                if context.graph_id in (
+                    GraphId.KNOWLEDGE_CITATION_REVIEW,
+                    GraphId.CONVERSATION_TOOL_USE,
+                )
+                and binding.tool_name == 'knowledge_search'
+                else None
+            )
             if not binding.read_only:
                 return ToolResult(status='ok',proposed_action=ActionProposal(binding_ref=binding_ref,scope_id=scope_id,args=args,args_hash=digest(args)))
             if previous:
@@ -193,7 +225,9 @@ class PolicyToolExecutor:
             started=time.monotonic()
             try:
                 correlation={'run_id':guard.run_id,'invocation_id':invocation_id,'query_scope_ref':scope_id}
-                options={'correlation':correlation} if binding.tool_name in DOD_MCP_TOOLS else {}
+                options={'correlation':correlation} if binding.tool_name in DOD_MCP_TOOLS or binding.argument_mapping is not None else {}
+                if binding.argument_mapping is not None:
+                    options['argument_mapping']=binding.argument_mapping
                 if expected_business_scope is not None: options['expected_business_scope']=expected_business_scope
                 if expected_knowledge_scope is not None: options['expected_knowledge_scope']=expected_knowledge_scope
                 from workbench_agent.observability import span_or_none
@@ -227,7 +261,10 @@ class PolicyToolExecutor:
                     await self.budgets.quarantine(guard,ident,ActualUsage(input_tokens=0,output_tokens=0),uow=uow)
                 raise
             if status=='ok':
-                if binding.tool_name in DOD_MCP_TOOLS:
+                if (
+                    binding.argument_mapping is None
+                    and binding.tool_name in DOD_MCP_TOOLS
+                ):
                     result=getattr(response,'structuredContent',None)
                     if not isinstance(result,dict) or result.get('schema_version')!='dod-tool-result-v1' or result.get('status') not in ('ok','empty','denied','invalid_input','timeout','unavailable','unknown'):
                         return ToolResult(status='unknown',error=ToolError(code='INVALID_OUTPUT'))
@@ -263,6 +300,24 @@ class PolicyToolExecutor:
                     response=response.structuredContent
                 elif hasattr(response,'model_dump'):
                     response=response.model_dump(mode='json')
+                if (
+                    binding.argument_mapping is not None
+                    and isinstance(response, dict)
+                    and response.get('structuredContent') is None
+                    and isinstance(response.get('content'), list)
+                ):
+                    texts = [
+                        item.get('text')
+                        for item in response['content']
+                        if isinstance(item, dict)
+                        and item.get('type') == 'text'
+                        and isinstance(item.get('text'), str)
+                    ]
+                    if len(texts) == 1:
+                        try:
+                            response = json.loads(texts[0])
+                        except ValueError:
+                            response = None
                 if response in (None,[],{},''): return await self._complete_empty(context,guard,binding,binding_ref,scope_id,ident,expected_business_scope,expected_knowledge_scope)
                 if binding.output_schema is not None and not Draft202012Validator(binding.output_schema).is_valid(response): return ToolResult(status='unknown',error=ToolError(code='INVALID_OUTPUT'))
                 if scope_id is None: return ToolResult(status='unknown',error=ToolError(code='QUERY_SCOPE_REQUIRED'))
@@ -271,7 +326,11 @@ class PolicyToolExecutor:
                     return ToolResult(status='denied',error=ToolError(code='TOOL_DENIED'))
                 from workbench_agent.domain.evidence import safe_evidence_payload
                 payload,truncated=safe_evidence_payload(response,binding.max_output_bytes)
-                if binding.tool_name in DOD_MCP_TOOLS and response.get('meta',{}).get('truncated') is True: truncated=True
+                if (
+                    binding.tool_name in DOD_MCP_TOOLS
+                    and isinstance(response, dict)
+                    and response.get('meta',{}).get('truncated') is True
+                ): truncated=True
                 async with self.backend.create_uow().begin_write() as uow:
                     await self.budgets._owned(uow,guard)
                     current=await self.backend.runs.current_scope(uow,guard.team_id,guard.run_id)
