@@ -1,0 +1,71 @@
+name: knowledge-evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: knowledge-evaluation
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    if: ${{ vars.KNOWLEDGE_EVAL_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
+      WORKBENCH_BASELINE_TOKEN: ${{ secrets.WORKBENCH_BASELINE_TOKEN }}
+      KNOWLEDGE_EVAL_BUDGET_MICROS: ${{ vars.KNOWLEDGE_EVAL_BUDGET_MICROS }}
+      KNOWLEDGE_EVAL_CURRENCY: ${{ vars.KNOWLEDGE_EVAL_CURRENCY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/agent/uv.lock
+      - name: Require explicit inputs
+        run: |
+          test -n "$WORKBENCH_BASELINE_TOKEN"
+          test -n "$KNOWLEDGE_EVAL_BUDGET_MICROS"
+          test -n "$KNOWLEDGE_EVAL_CURRENCY"
+      - name: Install
+        working-directory: apps/agent
+        run: uv sync --frozen --group dev
+      - name: Validate tracked regression policy
+        run: |
+          apps/agent/.venv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          value = json.loads(Path('evaluation/knowledge/regression-policy.json').read_text())
+          assert value['max_rule_rate_drop'] == 0.05
+          assert value['max_latency_p95_growth'] == 0.25
+          PY
+      - name: Run configured evaluation
+        run: |
+          mkdir -p artifacts/evaluation
+          if [ -n "$KNOWLEDGE_EVAL_BASELINE_EXPERIMENT" ]; then
+            apps/agent/.venv/bin/workbench eval compare \
+              --baseline "$KNOWLEDGE_EVAL_BASELINE_EXPERIMENT" \
+              --candidate "$KNOWLEDGE_EVAL_CANDIDATE_EXPERIMENT" \
+              --policy evaluation/knowledge/regression-policy.json \
+              --output artifacts/evaluation/comparison.json
+          else
+            echo '{"status":"no_baseline","quality_status":"unavailable"}' \
+              > artifacts/evaluation/comparison.json
+          fi
+        env:
+          KNOWLEDGE_EVAL_BASELINE_EXPERIMENT: ${{ vars.KNOWLEDGE_EVAL_BASELINE_EXPERIMENT }}
+          KNOWLEDGE_EVAL_CANDIDATE_EXPERIMENT: ${{ vars.KNOWLEDGE_EVAL_CANDIDATE_EXPERIMENT }}
+      - name: Upload sanitized result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-evaluation-summary
+          path: artifacts/evaluation/comparison.json
+          if-no-files-found: warn
+          retention-days: 14
