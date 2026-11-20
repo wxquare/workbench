@@ -196,6 +196,30 @@ class ToolModel:
         )
 
 
+class LimitModel:
+    def __init__(self):
+        self.calls = 0
+    def bind_tools(self, tools):
+        return self
+    async def ainvoke(self, messages, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            return AIMessage(
+                content='',
+                tool_calls=[{
+                    'name': 'knowledge_search',
+                    'args': {'query': f'retry-{index}', 'scene': 'qa'},
+                    'id': f'call-{index}',
+                    'type': 'tool_call',
+                } for index in range(6)],
+                usage_metadata={'input_tokens': 4, 'output_tokens': 2, 'total_tokens': 6},
+            )
+        return AIMessage(
+            content='Retry after checking the queue.',
+            usage_metadata={'input_tokens': 4, 'output_tokens': 2, 'total_tokens': 6},
+        )
+
+
 @pytest.mark.asyncio
 async def test_tool_conversation_runs_tool_and_projects_unverified_answer(
     platform, client, monkeypatch
@@ -222,6 +246,25 @@ async def test_tool_conversation_runs_tool_and_projects_unverified_answer(
         else:
             assert result['status'] == 'partial'
             assert '工具证据' in ' '.join(result['outcome']['unresolved_items'])
+    finally:
+        await backend.close()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_tool_conversation_never_executes_more_than_four_calls(
+    platform, client, monkeypatch
+):
+    model = LimitModel()
+    runtime, app, backend, worker, calls, run_id = await setup_tool_run(
+        platform, client, monkeypatch, model
+    )
+    try:
+        assert await worker.run_once() == 'projected'
+        result = (await client.get('/v1/runs/' + run_id)).json()
+        assert result['outcome']['completed'] is False
+        assert 'knowledge_search: denied' in ' '.join(result['outcome']['unresolved_items'])
+        assert len(calls) <= 4
     finally:
         await backend.close()
         await runtime.close()
