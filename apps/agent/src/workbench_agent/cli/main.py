@@ -66,7 +66,21 @@ def main() -> None:
     kb_rebuild.add_argument('--expected-revision', type=int, required=True)
 
     evaluate.add_argument("--dataset-type", choices=("rca", "knowledge"), default="rca")
+    eval_command = subcommands.add_parser("eval", help="versioned and resumable knowledge evaluation")
+    eval_subcommands = eval_command.add_subparsers(dest="eval_command", required=True)
+    eval_validate = eval_subcommands.add_parser("validate", help="validate a versioned knowledge dataset")
+    eval_validate.add_argument("--dataset", required=True)
     args = parser.parse_args()
+    if args.command == "eval":
+        from workbench_agent.cli.eval import main as eval_main
+        try:
+            code = eval_main(args)
+        except (ValueError, OSError):
+            print(json.dumps({"error": "invalid evaluation input"}))
+            sys.exit(2)
+        if code:
+            sys.exit(code)
+        return
     if args.command == "evaluate":
         from workbench_agent.cli.evaluate import run_evaluate
         try:

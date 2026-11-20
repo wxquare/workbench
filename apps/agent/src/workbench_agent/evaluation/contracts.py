@@ -7,17 +7,6 @@ import json
 from typing import Any
 from dataclasses import dataclass
 
-from workbench_agent.domain.query_scope import validate_qa_scope
-
-
-SCENARIOS = {
-    'answerable',
-    'multiple_sources',
-    'no_answer',
-    'conflict',
-    'stale',
-    'unauthorized',
-}
 SEED_KINDS = {'faq', 'runbook', 'glossary', 'case'}
 
 
@@ -121,39 +110,6 @@ def validate_seed_manifest(value: dict) -> list[dict]:
             raise ValueError('invalid knowledge draft') from None
         normalized.append(seed)
     return normalized
-
-
-def validate_dataset(value: dict) -> dict:
-    """Validate labels while allowing an empty collection template."""
-    if not isinstance(value, dict) or value.get('schema_version') != 'knowledge-eval-v1':
-        raise ValueError('invalid dataset schema')
-    if value.get('dataset_kind') != 'business':
-        raise ValueError('baseline datasets must be declared as business')
-    cases = value.get('cases')
-    if not isinstance(cases, list):
-        raise ValueError('dataset cases must be a list')
-    identifiers: set[str] = set()
-    for case in cases:
-        if not isinstance(case, dict) or not isinstance(case.get('id'), str):
-            raise ValueError('each case requires an id')
-        if not case['id'] or case['id'] != case['id'].strip():
-            raise ValueError('invalid case id')
-        if case['id'] in identifiers:
-            raise ValueError('duplicate case id')
-        identifiers.add(case['id'])
-        scenario = case.get('scenario')
-        if scenario not in SCENARIOS:
-            raise ValueError('unsupported scenario')
-        if type(case.get('answerable')) is not bool:
-            raise ValueError('answerable must be boolean')
-        validate_qa_scope(case.get('query_scope'))
-        for field in ('expected_source_ids', 'must_include'):
-            labels = case.get(field)
-            if not isinstance(labels, list) or any(
-                not isinstance(label, str) or not label.strip() for label in labels
-            ):
-                raise ValueError(f'{field} must contain nonempty strings')
-    return value
 
 
 def validate_experiment_config(value: dict) -> dict:

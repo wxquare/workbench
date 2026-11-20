@@ -4,10 +4,10 @@ import pytest
 
 from workbench_agent.evaluation.contracts import (
     make_run_key,
-    validate_dataset,
     validate_experiment_config,
     validate_seed_manifest,
 )
+from workbench_agent.evaluation.dataset import validate_dataset
 
 
 def test_run_key_separates_experiments_and_reuses_resume():

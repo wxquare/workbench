@@ -21,7 +21,9 @@
         "Required business fact or condition"
       ],
       "review_status": "pending",
-      "reviewer": null
+      "reviewer": null,
+      "split": "dev",
+      "checks": []
     },
     {
       "id": "no-answer-001",
@@ -38,7 +40,9 @@
       "expected_source_ids": [],
       "must_include": [],
       "review_status": "pending",
-      "reviewer": null
+      "reviewer": null,
+      "split": "dev",
+      "checks": []
     }
   ]
 }

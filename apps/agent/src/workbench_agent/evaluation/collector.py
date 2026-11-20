@@ -14,8 +14,8 @@ from workbench_agent.evaluation.contracts import (
     canonical,
     hash_json,
     make_run_key,
-    validate_dataset,
 )
+from workbench_agent.evaluation.dataset import validate_dataset
 from workbench_agent.evaluation.journal import fsync_directory
 
 
