@@ -56,7 +56,14 @@ class PolicyToolExecutor:
         self.backend,self.transport,self.execution=backend,transport,execution
         self.permissions=execution.tool_permissions
         if not isinstance(self.permissions,DeploymentToolPermissions): raise ValueError('trusted deployment tool permissions required')
-        self.expert=execution._expert_name
+        # The coordinator owns tool execution for the tool-use conversation.
+        # Its role-specific capability is the knowledge tool grant; the model
+        # and transport still execute under the same live Worker lease.
+        self.expert = (
+            'knowledge'
+            if execution.claim.context.graph_id == GraphId.CONVERSATION_TOOL_USE
+            else execution._expert_name
+        )
         self.delays=delays
         self.budgets=BudgetService(backend)
     async def _replay(self,uow,guard,previous,binding_ref,args,scope_id,expected_business_scope=None,expected_knowledge_scope=None):

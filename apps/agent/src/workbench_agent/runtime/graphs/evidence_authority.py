@@ -58,12 +58,17 @@ async def authorized_sources(backend, uow, guard, context, references, expected_
                 binding = load_published_binding(raw) if digest(raw) == ref.content_hash else None
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
-                if context.graph_id in (GraphId.SOP_CONDITIONAL, GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL): expert = 'diagnosis'
-                elif context.graph_id in (
+                if context.graph_id in (
                     GraphId.KNOWLEDGE_SCOPED_EXCERPT,
                     GraphId.KNOWLEDGE_CITATION_REVIEW,
                     GraphId.CONVERSATION_TOOL_USE,
                 ): expert = 'knowledge'
+                elif context.graph_id in (
+                    GraphId.SOP_CONDITIONAL,
+                    GraphId.RCA_SYNTHETIC,
+                    GraphId.RCA_PROPOSAL,
+                    GraphId.RCA_BATCH_PROPOSAL,
+                ): expert = 'diagnosis'
                 else: continue
                 authority = (expert, binding.permission)
             else:

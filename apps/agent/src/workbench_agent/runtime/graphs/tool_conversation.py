@@ -18,7 +18,6 @@ from workbench_agent.runtime.graphs.agent_instructions import system_instruction
 from workbench_agent.runtime.graphs.ids import GraphId
 from workbench_agent.tools.model_schema import project_model_schema
 
-
 STATE_SCHEMA_VERSION = 'conversation-tool-use-state-v1'
 NOTICE = '以下回答基于所列工具返回的结果，未经独立校验\n\n'
 MAX_TOOL_CALLS = 4
@@ -45,8 +44,10 @@ MAX_HISTORY_BYTES = 16_000
 
 async def _authorized_history(execution, *, limit: int):
     import json
+
     from langchain_core.messages import AIMessage, HumanMessage
     from sqlalchemy import and_, select
+
     from workbench_agent.application.context import ContextResolver
     from workbench_agent.domain.context import RunContext
     from workbench_agent.domain.outcomes import RunOutcome
@@ -157,6 +158,7 @@ async def _authorized_history(execution, *, limit: int):
 
 async def _load_bindings(execution):
     import json
+
     from workbench_agent.application.idempotency import digest
     from workbench_agent.tools.policy import load_published_binding
     context = execution.claim.context
@@ -236,7 +238,11 @@ async def _model(execution, messages, *, phase, bindings):
         'knowledge',
         messages,
         tools=tools,
-        logical_call_id=None,
+        logical_call_id=str(uuid5(
+            UUID(execution.guard.run_id),
+            f'{GraphId.CONVERSATION_TOOL_USE}:{phase}:tools:{len(messages)}:'
+            f'{len(getattr(messages[-1], "tool_calls", ()) if messages else ())}',
+        )),
     )
 
 
@@ -293,6 +299,8 @@ def build_tool_conversation(saver):
                 'MAX_CONTEXT_EXCEEDED',
                 'MODEL_PROFILE_UNAVAILABLE',
                 'MODEL_CREDENTIAL_UNAVAILABLE',
+                'INVOCATION_ALREADY_SENT',
+                'RESERVATION_CONFLICT',
             }:
                 return {'phase': 'model', 'last_error': exc.code}
             raise
@@ -445,9 +453,10 @@ def build_tool_conversation(saver):
             }
         model_message = next(
             (
-                message
-                for message in reversed(state.get('messages', []))
-                if isinstance(message, AIMessage) and isinstance(message.content, str)
+                message for message in reversed(state.get('messages', []))
+                if isinstance(message, AIMessage)
+                and isinstance(message.content, str)
+                and message.content.strip()
             ),
             None,
         )

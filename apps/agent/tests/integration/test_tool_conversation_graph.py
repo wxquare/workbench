@@ -1,27 +1,22 @@
-import json
 from types import SimpleNamespace
+from uuid import UUID
 
-import httpx
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
 from contract.test_dod_mcp_mapping import GRANT, SCOPE
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from support.runs import make_run_payload
+
+from workbench_agent.application.errors import DomainError
 from workbench_agent.domain.profiles import ProfileDraft
 from workbench_agent.domain.tools import ToolBinding
 from workbench_agent.jobs.worker import Worker
 from workbench_agent.persistence.backends.sqlite import SQLiteBackend
 from workbench_agent.runtime.graphs.registry import foundation_worker_registry
 from workbench_agent.runtime.models.invoker import ModelInvoker
-from workbench_agent.tools.mcp import (
-    MCPAdapter,
-    StreamableSessionFactory,
-    configured_connection_policy,
-)
+from workbench_agent.tools.mcp import MCPAdapter
 from workbench_agent.tools.permissions import DeploymentToolPermissions
 from workbench_agent.tools.policy import PolicyToolExecutor
 from workbench_agent.tools.registry import ToolRegistry
-from workbench_agent.runtime.graphs.tool_conversation import build_tool_conversation
 
 
 async def setup_tool_run(platform, client, monkeypatch, model):
@@ -90,25 +85,77 @@ async def setup_tool_run(platform, client, monkeypatch, model):
         },
         'required': ['query', 'scene', 'scope'],
     }
-    class Adapter:
-        async def call(self, *args, **kwargs):
+    policy = None
+    class Adapter(MCPAdapter):
+        def __init__(self):
+            self.prepared = []
+            super().__init__(None, None)
+
+        def prepare(self, connection_ref, credential_scope, tool_name, args, *, team_id,
+                    agent_id, query_scope, correlation=None):
+            from workbench_agent.tools.mcp import build_dod_arguments
+            bound = build_dod_arguments(
+                tool_name, args, query_scope, GRANT, correlation,
+            )
+            self.prepared.append({
+                'connection_ref': connection_ref,
+                'credential_scope': credential_scope,
+                'team_id': team_id,
+                'agent_id': agent_id,
+                'query_scope': dict(query_scope),
+                'correlation': dict(correlation or {}),
+            })
+            return bound
+
+        async def call(self, connection_ref, credential_scope, tool_name, args, *, team_id,
+                       agent_id, query_scope=None, correlation=None, **kwargs):
+            self.prepared.append({
+                'connection_ref': connection_ref,
+                'credential_scope': credential_scope,
+                'team_id': team_id,
+                'agent_id': agent_id,
+                'query_scope': dict(query_scope or {}),
+                'correlation': dict(correlation or {}),
+            })
+            scope = self.prepare(
+                connection_ref,
+                credential_scope,
+                tool_name,
+                args,
+                team_id=team_id,
+                agent_id=agent_id,
+                query_scope=query_scope,
+                correlation=correlation,
+            )['scope']
             return SimpleNamespace(
                 isError=False,
                 structuredContent={
                     'schema_version': 'dod-tool-result-v1',
                     'status': 'ok',
-                    'data': {'matches': [{'source_id': 'guide-1', 'title': 'Guide', 'content': 'Check the queue before retrying.'}]},
+                    'data': {
+                        'matches': [{
+                            'source_id': 'guide-1',
+                            'title': 'Guide',
+                            'content': 'Check the queue before retrying.',
+                            'source_uri': None,
+                        }],
+                    },
+                    'error': None,
+                    'retryable': False,
+                    'evidence_refs': [{
+                        'scope': scope,
+                        'invocation_id': correlation['invocation_id'],
+                        'query_scope_ref': correlation['query_scope_ref'],
+                        'quality_status': 'valid',
+                        'source_locator': 'kb:guide-1@1#' + 'a' * 24,
+                        'source_type': 'knowledge',
+                        'time_window': None,
+                    }],
                     'meta': {'truncated': False},
+                    'artifacts': [],
                 },
             )
-        async def discover(self, *args, **kwargs):
-            raise AssertionError('discovery is not part of this graph test')
-    policy = None
     adapter = Adapter()
-    catalog = SimpleNamespace(
-        names=('knowledge_search',),
-        tools=({'name': 'knowledge_search', 'inputSchema': schema},),
-    )
     binding = ToolBinding(
         alias='knowledge.search',
         provider='mcp',
@@ -146,6 +193,8 @@ async def setup_tool_run(platform, client, monkeypatch, model):
         'experts': {'knowledge': ['knowledge.read']},
     }
     permissions = DeploymentToolPermissions(lambda: rules)
+    platform.backend._tool_permissions = permissions
+    platform.backend._mcp_connection_policy = policy
     payload = make_run_payload(platform.agent_id)
     payload['input']['text'] = 'What should I do before retrying?'
     scope = dict(SCOPE, start_at='2026-11-13T00:00:00.000Z', end_at='2026-11-13T00:10:00.000Z')
@@ -175,6 +224,8 @@ async def setup_tool_run(platform, client, monkeypatch, model):
 
 
 class ToolModel:
+    def __init__(self):
+        self.logical_call_ids = []
     def bind_tools(self, tools):
         return self
     async def ainvoke(self, messages, **kwargs):
@@ -221,31 +272,64 @@ class LimitModel:
 
 
 @pytest.mark.asyncio
-async def test_tool_conversation_runs_tool_and_projects_unverified_answer(
+async def test_tool_model_call_id_is_stable_across_graph_construction(
     platform, client, monkeypatch
 ):
     runtime, app, backend, worker, calls, run_id = await setup_tool_run(
         platform, client, monkeypatch, ToolModel()
     )
+    callsites = []
+
+    class Invoker:
+        async def invoke(self, guard, role, messages, **kwargs):
+            callsites.append(kwargs.get('logical_call_id'))
+            raise DomainError('INVOCATION_ALREADY_SENT', 409)
+
+    backend._diagnosis_factory = lambda execution: (
+        Invoker(),
+        object(),
+    )
+    try:
+        await worker.run_once()
+        result = (await client.get('/v1/runs/' + run_id)).json()
+        assert result['outcome']['completed'] is False
+        first = callsites[-1]
+        assert first is not None
+
+        assert UUID(first).version == 5
+        assert first == callsites[0]
+    finally:
+        await backend.close()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_tool_conversation_records_readable_evidence_from_scoped_adapter(
+    platform, client, monkeypatch
+):
+    model = ToolModel()
+    runtime, app, backend, worker, calls, run_id = await setup_tool_run(
+        platform, client, monkeypatch, model
+    )
     try:
         outcome = await worker.run_once()
         if outcome != 'projected':
-            from sqlalchemy import select
-            from workbench_agent.persistence import schema
             async with backend.create_uow().begin_read() as uow:
                 run = await backend.runs.one(
                     uow, 'runs', team_id=platform.auth.team_id, run_id=run_id
                 )
             raise AssertionError((outcome, dict(run)))
         result = (await client.get('/v1/runs/' + run_id)).json()
-        assert result['status'] in {'succeeded', 'partial'}
-        assert result['outcome']['completed'] is (result['status'] == 'succeeded')
+        assert result['status'] == 'succeeded'
+        assert result['outcome']['completed'] is True
         assert result['outcome']['summary'].startswith('以下回答基于所列工具返回的结果，未经独立校验')
-        if result['outcome']['evidence_refs']:
-            assert calls
-        else:
-            assert result['status'] == 'partial'
-            assert '工具证据' in ' '.join(result['outcome']['unresolved_items'])
+        assert len(result['outcome']['evidence_refs']) == 1
+        evidence = await client.get(
+            f"/v1/runs/{run_id}/evidence/{result['outcome']['evidence_refs'][0]}"
+        )
+        assert evidence.status_code == 200
+        assert 'Check the queue before retrying.' in evidence.text
+        assert "knowledge.search / call-1 / ok" in result['outcome']['summary']
     finally:
         await backend.close()
         await runtime.close()
@@ -278,6 +362,173 @@ class NoToolModel:
             content='No tool was used.',
             usage_metadata={'input_tokens': 4, 'output_tokens': 2, 'total_tokens': 6},
         )
+
+
+class HistoryModel:
+    def __init__(self):
+        self.seen = []
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages, **kwargs):
+        self.seen.append(list(messages))
+        if any(isinstance(message, ToolMessage) for message in messages):
+            return AIMessage(
+                content='Follow-up answer.',
+                usage_metadata={
+                    'input_tokens': 4,
+                    'output_tokens': 2,
+                    'total_tokens': 6,
+                },
+            )
+        return AIMessage(
+            content='',
+            tool_calls=[{
+                'name': 'knowledge_search',
+                'args': {'query': 'retry', 'scene': 'qa'},
+                'id': 'history-call',
+                'type': 'tool_call',
+            }],
+            usage_metadata={
+                'input_tokens': 4,
+                'output_tokens': 2,
+                'total_tokens': 6,
+            },
+        )
+
+
+async def create_tool_run(client, platform, *, key, scope, thread_id=None):
+    payload = make_run_payload(platform.agent_id, thread_id=thread_id)
+    payload['input']['text'] = key
+    payload['business_context'] = {
+        'conversation': True,
+        'query_scope': scope,
+    }
+    response = await client.post(
+        '/v1/runs',
+        json=payload,
+        headers={'Idempotency-Key': key},
+    )
+    assert response.status_code == 202, response.text
+    return response.json()
+
+
+@pytest.mark.asyncio
+async def test_authorized_history_stops_at_scope_and_evidence_authority_changes(
+    platform, client, monkeypatch
+):
+    model = HistoryModel()
+    runtime, app, backend, worker, calls, first_id = await setup_tool_run(
+        platform, client, monkeypatch, model
+    )
+    try:
+        assert await worker.run_once() == 'projected'
+        first = (await client.get('/v1/runs/' + first_id)).json()
+        assert first['status'] == 'succeeded'
+        thread_id = first['thread_id']
+        second = await create_tool_run(
+            client, platform, key='same-scope', scope=dict(SCOPE), thread_id=thread_id
+        )
+        platform.backend._tool_permissions = DeploymentToolPermissions(lambda: {
+            'users': {platform.auth.subject: ['knowledge.read']},
+            'teams': {platform.auth.team_id: ['knowledge.read']},
+            'agents': {platform.agent_id: ['knowledge.read']},
+            'skills': {'__none__': ['knowledge.read']},
+            'experts': {'knowledge': ['knowledge.read']},
+        })
+        assert await worker.run_once() == 'projected'
+        second_view = (await client.get('/v1/runs/' + second['run_id'])).json()
+        assert second_view['status'] == 'succeeded'
+        assert any(
+            isinstance(message, HumanMessage) and message.content == 'same-scope'
+            for message in model.seen[-2]
+        )
+
+        # A run on a different immutable scope is never admitted to history.
+        third = await create_tool_run(
+            client,
+            platform,
+            key='scope-isolated',
+            scope=dict(SCOPE, region='sg'),
+            thread_id=thread_id,
+        )
+        assert await worker.run_once() == 'projected'
+        assert not any(
+            isinstance(message, HumanMessage) and message.content == 'same-scope'
+            for message in model.seen[-2]
+        )
+
+        # Revoking the current tool evidence permission must also exclude the
+        # earlier answer from the model prompt.
+        denied_rules = {
+            'users': {platform.auth.subject: []},
+            'teams': {platform.auth.team_id: []},
+            'agents': {platform.agent_id: []},
+            'skills': {'__none__': []},
+            'experts': {'knowledge': []},
+        }
+        platform.backend._tool_permissions = DeploymentToolPermissions(
+            lambda: denied_rules
+        )
+        fourth = await create_tool_run(
+            client,
+            platform,
+            key='revoked-history',
+            scope=dict(SCOPE),
+            thread_id=thread_id,
+        )
+        assert await worker.run_once() == 'projected'
+        assert not any(
+            isinstance(message, AIMessage) and message.content == 'Check the queue before retrying.'
+            for message in model.seen[-2]
+        )
+        assert third['run_id'] and fourth['run_id']
+    finally:
+        await backend.close()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_tool_conversation_refuses_a_digest_tampered_historical_turn(
+    platform, client, monkeypatch
+):
+    from sqlalchemy import update
+
+    from workbench_agent.persistence import schema
+    model = HistoryModel()
+    runtime, app, backend, worker, calls, first_id = await setup_tool_run(
+        platform, client, monkeypatch, model
+    )
+    try:
+        assert await worker.run_once() == 'projected'
+        first = (await client.get('/v1/runs/' + first_id)).json()
+        async with backend.create_uow().begin_write() as uow:
+            await uow.execute(
+                update(schema.run_outcomes)
+                .where(
+                    schema.run_outcomes.c.team_id == platform.auth.team_id,
+                    schema.run_outcomes.c.run_id == first_id,
+                )
+                .values(digest='0' * 64)
+            )
+        fifth = await create_tool_run(
+            client,
+            platform,
+            key='tampered-history',
+            scope=dict(SCOPE),
+            thread_id=first['thread_id'],
+        )
+        assert await worker.run_once() == 'projected'
+        assert not any(
+            isinstance(message, AIMessage)
+            and message.content == 'Check the queue before retrying.'
+            for message in model.seen[-2]
+        )
+        assert fifth['run_id']
+    finally:
+        await backend.close()
+        await runtime.close()
 
 
 @pytest.mark.asyncio
