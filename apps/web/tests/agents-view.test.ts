@@ -97,6 +97,7 @@ describe('Agent management', () => {
           draft_revision: null,
           tool_name: 'knowledge_search',
           read_only: true,
+          tool_conversation_compatible: true,
           latest_ref: toolRef,
         }],
         next_cursor: null,

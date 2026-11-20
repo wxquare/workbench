@@ -14,7 +14,10 @@ const loading = ref(false), busy = ref(false), error = ref(''), notice = ref('')
 let generation = 0, pollTimer: ReturnType<typeof setTimeout> | undefined
 const service = new ToolApi(api)
 
-const compatible = (tool: string) => tool === 'knowledge_search'
+const compatible = (tool: string) =>
+  tool === 'knowledge_search' ||
+  connections.value.some(item => item.tool_conversation_tools.includes(tool) &&
+    item.mapping_policies.some(policy => policy.tool_name === tool))
 function stopPoll() { if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined }
 
 async function loadAgents() {
@@ -79,8 +82,9 @@ async function waitJob(id: string, current: number) {
     const job = await service.job(agent.value, id)
     if (job.status === 'succeeded') {
       const result = job.result_ref ? JSON.parse(job.result_ref) : {tools: []}
-      discovered.value = (result.tools ?? []).filter((tool: {name?: string}) => compatible(tool.name ?? ''))
-      notice.value = discovered.value.length ? '发现完成。' : '没有可用的 knowledge_search 工具。'
+      discovered.value = (result.tools ?? []).filter((tool: {name?: string; tool_conversation_compatible?: boolean}) =>
+        tool.tool_conversation_compatible === true)
+      notice.value = discovered.value.length ? '发现完成。' : '没有与工具对话兼容的已授权工具。'
       return
     }
     if (['failed', 'cancelled'].includes(job.status)) throw new Error(`发现失败：${job.status}`)
@@ -90,16 +94,16 @@ async function waitJob(id: string, current: number) {
 }
 function makeDraft() {
   const tool = discovered.value[0]
-  const connection = connections.value.find(item => item.read_tools.includes('knowledge_search'))
+  const connection = connections.value.find(item => item.read_tools.includes(tool.name))
   if (!tool || !connection) return
   const schema = tool.schema ?? {type: 'object'}
   draft.value = {
-    alias: 'knowledge.search',
+    alias: tool.name === 'knowledge_search' ? 'knowledge.search' : tool.name.replace(/[^A-Za-z0-9_-]/g, '_'),
     provider: 'mcp',
     tool_name: tool.name,
     server: connection.server,
     credential_scope: connection.credential_scope,
-    permission: 'knowledge.read',
+    permission: tool.name === 'knowledge_search' ? 'knowledge.read' : `${tool.name}.read`,
     input_schema: schema,
     output_schema: null,
     timeout_seconds: 10,
@@ -144,12 +148,12 @@ onUnmounted(() => { generation++; stopPoll() })
 </script>
 
 <template>
-  <div class="page-heading"><div><div class="eyebrow">TOOLS <span></span> 工具连接</div><h1>只读 MCP 工具</h1><p>连接、授权白名单和凭据作用域来自部署配置。</p></div><label class="tool-agent">Agent<select v-model="agent"><option v-for="item in agents" :key="item.agent_id" :value="item.agent_id">{{ item.name }}</option></select></label></div>
+  <div class="page-heading"><div><div class="eyebrow">TOOLS <span></span> 工具连接</div><h1>只读 MCP 工具</h1><p>连接、授权白名单、参数映射策略和凭据作用域来自部署配置。</p></div><label class="tool-agent">Agent<select v-model="agent"><option v-for="item in agents" :key="item.agent_id" :value="item.agent_id">{{ item.name }}</option></select></label></div>
   <p v-if="error" class="form-error" role="alert">{{ error }}</p>
   <p v-if="notice" class="form-note" role="status">{{ notice }}</p>
   <p v-if="loading" class="form-note">正在加载工具配置…</p>
   <div v-else class="tool-layout">
-    <section class="panel"><h2>授权连接</h2><p v-if="!connections.length">当前 Agent 没有已授权连接。</p><article v-for="connection in connections" :key="`${connection.server}:${connection.credential_scope}`" class="tool-row"><div><strong>{{ connection.server }}</strong><small>{{ connection.credential_scope }} · {{ connection.status }}</small><p>{{ connection.read_tools.join(', ') }}</p><p v-if="!connection.read_tools.every(compatible)" class="muted">本期工具对话仅启用 knowledge_search；其他只读工具保留管理展示。</p></div><button type="button" :disabled="busy || !compatibleTool(connection)" @click="discover(connection)">获取工具</button></article></section>
+    <section class="panel"><h2>授权连接</h2><p v-if="!connections.length">当前 Agent 没有已授权连接。</p><article v-for="connection in connections" :key="`${connection.server}:${connection.credential_scope}`" class="tool-row"><div><strong>{{ connection.server }}</strong><small>{{ connection.credential_scope }} · {{ connection.status }}</small><p>{{ connection.read_tools.join(', ') }}</p><p v-if="connection.mapping_policies.length" class="muted">固定映射：{{ connection.mapping_policies.map(policy => policy.tool_name).join(', ') }} · 模型仅可填写声明字段，范围与身份由部署配置注入。</p><p v-if="!connection.read_tools.every(compatible)" class="muted">其他只读工具保留管理展示，未配置映射策略时不能进入工具对话。</p></div><button type="button" :disabled="busy || !compatibleTool(connection)" @click="discover(connection)">获取工具</button></article></section>
     <section class="panel"><h2>绑定</h2><p v-if="!summaries.length">尚未保存工具绑定。</p><button v-for="item in summaries" :key="item.alias" class="binding-row" @click="open(item)"><strong>{{ item.alias }}</strong><small>草稿 rev {{ item.draft_revision ?? '—' }} · 最新版本 {{ item.latest_ref?.version ?? '—' }}</small></button></section>
     <section v-if="draft || discovered.length" class="panel tool-editor"><h2>配置绑定</h2><div v-if="discovered.length" class="tool-picker"><label>已发现工具<select><option v-for="tool in discovered" :key="tool.name">{{ tool.name }}</option></select></label><button type="button" @click="makeDraft">生成草稿</button></div><template v-if="draft"><dl><div><dt>Alias</dt><dd>{{ draft.alias }}</dd></div><div><dt>Tool</dt><dd>{{ draft.tool_name }}</dd></div><div><dt>权限</dt><dd>{{ draft.permission }}</dd></div><div><dt>只读</dt><dd>{{ draft.read_only ? '是' : '否' }}</dd></div><div><dt>超时</dt><dd>{{ draft.timeout_seconds }} 秒</dd></div></dl><details><summary>完整 Schema</summary><pre>{{ JSON.stringify(draft.input_schema, null, 2) }}</pre></details><div class="tool-actions"><button type="button" :disabled="busy" @click="save">保存草稿</button><button type="button" :disabled="busy || revision === null || !revision" @click="publish">发布只读版本</button></div><p class="muted">绑定发布后仍需在 Agent 配置中选择版本、保存并发布配置才会生效。</p></template></section>
   </div>

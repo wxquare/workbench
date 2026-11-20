@@ -184,7 +184,7 @@ async function loadSkills(current = generation) {
 const skillRefs = computed<ModelRef[]>(() => Array.isArray(currentDraft.value?.skills) ? currentDraft.value.skills as ModelRef[] : [])
 const toolRefs = computed<ModelRef[]>(() => Array.isArray(currentDraft.value?.tools) ? currentDraft.value.tools as ModelRef[] : [])
 const availableKnowledgeTools = computed(() => tools.value.filter(tool =>
-  tool.latest_ref && tool.read_only === true && tool.tool_name === 'knowledge_search'))
+  tool.latest_ref && tool.read_only === true && tool.tool_conversation_compatible))
 const boundSkills = computed(() => skillRefs.value.map(ref => ({ ref, skill: skills.value.find(skill =>
   skill.versions.some(version => refKey(version) === refKey(ref))) })))
 const filteredSkills = computed(() => {
@@ -476,13 +476,13 @@ async function publish() {
             <p class="form-note">从团队已发布模型中选择。模型参数在 <a href="/app/models" @click="confirmNavigation">模型配置</a> 中维护。</p>
             <div class="settings-group">
               <div class="skill-heading"><h2>工具配置 <span class="skill-count">{{ toolRefs.length }}</span></h2><a href="/app/tools" @click="confirmNavigation">管理工具</a></div>
-              <p class="form-note">只可绑定已发布、只读的 knowledge_search。固定版本会随 Agent 草稿保存；发布 Agent 后生效。</p>
+              <p class="form-note">只可绑定已发布、只读且具备当前部署映射策略的工具。固定版本会随 Agent 草稿保存；发布 Agent 后生效。</p>
               <p v-if="toolsLoading" class="form-note">加载已发布工具中…</p>
               <p v-else-if="toolError" class="form-error" role="alert">{{ toolError }}</p>
-              <p v-else-if="!availableKnowledgeTools.length" class="form-note skill-empty">没有可用的已发布 knowledge_search。</p>
+              <p v-else-if="!availableKnowledgeTools.length" class="form-note skill-empty">没有与工具对话兼容的已发布工具。</p>
               <label v-for="tool in availableKnowledgeTools" :key="tool.alias" class="skill-option">
                 <input type="checkbox" :checked="toolBound(tool)" :disabled="busy" @change="toggleTool(tool, eventChecked($event))" />
-                <span class="option-details"><strong>{{ tool.alias }}</strong><small>knowledge_search · 只读 · 固定版本 {{ tool.latest_ref?.version }}</small></span>
+                <span class="option-details"><strong>{{ tool.alias }}</strong><small>{{ tool.tool_name }} · 只读 · 固定版本 {{ tool.latest_ref?.version }}</small></span>
                 <span class="option-state">{{ toolBound(tool) ? '已绑定' : '未绑定' }}</span>
               </label>
               <div v-for="ref in toolRefs.filter(ref => !tools.some(tool => tool.latest_ref && refKey(tool.latest_ref) === refKey(ref)))" :key="refKey(ref)" class="skill-binding">

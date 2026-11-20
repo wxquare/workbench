@@ -1,7 +1,7 @@
 ---
 title: 产品说明
 status: stable
-verified_commit: c5f93fb
+verified_commit: 16c4617
 ---
 
 # 产品说明
@@ -166,7 +166,7 @@ flowchart TB
 | FR-05 | Agent 协作 | 主图 + Knowledge/Diagnosis/Code 专家，按需调用，共用预算 | 🟡 | 专家与多专家流程存在；无并行与完整证据合成 |
 | FR-06 | Skill 和知识 | 导入、校验、版本、发布/回滚、按需加载、知识检索 | 🟡 | Skill 共享库可用；内置知识库支持条目、版本和检索；Skill 仅加载 SKILL.md 文本 |
 | FR-07 | Agent 执行 | 仓库快照、文件读取、脚本执行、受控环境、产物 | 🟡 | 快照读取与 Runner 代码存在；真实容器/对象存储未验收 |
-| FR-08 | 工具 | MCP 发现/调用、Schema 校验、身份注入、台账 | 🟡 | MCP 客户端与治理已实现；授权连接和只读工具管理已接入页面，企业真实上游与工具对话未验收 |
+| FR-08 | 工具 | MCP 发现/调用、Schema 校验、身份注入、台账 | 🟡 | MCP 客户端与治理已实现；授权连接、只读工具管理及部署钉住的声明式参数映射已接入，企业真实上游与第二业务工具未验收 |
 | FR-09 | SOP 和巡检 | 版本化工作流、变量、分支、有限并行、定时与手动触发 | 🟡 | 顺序执行与条件分支、定时调度已实现；无并行，无页面 |
 | FR-10 | 任务生命周期 | 排队、异步、SSE、取消、等待输入/确认、恢复、持久化 | 🟡 | 网页已实现实时流、取消、补充输入与 Run 级审批；待手工验收 |
 | FR-11 | 业务结果 | Duty Event、DoD 跟进、Jira、SeaTalk 通知 | 🟡 | 事件、审批、动作台账与本地模拟回执可用；真实发送器默认关闭 |
@@ -201,7 +201,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-06.4 | 按需加载脚本与参考资料 | ⏳ | skill_management/loader 与 conversation_qa 仅加载 SKILL.md |
 | FR-07.1 | 固定仓库快照与文件读取 | 🟡 | execution/snapshots、api/repositories；真实仓库未验收 |
 | FR-07.2 | Runner 脚本执行与产物 | 🟡 | runner/service；M2 验收：真实容器与对象存储未验收 |
-| FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions；实验工具对话首批仅 knowledge_search |
+| FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions、tools/scope_mapping；实验工具对话配置协议支持 legacy knowledge_search 与部署批准的其他只读工具 |
 | FR-08.2 | MCP Server 只读工具 | 🟡 | apps/mcp-server（四类只读工具）；仅合成上游 |
 | FR-08.3 | 工具连接管理页 | ✅ | admin 查看授权连接、后台发现、保存/探测/发布只读绑定 |
 | FR-09.1 | SOP 固定工作流（依赖、条件、输出校验） | ✅ | runtime/graphs/sop、sop_graph（sop.conditional） |

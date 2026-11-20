@@ -6,6 +6,13 @@ export interface ToolConnection {
   credential_scope: string
   read_tools: string[]
   status: string
+  tool_conversation_tools: string[]
+  mapping_policies: {
+    tool_name: string
+    mapping_hash: string
+    model_input_fields: string[]
+    protected_targets: string[][]
+  }[]
 }
 export interface ToolBinding {
   alias: string
@@ -25,6 +32,7 @@ export interface ToolSummary {
   draft_revision: number | null
   tool_name: string | null
   read_only: boolean | null
+  tool_conversation_compatible: boolean
   latest_ref: ModelRef | null
 }
 interface Client {

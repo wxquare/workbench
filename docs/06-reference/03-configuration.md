@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 status: stable
-verified_commit: c5f93fb
+verified_commit: 16c4617
 ---
 
 # 配置参考（Agent 与 MCP Server）
@@ -146,6 +146,51 @@ flowchart TD
 | `read_tools` | `tuple[str]`，至少 1 个 | - | 是 | 授权的只读工具 |
 | `probe_requests` | `dict[tool, dict]` | `{}` | 否 | 探测请求；键必须属于 `read_tools` |
 | `scope_grants` | `tuple[dict]` | `()` | 否 | 范围授权，结构待核 |
+| `mapping_policies` | `tuple[MappingPolicyBinding]` | `()` | 否 | 声明式参数映射策略；按 `tool_name` 唯一，`mapping_hash` 固定批准版本，可再用 `schema_hash` 固定上游输入 |
+| `tool_conversation_allowed_tools` | `tuple[str]` | `()` | 否 | 工具对话可用工具；必须同时出现在 `read_tools` 且有 mapping policy |
+
+`service.mcp_connections[].mapping_policies[]`：
+
+| 路径 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `tool_name` | str 1..128 | 是 | 上游 MCP 工具名 |
+| `mapping_hash` | 64 位 hex | 是 | ToolBinding 中 `argument_mapping` 的 canonical SHA-256 |
+| `schema_hash` | 64 位 hex | 否 | ToolBinding 中完整 `input_schema` 的 canonical SHA-256；配置后 schema 漂移会拒绝发布、发送和证据读取 |
+| `model_input_fields` | `tuple[str]` | 否 | 允许模型填写的闭合标量字段 |
+| `query_scope_fields` | `tuple[str]` | 否 | 可由 QueryScope 注入的字段 |
+| `grant_fields` | `tuple[str]` | 否 | 可由部署 grant 注入的字段，如 `team`、`sources.tool_name` |
+| `context_fields` | `tuple[str]` | 否 | 可由服务端运行上下文注入的字段 |
+| `protected_targets` | `tuple[tuple[str]]` | 否 | 禁止模型写入的 scope、身份和 context 目标路径 |
+
+映射声明只描述数据流向，不执行表达式。模型输入必须匹配
+`argument_mapping.model_input_schema`，完整上游参数还必须匹配绑定
+`input_schema`。`schema_hash` 的 hash 计算对象为 `input_schema`，计算方式与
+`mapping_hash` 一样：对 JSON 使用 `sort_keys=true`、紧凑分隔符、UTF-8 编码后取
+SHA-256。生产导入的新声明式绑定建议设置该字段；省略时，绑定自身的发布 hash 和
+上游调用前的 schema 对比仍生效，但部署配置不能独立固定字段集合。
+`mapping_hash`、`schema_hash`、部署 `read_tools`、当前 grant 和 Profile
+引用任一变化都会拒绝新发送；旧绑定若没有 `argument_mapping`，继续使用冻结的
+legacy 四工具映射。
+
+配置片段示例：
+
+```yaml
+mapping_policies:
+  - tool_name: counter_read
+    mapping_hash: "<ToolBinding.argument_mapping 的 canonical SHA-256>"
+    schema_hash: "<ToolBinding.input_schema 的 canonical SHA-256>"
+    model_input_fields: [query]
+    query_scope_fields: [service, environment, region]
+    grant_fields: [team, sources.counter_read]
+    context_fields: [run_id, invocation_id, query_scope_ref]
+    protected_targets:
+      - [scope, team]
+      - [scope, service]
+      - [scope, environment]
+      - [scope, region]
+      - [scope, source_id]
+tool_conversation_allowed_tools: [counter_read]
+```
 | `allow_loopback_http` | bool | `false` | 否 | 仅本地开发 |
 
 `service.synthetic_ingress.<name>`（`SyntheticIngressBinding`）：`protocol`（`synthetic-chat-v1|synthetic-alert-v1|synthetic-alert-v2`，必填）、`team_id`、`agent_id`（规范 UUID，必填）、`secret_ref`（**仅 `env://NAME`**，必填）、`actors`（dict，chat 必填且非空）、`actor_subject`（alert 必填，chat 禁止）、`identity_id`（仅 v2，必填）、`allowed_scopes`（四元字符串元组列表，仅 v2，必填）。
@@ -435,7 +480,7 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 | 5 | 未说明加载/覆盖机制 | 三个环境变量覆盖 YAML；`asset_root` 回落到 `WORKBENCH_ASSET_ROOT`；`*_ref` 按需解析 | 本文第 1 节 |
 | 6 | 未涉及 MCP Server 配置 | 样例 `scope_enforced: false` 无法通过校验（要求为 true）；`audit.redact_fields` 样例会替换默认 | 本文第 5 节，建议修正样例注释 |
 | 7 | 原文称 `agent_scope` 用于身份限制 | settings.py 中未出现 `agent_scope` | 待核 |
-| 8 | 未列的待核项 | `secret://` 后端、`tool_permissions`/`scope_grants` 结构、工作流加载入口、MCP 命令名、`WORKBENCH_MODEL_SECRET_MASTER_KEY` 格式 | 已逐处标「待核」 |
+| 8 | 未列的待核项 | `secret://` 后端、`tool_permissions`/`scope_grants` 结构、工作流加载入口、MCP 命令名、`WORKBENCH_MODEL_SECRET_MASTER_KEY` 格式 | 已逐处标「待核」；D3 的 `mapping_policies` 已有代码 schema |
 
 ## 内置知识库服务身份配置
 

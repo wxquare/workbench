@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: c5f93fb
+verified_commit: 16c4617
 ---
 
 # 架构设计
@@ -320,6 +320,11 @@ Run 是历史事实，删除或停用 Agent 不应改写历史 Run 的受理快�
 | conversation.multi_turn | 多轮直接问答 | START → answer → END（加载有界历史） |
 | knowledge.citation_review | 知识问答与引用审查 | prepare → retrieve → draft_answer → validate_citations → review_support → record_gap → compose_outcome |
 | conversation.tool_use | 实验工具对话 | prepare → model → tools → model → compose |
+
+工具对话的模型工具投影来自发布绑定：legacy `knowledge_search` 使用固定标量投影；
+声明式绑定使用 `argument_mapping.model_input_schema`。完整上游参数由部署 grant、
+当前 QueryScope 和服务端 context 注入后，再按发布 `input_schema` 校验。工具名不在
+legacy 白名单时，部署必须同时授权 read tool、工具对话 allowlist 与 mapping hash。
 
 ![工作流目标架构](assets/03-workflow.svg)
 

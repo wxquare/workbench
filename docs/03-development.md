@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: c5f93fb
+verified_commit: 16c4617
 ---
 
 # 开发指南
@@ -766,7 +766,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 ### 7.3 修改指引
 
-新增只读源时，先扩展 `application/ports.py` 的 Gateway 契约及 `domain` 规则，再实现 `infrastructure/connectors/` 适配，最后在 `bootstrap.py` 装配并增加 MCP 映射。避免将上游返回的任意字段直接透传给模型。改变工具 Schema 需同步 Agent 的绑定和端到端合同测试，检查权限、范围和结果截断。
+新增只读源时，先扩展 `application/ports.py` 的 Gateway 契约及 `domain` 规则，再实现 `infrastructure/connectors/` 适配，最后在 `bootstrap.py` 装配并增加 MCP 映射。避免将上游返回的任意字段直接透传给模型。兼容声明式映射的上游工具可以不改 Agent 的 Python 工具名白名单，但部署连接必须同时配置 `read_tools`、`tool_conversation_allowed_tools` 与钉住 `mapping_hash`/`schema_hash` 的 `mapping_policies`。改变工具 Schema 需同步 Agent 的绑定和端到端合同测试，检查权限、范围和结果截断。
 
 ## 8 Web 实现
 
@@ -811,7 +811,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 | 存储 Schema | `contract/storage/test_agent_boundary.py`、迁移与备份故障测试 |
 | 模型或预算 | `test_model_binding.py`、`test_usage.py`、专家预算集成测试 |
 | Skill 版本 | `test_shared_skills.py`、`test_skill_versions.py`、包校验测试 |
-| MCP Schema/映射 | `contract/test_dod_mcp_mapping.py` 与 MCP Server acceptance 测试 |
+| MCP Schema/映射 | `contract/test_dod_mcp_mapping.py`、`test_declarative_mcp_mapping.py`、`test_scope_mapping_policy.py`、`test_configured_mapped_tool.py` 与 MCP Server acceptance 测试 |
 | Web 事件 | `tests/run-stream.test.ts`、`tests/sse.test.ts`、页面测试 |
 
 测试通过只能证明相应范围内的合同；合成数据源与本地模拟投递不等同于真实监控、SeaTalk、Jira 或 DoD 的业务验收。
@@ -835,7 +835,7 @@ Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3�
 ### 10.2 新增工具或 MCP 源
 
 1. 明确工具是只读查询还是外部写动作；写动作必须走 Action/Approval/Outbox。
-2. 为参数、结果、范围、角色、速率和预算定义合同，在 ToolBinding 草稿中配置并发布。
+2. 为参数、结果、范围、角色、速率和预算定义合同，在 ToolBinding 草稿中配置并发布。新增工具若不在 legacy 四工具映射中，还需在部署连接中配置钉住映射与输入 schema 的 `mapping_policies`，并加入 `tool_conversation_allowed_tools`。
 3. MCP 查询先在 MCP Server 的 domain/application 实现范围与格式约束，再接入基础设施 Gateway。
 4. 在 Agent `tools/` 中接入调用适配，并验证绑定、权限交集、幂等台账及拒绝路径。
 5. 用合同测试覆盖不允许的团队、过期凭据、越界 Scope 和超大响应；真实源另做验收。
