@@ -44,8 +44,8 @@ class Idempotency:
     async def execute(self, uow, auth, agent_id, route, key, payload, operation, status=200, *, max_payload_bytes=65536):
         return await self._execute(uow, auth, agent_id, route, key, payload, operation, status, max_payload_bytes=max_payload_bytes)
 
-    async def execute_team(self, uow, auth, route, key, payload, operation, status=200):
-        return await self._execute(uow, auth, None, route, key, payload, operation, status)
+    async def execute_team(self, uow, auth, route, key, payload, operation, status=200, *, max_payload_bytes=65536):
+        return await self._execute(uow, auth, None, route, key, payload, operation, status, max_payload_bytes=max_payload_bytes)
 
     async def _execute(self, uow, auth, agent_id, route, key, payload, operation, status, *, max_payload_bytes=65536):
         if not isinstance(key, str) or not 1 <= len(key) <= 128:

@@ -38,7 +38,7 @@ def validate_bundle_path(path: str) -> str:
     return candidate.as_posix()
 
 
-def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False) -> ValidatedBundle:
+def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False, allow_scripts: bool = False) -> ValidatedBundle:
     if not _NAME.fullmatch(name) or len(raw) > MAX_ARCHIVE_BYTES:
         raise InvalidBundle('invalid skill bundle')
     resources = {}
@@ -69,7 +69,9 @@ def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False) -> Val
                 content = archive.read(entry)
                 if len(content) != entry.file_size:
                     raise InvalidBundle('resource length mismatch')
-                if ('.claude' in relative.split('/') or 'scripts' in relative.split('/') or
+                if '.claude' in relative.split('/'):
+                    raise InvalidBundle('unsupported Claude resource')
+                if not allow_scripts and ('scripts' in relative.split('/') or
                         relative.endswith(('.sh', '.py', '.bash', '.js')) or content.startswith(b'#!') or mode & 0o111):
                     raise InvalidBundle('unsupported executable or Claude resource')
                 if not allow_binary:

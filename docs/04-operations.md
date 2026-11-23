@@ -1,7 +1,7 @@
 ---
 title: 运维手册
 status: stable
-verified_commit: 2115cf7
+verified_commit: 590a15e
 ---
 
 # 运维手册
@@ -281,6 +281,12 @@ uv run workbench worker      --config "$WORKBENCH_ROOT/config/local/agent.yaml" 
 - 生产与 test 只允许 HTTPS；development 仅在显式 `allow_http` 且 endpoint 为数字回环地址时允许 HTTP。
 - 后端需支持条件 PutObject 与 SHA-256 校验。本机 MinIO 已验证上传、回读与摘要；其他 S3 兼容服务未验收。
 - 下载接口依赖注入的签名器；生产签名器装配尚未完成。
+
+Skill 多文件草稿与产物上传分别装配：共享库发布及 Worker 加载仍使用 `storage.skill_object_root` 本地目录，API/Worker 必须共同访问同一内容；配置 `storage.s3` 不会自动迁移 Skill。
+
+升级到 `0006_multifile_skill_drafts` 前先停止写入并备份数据库与对象目录，再使用既有 `workbench db migrate` 维护命令。该迁移允许已有 Agent/Profile/Run 数据的 v5 库，原草稿正文转换为 `files_json["SKILL.md"] = {encoding:"utf-8", content:原正文}`，保留修订号、时间戳、已发布引用和外键。服务不会启动时自动迁移；回退需恢复已核对的备份。更早、尚未完成 Graph ID 迁移的已填充库仍保留原有空库迁移限制。
+
+共享库文件编辑器可保存脚本和 PNG/JPEG/GIF/WebP 图片；脚本保存不会执行，图片发布时写原始字节，草稿内为 Base64。每份草稿最多 64 个文件、解码后 8 MiB；文本附件最多 256 KiB，图片最多 2 MiB，主正文最多 32000 UTF-8 字节。`.claude` 自动执行配置仍不接收。Agent 专属导入接口保留现有脚本/二进制限制，本次扩展的是共享草稿链路。
 
 ### 4.3 仓库快照
 

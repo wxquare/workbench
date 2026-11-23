@@ -1,7 +1,7 @@
 """Team-wide Skill library endpoints."""
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from workbench_agent.api.auth import authenticate
 from workbench_agent.api.common import response, revision
 from workbench_agent.application.errors import DomainError
@@ -13,7 +13,14 @@ router = APIRouter(prefix='/v1/skills')
 class SkillDraft(BaseModel):
     model_config = ConfigDict(extra='forbid')
     description: str = Field(min_length=1, max_length=1000)
-    content: str = Field(min_length=1, max_length=32000)
+    content: str | None = Field(default=None, min_length=1, max_length=32000)
+    files: dict[str, str | dict[str, str]] | None = Field(default=None, max_length=64)
+
+    @model_validator(mode='after')
+    def require_resources(self):
+        if self.content is None and self.files is None:
+            raise ValueError('content or files is required')
+        return self
 
 
 class SkillCreate(SkillDraft):
@@ -41,7 +48,7 @@ async def list_skills(request: Request, auth=Depends(authenticate), limit: int =
 
 @router.post('')
 async def create_skill(body: SkillCreate, request: Request, auth=Depends(authenticate), idempotency_key: str = Header()):
-    return response(await library(request).create(auth, body.name, body.description, body.content, idempotency_key))
+    return response(await library(request).create(auth, body.name, body.description, body.content, idempotency_key, files=body.files))
 
 
 @router.get('/{skill_id}')
@@ -52,7 +59,7 @@ async def get_skill(skill_id: UUID, request: Request, auth=Depends(authenticate)
 @router.patch('/{skill_id}')
 async def save_skill(skill_id: UUID, body: SkillDraft, request: Request, auth=Depends(authenticate),
                      expected: int = Depends(revision), idempotency_key: str = Header()):
-    return response(await library(request).save(auth, str(skill_id), body.description, body.content, expected, idempotency_key))
+    return response(await library(request).save(auth, str(skill_id), body.description, body.content, expected, idempotency_key, files=body.files))
 
 
 @router.post('/{skill_id}/publish')

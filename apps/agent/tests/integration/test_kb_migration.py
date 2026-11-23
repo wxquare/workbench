@@ -10,7 +10,7 @@ def test_fresh_knowledge_schema_and_missing_index_readiness(config_data):
     path = url.removeprefix('sqlite+aiosqlite:///')
     with sqlite3.connect(path) as db:
         db.execute('PRAGMA foreign_keys=ON')
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0005_graph_id',)
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0006_multifile_skill_drafts',)
         sql = db.execute("SELECT sql FROM sqlite_master WHERE name='kb_fts'").fetchone()[0]
         assert 'trigram' in sql
         assert validate_required_schema(db) == []

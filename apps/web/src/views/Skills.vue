@@ -4,16 +4,20 @@ import { onBeforeRouteLeave } from 'vue-router'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { api, bearerToken } from '../session'
 import { agentError } from '../agents-api'
-import { SkillApi, type Skill, type SkillDraft } from '../skills-api'
+import { SkillApi, type Skill, type SkillDraft, type SkillFiles } from '../skills-api'
+import SkillFilesEditor from '../components/SkillFilesEditor.vue'
+import { EMPTY_FILES, filesError, normalizeFiles } from '../skill-files'
 
 const service = new SkillApi(api)
 const skills = ref<Skill[]>([]), selected = ref<Skill | null>(null)
-const search = ref(''), name = ref(''), description = ref(''), content = ref('')
-const baseline = ref(''), error = ref(''), notice = ref(''), historical = ref('')
+const search = ref(''), name = ref(''), description = ref('')
+const files = ref<SkillFiles>(EMPTY_FILES()), historical = ref<SkillFiles | null>(null), historicalVersion = ref(''), uploading = ref(false)
+const baseline = ref(''), error = ref(''), notice = ref('')
 const busy = ref(false), loading = ref(false), creating = ref(false)
-let generation = 0
+let generation = 0, historyGeneration = 0
 const filtered = computed(() => skills.value.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(search.value.toLowerCase())))
-const draft = computed<SkillDraft>(() => ({ description: description.value, content: content.value }))
+const draft = computed<SkillDraft>(() => ({ description: description.value, files: files.value }))
+const validationError = computed(() => filesError(files.value))
 const snapshot = computed(() => JSON.stringify({ name: creating.value ? name.value : '', ...draft.value }))
 const dirty = computed(() => snapshot.value !== baseline.value)
 function canLeave() { return !dirty.value || window.confirm('当前草稿有未保存的修改，是否放弃？') }
@@ -21,8 +25,9 @@ onBeforeRouteLeave(() => canLeave())
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
 if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('beforeunload', beforeUnload)
 function show(skill: Skill) {
-  selected.value = skill; creating.value = false; historical.value = ''
-  name.value = skill.name; description.value = skill.draft?.description ?? ''; content.value = skill.draft?.content ?? ''
+  uploading.value = false
+  selected.value = skill; creating.value = false; historical.value = null; historicalVersion.value = ''; ++historyGeneration
+  name.value = skill.name; description.value = skill.draft?.description ?? ''; files.value = normalizeFiles(skill.draft)
   baseline.value = snapshot.value
 }
 async function load() {
@@ -33,18 +38,18 @@ async function load() {
 }
 async function open(id: string) {
   if (!canLeave()) return
-  const current = ++generation; error.value = notice.value = ''; loading.value = true
+  const current = ++generation; error.value = notice.value = ''; loading.value = true; uploading.value = false
   try { const result = await service.get(id); if (current === generation) show(result) }
   catch (e) { if (current === generation) error.value = agentError(e) }
   finally { if (current === generation) loading.value = false }
 }
 function startCreate() {
   if (!canLeave()) return
-  ++generation; selected.value = null; creating.value = true; name.value = description.value = content.value = historical.value = ''
+  ++generation; ++historyGeneration; selected.value = null; creating.value = true; uploading.value = false; name.value = description.value = historicalVersion.value = ''; historical.value = null; files.value = EMPTY_FILES()
   baseline.value = snapshot.value; error.value = notice.value = ''
 }
 async function save() {
-  if (!description.value.trim() || !content.value.trim()) return
+  if (loading.value || busy.value || uploading.value || !description.value.trim() || validationError.value) return
   const current = generation; busy.value = true; error.value = notice.value = ''
   try {
     const result = creating.value ? await service.create(name.value.trim(), draft.value) : await service.save(selected.value!.skill_id, selected.value!.revision, draft.value)
@@ -54,7 +59,7 @@ async function save() {
   finally { if (current === generation) busy.value = false }
 }
 async function publish() {
-  if (!selected.value || dirty.value || !window.confirm(`发布 ${selected.value.name} 的当前草稿？`)) return
+  if (loading.value || busy.value || uploading.value || !selected.value || dirty.value || !window.confirm(`发布 ${selected.value.name} 的当前草稿？`)) return
   const current = generation, id = selected.value.skill_id; busy.value = true; error.value = notice.value = ''
   try {
     const result = await service.publish(id, selected.value.revision)
@@ -68,17 +73,19 @@ async function publish() {
 }
 async function viewVersion(version: string) {
   if (!selected.value) return
-  const current = generation
-  try { const value = await service.version(selected.value.skill_id, version); if (current === generation) historical.value = value.content }
-  catch (e) { if (current === generation) error.value = agentError(e) }
+  const current = generation, request = ++historyGeneration
+  try {
+    const value = await service.version(selected.value.skill_id, version)
+    if (current === generation && request === historyGeneration) { historical.value = normalizeFiles(value); historicalVersion.value = version }
+  } catch (e) { if (current === generation && request === historyGeneration) error.value = agentError(e) }
 }
 watch(bearerToken, () => {
-  ++generation; skills.value = []; selected.value = null; creating.value = false
-  name.value = description.value = content.value = historical.value = ''; baseline.value = snapshot.value
+  ++generation; ++historyGeneration; skills.value = []; selected.value = null; creating.value = false; uploading.value = false
+  name.value = description.value = historicalVersion.value = ''; historical.value = null; files.value = EMPTY_FILES(); baseline.value = snapshot.value
   error.value = notice.value = ''; busy.value = loading.value = false
   if (bearerToken.value) void load()
 }, { immediate: true })
-onUnmounted(() => { ++generation; if (typeof window !== 'undefined' && window.removeEventListener) window.removeEventListener('beforeunload', beforeUnload) })
+onUnmounted(() => { ++generation; ++historyGeneration; if (typeof window !== 'undefined' && window.removeEventListener) window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 
 <template>
@@ -101,10 +108,11 @@ onUnmounted(() => { ++generation; if (typeof window !== 'undefined' && window.re
       <div v-if="selected" class="admin-detail-meta"><span class="admin-status" :class="selected.latest_version ? 'published' : 'draft'">{{ selected.latest_version ? `版本 ${selected.latest_version.version}` : '未发布' }}</span><span>修订 {{ selected.revision }}</span></div>
       <label>技能标识<input v-model="name" :disabled="!creating || busy" maxlength="128" placeholder="例如 value-investing" /></label>
       <label>描述<textarea v-model="description" :disabled="busy || (!!selected && !selected.draft)" maxlength="1000" rows="3" /></label>
-      <label>技能指令<textarea v-model="content" :disabled="busy || (!!selected && !selected.draft)" maxlength="32000" rows="12" /></label>
+      <SkillFilesEditor :key="generation" v-model="files" :disabled="loading || busy || (!!selected && !selected.draft)" @uploading="uploading = $event" />
+      <p v-if="dirty && validationError" class="form-note">{{ validationError }}</p>
       <p v-if="selected && !selected.draft" class="form-note">此技能没有可编辑的草稿。</p>
-      <div class="form-actions"><button class="primary-button" :disabled="busy || !dirty || !name.trim() || !description.trim() || !content.trim()" @click="save">保存草稿</button><button v-if="selected" :disabled="busy || dirty || !selected.draft" @click="publish">发布</button></div>
-      <div v-if="selected?.versions.length" class="versions"><h2>版本历史</h2><button v-for="version in selected.versions" :key="version.resource_id" type="button" @click="viewVersion(version.version)">版本 {{ version.version }}</button><pre v-if="historical">{{ historical }}</pre></div>
+      <div class="form-actions"><button class="primary-button" :disabled="loading || busy || uploading || !dirty || !name.trim() || !description.trim() || !!validationError" @click="save">保存草稿</button><button v-if="selected" :disabled="loading || busy || uploading || dirty || !selected.draft || !!validationError" @click="publish">发布</button></div>
+      <div v-if="selected?.versions.length" class="versions"><h2>版本历史</h2><button v-for="version in selected.versions" :key="version.resource_id" type="button" @click="viewVersion(version.version)">版本 {{ version.version }}</button><div v-if="historical"><h3>版本 {{ historicalVersion }}（只读）</h3><SkillFilesEditor :key="historicalVersion" :model-value="historical" readonly /></div></div>
     </fieldset>
     <div v-else class="admin-empty"><span class="admin-empty-mark">S</span><h2>选择一个 Skill</h2><p>在左侧打开技能，编辑指令或查看已发布的版本。</p></div>
     </div>

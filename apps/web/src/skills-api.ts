@@ -1,7 +1,10 @@
 import type { ModelRef } from './agents-api'
 
 export interface SkillVersion extends ModelRef { created_at?: number }
-export interface SkillDraft { description: string; content: string }
+export interface SkillFile { encoding: 'utf-8' | 'base64'; content: string }
+export type SkillFiles = Record<string, SkillFile>
+export interface SkillDraft { description: string; content?: string; files?: SkillFiles }
+export interface SkillVersionContent { content: string; files?: SkillFiles }
 export interface Skill {
   skill_id: string; name: string; description: string; revision: number; updated_at: number
   latest_version: SkillVersion | null; versions: SkillVersion[]; draft?: SkillDraft | null
@@ -26,7 +29,7 @@ export class SkillApi {
     return items
   }
   get(id: string) { return this.client.request<Skill>(`/v1/skills/${encodeURIComponent(id)}`) }
-  version(id: string, version: string) { return this.client.request<{ content: string }>(`/v1/skills/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}`) }
+  version(id: string, version: string) { return this.client.request<SkillVersionContent>(`/v1/skills/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}`) }
   private async mutate<T>(operation: string, path: string, method: string, revision?: number, body?: unknown) {
     const signature = JSON.stringify({ path, method, revision, body })
     let pending = this.pending.get(operation)

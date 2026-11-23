@@ -1,15 +1,15 @@
 ---
 title: 数据字典
 status: stable
-verified_commit: c5f93fb
+verified_commit: 590a15e
 ---
 
-# 数据字典（schema_agent_v5：图 ID 与知识库增量）
+# 数据字典（schema_agent_v6：多文件 Skill 草稿）
 
 > **读者**：查字段、写迁移、核对数据的人。**以代码为准**，由 SQLAlchemy 元数据抽取。
 > 小节编号保留 `A.x` 前缀，便于从旧文档迁移引用；接口见 [01 接口参考](01-api.md)，配置见 [03 配置参考](03-configuration.md)。
 
-> 本文用途：给出 Workbench Agent 持久层在 `schema_v1…schema_v20`（Workspace 历史链）叠加、再经 `schema_agent_v1…v5`（Agent 链）演进后的最终物理结构（表、字段、约束、索引与演进）。**一切以代码为准**：结构信息由脚本从 `apps/agent/src/workbench_agent/persistence/` 下的 SQLAlchemy 元数据实际导入后抽取并人工整理，原文 13.2 仅用作分组与业务语义参考，其差异见文末「核对记录」。
+> 本文用途：给出 Workbench Agent 持久层在 `schema_v1…schema_v20`（Workspace 历史链）叠加、再经 `schema_agent_v1…v6`（Agent 链）演进后的最终物理结构（表、字段、约束、索引与演进）。**一切以代码为准**：结构信息由脚本从 `apps/agent/src/workbench_agent/persistence/` 下的 SQLAlchemy 元数据实际导入后抽取并人工整理，原文 13.2 仅用作分组与业务语义参考，其差异见文末「核对记录」。
 
 ## A.0 概览与约定
 
@@ -17,8 +17,8 @@ verified_commit: c5f93fb
 
 | 项 | 取值（来源） |
 | --- | --- |
-| 最终 Schema | `schema_agent_v5.metadata`（`persistence/schema.py` 导出） |
-| Agent 迁移头 | `0005_graph_id`（链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts → 0004_knowledge_base → 0005_graph_id） |
+| 最终 Schema | `schema_agent_v6.metadata`（`persistence/schema.py` 导出） |
+| Agent 迁移头 | `0006_multifile_skill_drafts`（链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts → 0004_knowledge_base → 0005_graph_id → 0006_multifile_skill_drafts） |
 | 存储协议 / Codec | `dod-storage-agent-v1` / `dod-checkpoint-v1`（`schema_agent_v1.py` 常量；写入 `dod_storage_metadata`） |
 | 历史 Workspace 链 | `schema_v1…schema_v20`，对应 `migrations/versions/0001_core…0021_synthetic_batch_policy`（共 21 个迁移，其中 `0005_resume_protocol` 仅数据规整，无 Schema 变化，所以 `schema_vN` 与迁移编号自 v5 起错位 1） |
 | Agent 基线生成方式 | `schema_agent_v1` 在导入时遍历 `schema_v20`，把表名 `workspaces→agents`、列名 `workspace_id→agent_id` 机械替换，约束/索引名同步替换；`0001_agent_domain` 仅允许在**全新库**上 `create_all`，已有库直接报错，不迁移 Workspace 数据 |
@@ -1567,7 +1567,7 @@ erDiagram
 #### A.8.3 `skill_drafts`：团队共享技能草稿
 
 - 用途：团队共享技能草稿。
-- 语义说明（来自原文，已按 DDL 复核，业务规则以服务层为准）：由 `0002_shared_skills` 增量迁移新增，不改写既有私有 Skill。草稿与发布版本分离，CAS 复用所属 skills 行的 revision，不另设独立草稿 revision。
+- 语义说明（来自原文，已按 DDL 复核，业务规则以服务层为准）：由 `0002_shared_skills` 新增，`0006_multifile_skill_drafts` 将单正文转换为多文件 JSON；不改写既有私有 Skill。草稿与发布版本分离，CAS 复用所属 skills 行的 revision，不另设独立草稿 revision。
 - 引入/演进：Agent 库新增（schema_agent_v2 / 0002_shared_skills）。
 
 | 字段 | 类型 | 可空 | 默认 | 引入 | 说明 |
@@ -1576,7 +1576,7 @@ erDiagram
 | `team_id` | `VARCHAR(36)` | 否 | — | agent_v2 | 所属团队 UUID。 |
 | `name` | `VARCHAR(128)` | 否 | — | agent_v2 | 团队内唯一、创建后稳定的技能名称。 |
 | `description` | `TEXT` | 否 | — | agent_v2 | 可编辑描述。 |
-| `content` | `TEXT` | 否 | — | agent_v2 | 可编辑 Markdown 指令正文。 |
+| `files_json` | `TEXT` | 否 | — | agent_v6 | 规范化 JSON：相对路径 → `{encoding,content}`；UTF-8 文本/脚本或 Base64 图片；主文件保存不带元信息的正文。由旧 content 无损包装后重命名。 |
 | `created_at` | `BIGINT` | 否 | — | agent_v2 | 创建时间，UTC 毫秒 |
 | `updated_at` | `BIGINT` | 否 | — | agent_v2 | 最后变更时间，UTC 毫秒 |
 
@@ -2021,7 +2021,7 @@ erDiagram
 | schema_v19 | `0020_synthetic_action_policy` | 新增 synthetic_action_policy_bindings | 0020 仅 DDL |
 | schema_v20 | `0021_synthetic_batch_policy` | 新增 synthetic_batch_policy 单例表 | 0021 仅 DDL；Workspace 链终点，共 59 表 575 字段 |
 
-### A.10.2 Agent 链（schema_agent_v1…v5）
+### A.10.2 Agent 链（schema_agent_v1…v6）
 
 | Schema | 迁移 | Schema 变化 | 迁移的数据行为 |
 | --- | --- | --- | --- |

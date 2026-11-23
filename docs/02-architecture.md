@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: 16c4617
+verified_commit: 590a15e
 ---
 
 # 架构设计
@@ -641,8 +641,8 @@ skills/skill-name/
 | 环节 | 约束 |
 | --- | --- |
 | 创建 | 名称：小写字母、数字和连字符，最长 128 字符 |
-| 草稿 | 编辑后保存在 skill_drafts；CAS 并发控制 |
-| 发布 | 生成 SKILL.md，写入不可变对象目录，新增 SkillVersion |
+| 草稿 | `skill_drafts.files_json` 保存整包文件；文本/脚本用 UTF-8，图片用 Base64；CAS 并发控制 |
+| 发布 | 为 SKILL.md 生成元信息，将全部资源和 manifest 写入不可变对象目录，新增 SkillVersion |
 | 绑定 | Agent 草稿最多选择 16 个不同 Skill |
 | 生效 | 添加或换版后须发布 Agent；已受理 Run 保留原引用 |
 
@@ -651,9 +651,13 @@ skills/skill-name/
 | 存储位置 | 保存内容 |
 | --- | --- |
 | skills 表 | team_id、skill_id、name、description、状态和 revision |
-| skill_drafts 表 | 当前可编辑的 description 和 Markdown content |
+| skill_drafts 表 | 当前可编辑的 description 和多文件 files_json；每个 Skill 至多一份草稿 |
 | skill_versions 表 | skill_version_id、version、content hash、bundle_ref 和状态 |
-| skill-objects/ 目录 | 内容寻址的清单文件和 SKILL.md（SHA-256 十六进制文件名） |
+| skill-objects/ 目录 | 内容寻址的清单、SKILL.md、参考文档、脚本与图片；图片保存解码后的原始字节 |
+
+共享库草稿支持新增、重命名、删除附件及图片上传，`SKILL.md` 是不可删除/重命名的主文件，其草稿值只包含正文。脚本作为资源保存，不会因保存、发布或加载而执行。图片支持 PNG/JPEG/GIF/WebP，不会自动成为模型视觉输入。当前发布与 Worker 读取使用共同可访问的本地对象目录，S3 配置尚不接管 Skill。
+
+一份草稿最多 64 个文件，路径最多 256 字符；主正文最多 32000 UTF-8 字节，文本附件最多 256 KiB/文件，图片最多 2 MiB/文件，解码后总大小最多 8 MiB。文件路径必须为安全相对路径，禁止文件/目录前缀冲突。旧单正文请求保存时保留附件；已发布版本可按文件查看。
 
 ### 10.4 运行时再验证
 

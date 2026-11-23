@@ -1,32 +1,36 @@
 """Team-scoped editable Skill drafts and immutable published versions."""
-from io import BytesIO
-import re
+import json
 from uuid import uuid4
-import zipfile
-import yaml
 from sqlalchemy import select
 
 from workbench_agent.application.authorization import Authorization
 from workbench_agent.application.errors import DomainError, not_found
-from workbench_agent.application.idempotency import Idempotency
+from workbench_agent.application.idempotency import Idempotency, canonical
 from workbench_agent.persistence import schema
 from workbench_agent.skill_management.manifest import PREFIX, read_manifest, read_resource, validate_skill_metadata, write_manifest
-from workbench_agent.skill_management.validator import InvalidBundle, validate_bundle
+from workbench_agent.skill_management.validator import validate_bundle
+from workbench_agent.skill_management.drafts import MAX_DRAFT_PAYLOAD, bundle_for_files, encode_resources, normalize_files
 
 
 def bundle_for(name, description, content):
-    if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', name) or len(name) > 128:
-        raise DomainError('INVALID_SKILL_NAME', 422)
-    if not description.strip() or not content.strip() or len(description) > 1000 or len(content.encode()) > 32000:
-        raise DomainError('INVALID_SKILL_CONTENT', 422)
-    document = '---\n' + yaml.safe_dump({'name': name, 'description': description}, allow_unicode=True, sort_keys=False) + '---\n' + content.strip() + '\n'
-    output = BytesIO()
-    with zipfile.ZipFile(output, 'w') as archive:
-        archive.writestr(name + '/SKILL.md', document)
+    return bundle_for_files(name, description, {'SKILL.md': content})
+
+
+def stored_files(draft):
     try:
-        return validate_bundle(output.getvalue(), name)
-    except InvalidBundle:
-        raise DomainError('INVALID_SKILL_CONTENT', 422) from None
+        return normalize_files(json.loads(draft['files_json']))
+    except (ValueError, TypeError, KeyError, DomainError):
+        raise DomainError('SKILL_DRAFT_UNAVAILABLE', 409) from None
+
+
+def requested_files(files, content, existing=None):
+    if files is None:
+        files = dict(existing or {})
+        files['SKILL.md'] = content
+    normalized = normalize_files(files)
+    if content is not None and normalized['SKILL.md']['content'] != content:
+        raise DomainError('INVALID_SKILL_CONTENT', 422)
+    return normalized
 
 
 class SharedSkillLibrary:
@@ -49,7 +53,9 @@ class SharedSkillLibrary:
     async def detail(self, uow, auth, skill_id):
         skill = await self.skill(uow, auth, skill_id)
         draft = await self.store.one(uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id)
-        skill['draft'] = {'description': draft['description'], 'content': draft['content']} if draft else None
+        files = stored_files(draft) if draft else None
+        skill['draft'] = {'description': draft['description'], 'files': files,
+                          'content': files['SKILL.md']['content']} if draft else None
         versions = await self._versions(uow, auth, skill_id)
         skill['versions'] = versions
         skill['latest_version'] = versions[0] if versions else None
@@ -78,8 +84,9 @@ class SharedSkillLibrary:
             rows = rows[:limit]
             items = []
             for skill_id in rows:
-                detail = await self.detail(uow, auth, skill_id)
-                detail.pop('draft')
+                detail = await self.skill(uow, auth, skill_id)
+                detail['versions'] = await self._versions(uow, auth, skill_id)
+                detail['latest_version'] = detail['versions'][0] if detail['versions'] else None
                 items.append(detail)
             return {'items': items, 'next_cursor': rows[-1] if more else None}
 
@@ -88,8 +95,9 @@ class SharedSkillLibrary:
             await self.authorize(uow, auth)
             return await self.detail(uow, auth, skill_id)
 
-    async def create(self, auth, name, description, content, key):
-        bundle_for(name, description, content)
+    async def create(self, auth, name, description, content, key, *, files=None):
+        normalized = requested_files(files, content)
+        bundle_for_files(name, description, normalized)
         async with self.backend.create_uow().begin_write() as uow:
             await self.authorize(uow, auth, 'maintainer')
             async def operation():
@@ -101,31 +109,38 @@ class SharedSkillLibrary:
                 await self.store.insert(uow, 'skills', dict(team_id=auth.team_id, agent_id=None, skill_id=skill_id,
                     name=name, description=description, status='active', revision=0, created_at=now, updated_at=now))
                 await self.store.insert(uow, 'skill_drafts', dict(team_id=auth.team_id, skill_id=skill_id, name=name,
-                    description=description, content=content, created_at=now, updated_at=now))
+                    description=description, files_json=canonical(normalized), created_at=now, updated_at=now))
                 return await self.detail(uow, auth, skill_id)
+            payload = {'name': name, 'description': description}
+            if files is not None: payload['files'] = files
+            if content is not None: payload['content'] = content
             return await self.idempotency.execute_team(uow, auth, 'shared-skill.create', key,
-                {'name': name, 'description': description, 'content': content}, operation, status=201)
+                payload, operation, status=201, max_payload_bytes=MAX_DRAFT_PAYLOAD)
 
-    async def save(self, auth, skill_id, description, content, revision, key):
+    async def save(self, auth, skill_id, description, content, revision, key, *, files=None):
         async with self.backend.create_uow().begin_write() as uow:
             await self.authorize(uow, auth, 'maintainer')
             async def operation():
                 skill = await self.skill(uow, auth, skill_id)
                 if skill['revision'] != revision:
                     raise DomainError('REVISION_CONFLICT', 409)
-                bundle_for(skill['name'], description, content)
                 now = await self.backend.clock.now_ms(uow)
                 draft = await self.store.one(uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id)
                 if not draft:
                     raise DomainError('SKILL_DRAFT_UNAVAILABLE', 409)
+                normalized = requested_files(files, content, stored_files(draft))
+                bundle_for_files(skill['name'], description, normalized)
                 await self.store.change(uow, 'skill_drafts', {'skill_id': skill_id, 'team_id': auth.team_id},
-                    {'description': description, 'content': content, 'updated_at': now})
+                    {'description': description, 'files_json': canonical(normalized), 'updated_at': now})
                 if not await self.store.change(uow, 'skills', {'skill_id': skill_id, 'team_id': auth.team_id, 'revision': revision},
                         {'revision': revision + 1, 'updated_at': now}):
                     raise DomainError('REVISION_CONFLICT', 409)
                 return await self.detail(uow, auth, skill_id)
+            payload = {'skill_id': skill_id, 'description': description, 'revision': revision}
+            if files is not None: payload['files'] = files
+            if content is not None: payload['content'] = content
             return await self.idempotency.execute_team(uow, auth, 'shared-skill.save', key,
-                {'skill_id': skill_id, 'description': description, 'content': content, 'revision': revision}, operation)
+                payload, operation, max_payload_bytes=MAX_DRAFT_PAYLOAD)
 
     async def publish(self, auth, skill_id, revision, key):
         payload = {'skill_id': skill_id, 'revision': revision}
@@ -144,7 +159,7 @@ class SharedSkillLibrary:
         objects = self.objects() if callable(self.objects) else self.objects
         if objects is None:
             raise DomainError('OBJECT_STORAGE_UNAVAILABLE', 503)
-        bundle = bundle_for(skill['name'], draft['description'], draft['content'])
+        bundle = bundle_for_files(skill['name'], draft['description'], stored_files(draft))
         try:
             bundle_ref = write_manifest(objects, bundle)
         except (OSError, ValueError):
@@ -186,15 +201,17 @@ class SharedSkillLibrary:
             try:
                 if row['bundle_ref'].startswith(PREFIX):
                     manifest = read_manifest(objects, row['bundle_ref'], skill['name'], row['hash'])
-                    raw = read_resource(objects, manifest, 'SKILL.md')
+                    resources = {path: read_resource(objects, manifest, path) for path in manifest['hashes']}
+                    raw = resources['SKILL.md']
                     validate_skill_metadata(manifest, raw)
                 else:
                     bundle = validate_bundle(objects.get(row['bundle_ref']), skill['name'], allow_binary=True)
                     if bundle.bundle_hash != row['hash']:
                         raise ValueError('hash mismatch')
+                    resources = bundle.resources
                     raw = bundle.resources['SKILL.md']
                 content = raw.decode('utf-8')
             except (OSError, ValueError, KeyError, UnicodeError):
                 raise DomainError('SKILL_VERSION_UNAVAILABLE', 409) from None
             return {'resource_id': row['skill_version_id'], 'version': str(row['version']),
-                    'content_hash': row['hash'], 'content': content}
+                    'content_hash': row['hash'], 'content': content, 'files': encode_resources(resources)}

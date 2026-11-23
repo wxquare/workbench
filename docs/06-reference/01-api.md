@@ -1,7 +1,7 @@
 ---
 title: 接口参考
 status: stable
-verified_commit: c5f93fb
+verified_commit: 590a15e
 ---
 
 # 接口参考（HTTP API 与 MCP Server 工具）
@@ -340,12 +340,18 @@ sequenceDiagram
 | 方法路径 | 角色 | 幂/版 | 请求 | 响应 |
 | --- | --- | --- | --- | --- |
 | `GET /v1/skills` | viewer | - | `limit`(默认 100)、`after`、`q`≤128 | 200 |
-| `POST /v1/skills` | maintainer | 幂 | `{name 1–128, description 1–1000, content 1–32000}` | 回执（409 `SKILL_NAME_CONFLICT`） |
+| `POST /v1/skills` | maintainer | 幂 | `{name 1–128, description 1–1000, files}`；兼容 `content` | 回执（409 `SKILL_NAME_CONFLICT`） |
 | `GET /v1/skills/{skill_id}` | viewer | - | - | 200（含 versions） |
-| `PATCH /v1/skills/{skill_id}` | maintainer | 幂+版 | `{description, content}` | 回执 |
-| `POST /v1/skills/{skill_id}/publish` | admin（待核） | 幂+版 | 无体 | 回执 |
+| `PATCH /v1/skills/{skill_id}` | maintainer | 幂+版 | `{description, files}`；兼容 `content` | 回执 |
+| `POST /v1/skills/{skill_id}/publish` | admin | 幂+版 | 无体 | 回执 |
 | `GET /v1/skills/{skill_id}/versions` | viewer | - | - | 200 `{items,next_cursor:null}` |
 | `GET /v1/skills/{skill_id}/versions/{version}` | viewer | - | `version` int | 200 |
+
+`files` 是相对路径到 `{encoding: "utf-8" | "base64", content: string}` 的映射，字符串值可作为 UTF-8 简写。必须包含非空 UTF-8 `SKILL.md` 正文，发布时自动生成 name/description 的 YAML 元信息。脚本作为文本资源保存；Base64 资源仅支持扩展名与文件签名一致的 PNG/JPEG/GIF/WebP 图片。
+
+最多 64 个文件，路径最多 256 字符，主正文最多 32000 UTF-8 字节，文本附件最多 256 KiB，图片最多 2 MiB，解码后的总大小最多 8 MiB。创建/保存的规范化幂等请求上限为 12 MiB。禁止绝对路径、越界路径、文件/目录前缀冲突、NUL 文本和 `.claude` 资源。
+
+完整 `files` 保存会替换文件集合；旧请求只传 `content` 时，仅更新主正文并保留附件。两个字段同时传入必须表达相同主正文。草稿响应包含 `description`、规范化 `files` 以及主正文的兼容别名 `content`。历史版本响应增加 `files`，其中 `SKILL.md` 是已生成元信息的完整文件；原 `content` 字段继续返回该完整主文件。列表响应不携带草稿文件。脚本资源不会隐式执行，图片也不会自动送入模型。
 
 ### 4.10 Team（`/v1/teams`）
 
