@@ -1,0 +1,50 @@
+{
+  "alias": "web.search",
+  "provider": "mcp",
+  "tool_name": "web_search",
+  "server": "web",
+  "credential_scope": "read",
+  "permission": "web.read",
+  "read_only": true,
+  "timeout_seconds": 15,
+  "max_output_bytes": 65536,
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "query": {"type": "string", "minLength": 1, "maxLength": 1000},
+      "limit": {"type": "integer", "minimum": 1, "maximum": 5},
+      "domain_policy_id": {"type": "string"},
+      "context": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {"type": "string"},
+          "invocation_id": {"type": "string"},
+          "query_scope_ref": {"type": "string"}
+        },
+        "required": ["run_id", "invocation_id", "query_scope_ref"]
+      }
+    },
+    "required": ["query", "limit", "domain_policy_id", "context"]
+  },
+  "argument_mapping": {
+    "schema_version": "scope-map-v1",
+    "model_input_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {"type": "string", "minLength": 1, "maxLength": 1000}
+      },
+      "required": ["query"]
+    },
+    "fields": [
+      {"origin": "model", "source": "query", "target": ["query"]},
+      {"origin": "grant", "source": "result_limit", "target": ["limit"]},
+      {"origin": "grant", "source": "domain_policy_id", "target": ["domain_policy_id"]},
+      {"origin": "context", "source": "run_id", "target": ["context", "run_id"]},
+      {"origin": "context", "source": "invocation_id", "target": ["context", "invocation_id"]},
+      {"origin": "context", "source": "query_scope_ref", "target": ["context", "query_scope_ref"]}
+    ]
+  }
+}

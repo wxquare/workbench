@@ -88,14 +88,14 @@ class DocumentationGateTest(unittest.TestCase):
         self.commit('source')
         self.assertNotEqual(self.check('--base', before).returncode, 0)
 
-    def test_plan_directory_excluded_and_long_document_only_warns(self):
+    def test_plan_directory_excluded_and_length_is_not_a_mechanical_warning(self):
         self.write_doc('docs/01-guide.md', '# A\n' + 'x\n' * 801, self.base[:7])
         plan = self.root / 'docs/superpowers/plans/work.md'
         plan.parent.mkdir(parents=True)
         plan.write_text('draft')
         result = self.check()
         self.assertEqual(result.returncode, 0)
-        self.assertIn('warning', result.stdout.lower())
+        self.assertNotIn('exceeds 800 lines', result.stdout)
 
 
 if __name__ == '__main__':

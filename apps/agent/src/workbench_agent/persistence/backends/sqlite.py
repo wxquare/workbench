@@ -78,6 +78,8 @@ class SQLiteBackend:
         self.knowledge=SQLiteKnowledgeStore()
         from workbench_agent.persistence.backends.statistics import SQLiteStatisticsStore
         self.statistics=SQLiteStatisticsStore()
+        from workbench_agent.persistence.backends.reviews import SQLiteReviewStore
+        self.reviews=SQLiteReviewStore()
 
     def create_uow(self):
         return SQLiteUnitOfWork(self)

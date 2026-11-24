@@ -10,6 +10,7 @@ from workbench_agent.evaluation.dataset import dataset_fingerprint, load_dataset
 from workbench_agent.evaluation.dataset import select_cases
 from workbench_agent.evaluation.journal import atomic_json
 from workbench_agent.evaluation.metrics import summarize_repeats
+from workbench_agent.evaluation.metrics import apply_dataset_boundary
 from workbench_agent.evaluation.runner import (
     ExperimentDirectory,
     _config_hash,
@@ -27,6 +28,7 @@ from workbench_agent.evaluation.tool_conversation_eval import (
     score_tool_result,
     tool_dataset_fingerprint,
 )
+from workbench_agent.evaluation.tool_runner import run_tool_experiment
 
 
 def _tool_dataset(path):
@@ -45,9 +47,12 @@ def _tool_dataset(path):
 def main(args) -> int:
     if args.eval_command == "validate":
         tool = _tool_dataset(args.dataset)
+        purpose = getattr(args, 'purpose', 'business')
         dataset = (
             load_tool_dataset(args.dataset)
-            if tool else load_dataset(args.dataset)
+            if tool else load_dataset(
+                args.dataset, purpose=purpose
+            )
         )
         print(
             json.dumps(
@@ -56,7 +61,7 @@ def main(args) -> int:
                     "schema_version": dataset["schema_version"],
                     "dataset_hash": (
                         tool_dataset_fingerprint(dataset)
-                        if tool else dataset_fingerprint(dataset)
+                        if tool else dataset_fingerprint(dataset, purpose=purpose)
                     ),
                     "cases": len(dataset["cases"]),
                 },
@@ -65,6 +70,11 @@ def main(args) -> int:
         )
         return 0
     if args.eval_command == "run":
+        purpose = (
+            'business'
+            if getattr(args, 'purpose', None) == 'release'
+            else getattr(args, 'purpose', None) or 'business'
+        )
         manifest_path = (
             Path(args.resume) / 'manifest.json'
             if args.resume else None
@@ -77,11 +87,7 @@ def main(args) -> int:
             .get('schema_version')
             == 'tool-conversation-eval-v1'
         )
-        if _tool_dataset(args.dataset) or resumed_tool:
-            raise ValueError(
-                'tool conversations require the completion of A4 and versioned '
-                'tool evaluation support before live runs'
-            )
+        tool = _tool_dataset(args.dataset) or resumed_tool
         if bool(args.resume) == bool(
             args.dataset and args.config and args.experiment_id
         ):
@@ -90,14 +96,22 @@ def main(args) -> int:
             experiment = Path(args.resume)
             manifest = json.loads((experiment / 'experiment.json').read_text())
             config_path = args.config or manifest.get('config_path')
-            dataset = load_dataset(args.dataset or manifest.get('dataset_path'))
+            dataset = (
+                load_tool_dataset(args.dataset or manifest.get('dataset_path'))
+                if tool else load_dataset(
+                    args.dataset or manifest.get('dataset_path'), purpose=purpose
+                )
+            )
             config = json.loads(Path(config_path).read_text()) if config_path else None
             split, repeats = manifest['split'], manifest['repeats']
             if config is None:
                 raise ValueError('resume requires the original config path')
         else:
             dataset_path, config_path = Path(args.dataset), Path(args.config)
-            dataset = load_dataset(dataset_path)
+            dataset = (
+                load_tool_dataset(dataset_path)
+                if tool else load_dataset(dataset_path, purpose=purpose)
+            )
             config = json.loads(config_path.read_text())
             experiment = Path(config.get('output_root', 'artifacts/evaluation')) / args.experiment_id
             split, repeats = args.split, args.repeats
@@ -112,6 +126,10 @@ def main(args) -> int:
             )
             manifest['dataset_path'] = str(dataset_path)
             manifest['config_path'] = str(config_path)
+            manifest['purpose'] = purpose
+            manifest['dataset_kind'] = dataset['dataset_kind']
+            if tool:
+                manifest['scoring_version'] = 'tool-conversation-rules-v1'
         if args.split == 'holdout' and args.purpose != 'release':
             raise ValueError('holdout may only run for an explicit release')
         with ExperimentDirectory(experiment):
@@ -127,7 +145,8 @@ def main(args) -> int:
                     base_url=config['api_base_url'],
                     timeout=config['request_timeout_seconds'],
                 ) as client:
-                    return await run_experiment(
+                    runner = run_tool_experiment if tool else run_experiment
+                    return await runner(
                         dataset,
                         config,
                         manifest=manifest,
@@ -151,12 +170,20 @@ def main(args) -> int:
             'rows': len(result['rows']),
             'expected': result['expected'],
         }
+        report = apply_dataset_boundary(
+            report, dataset_kind=dataset['dataset_kind']
+        )
+        report['purpose'] = purpose
         atomic_json(experiment / 'run-summary.json', report)
         return 0 if result['complete'] else 1
     if args.eval_command == "score":
+        purpose = getattr(args, 'purpose', 'business')
         experiment = Path(args.experiment)
         tool = _tool_dataset(args.dataset)
-        dataset = load_tool_dataset(args.dataset) if tool else load_dataset(args.dataset)
+        dataset = (
+            load_tool_dataset(args.dataset)
+            if tool else load_dataset(args.dataset, purpose=purpose)
+        )
         results = [
             json.loads(line)
             for line in (experiment / 'results.jsonl').read_text().splitlines()
@@ -165,7 +192,7 @@ def main(args) -> int:
         expected_cases = [
             case for case in dataset['cases']
             if case.get('split', 'dev') == args.split
-        ] if tool else select_cases(dataset, args.split)
+        ] if tool else select_cases(dataset, args.split, purpose=purpose)
         scores = [
             (score_tool_result(case, row) if tool else score_result(case, row))
             for case in expected_cases
@@ -180,7 +207,7 @@ def main(args) -> int:
             'schema_version': 'eval-report-v1',
             'dataset_hash': (
                 tool_dataset_fingerprint(dataset)
-                if tool else dataset_fingerprint(dataset)
+                if tool else dataset_fingerprint(dataset, purpose=purpose)
             ),
             'split': args.split,
             'repeats': k,
@@ -195,6 +222,10 @@ def main(args) -> int:
             ),
             'quality_status': 'unavailable',
         }
+        report['purpose'] = purpose
+        report = apply_dataset_boundary(
+            report, dataset_kind=dataset['dataset_kind']
+        )
         atomic_json(Path(args.output), report)
         return 0 if report['metrics']['complete'] and not report['metrics'][
             'unauthorized_accesses'

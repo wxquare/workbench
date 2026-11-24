@@ -16,6 +16,7 @@ import { listMessages } from '../threads-api'
 import KnowledgeAnswer from '../components/KnowledgeAnswer.vue'
 import RunFeedback from '../components/RunFeedback.vue'
 import RunUsage from '../components/RunUsage.vue'
+import WebSearchSources from '../components/WebSearchSources.vue'
 import type { UsageSummary } from '../usage'
 
 const route = useRoute()
@@ -94,6 +95,10 @@ const labels: Record<string, string> = { queued: '排队中', running: '执行�
       <template v-if="run.outcome"><KnowledgeAnswer v-if="run.outcome.knowledge_answer" :run-id="run.run_id" :answer="run.outcome.knowledge_answer" /><div v-else class="summary-box"><p class="result-text">{{ run.outcome.summary }}</p></div>
         <div v-if="!run.outcome.knowledge_answer && run.outcome.findings?.length" class="result-section"><h3>发现</h3><ul><li v-for="(item, index) in run.outcome.findings" :key="index">{{ item.summary }}</li></ul></div>
         <EvidenceReferences v-if="!run.outcome.knowledge_answer && run.run_id === runId" :key="evidenceGeneration" :run-id="runId" :token="bearerToken" :refs="run.outcome.findings?.flatMap(item => item.evidence_refs ?? []) ?? []" :get-evidence="(id, evidenceId) => api.evidence(id, evidenceId)" />
+        <WebSearchSources
+          v-if="run.outcome.web_search_sources?.length"
+          :sources="run.outcome.web_search_sources"
+        />
         <div v-if="run.outcome.unresolved_items?.length" class="result-section"><h3>未完成事项</h3><ul><li v-for="item in run.outcome.unresolved_items" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.knowledge_gaps?.length" class="result-section"><h3>知识缺口</h3><ul><li v-for="item in run.outcome.knowledge_gaps" :key="item">{{ item }}</li></ul></div>
         <div v-if="run.outcome.evidence_refs?.length" class="result-section"><h3>证据 ID</h3><ul><li v-for="item in run.outcome.evidence_refs" :key="item">{{ item }}</li></ul></div>

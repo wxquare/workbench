@@ -7,7 +7,7 @@ def test_fresh_database_uses_graph_id(config_data):
     url = config_data['storage']['database_url']
     migrate(url)
     with sqlite3.connect(url.removeprefix('sqlite+aiosqlite:///')) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0006_multifile_skill_drafts',)
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0007_review_indexes',)
         columns = {row[1] for row in db.execute('PRAGMA table_info(runtime_profiles)')}
         assert 'graph_id' in columns
         assert 'graph_version' not in columns
@@ -32,7 +32,7 @@ def test_empty_v4_database_upgrades_without_losing_foreign_keys(config_data):
     engine.dispose()
     migrate(url)
     with sqlite3.connect(path) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0006_multifile_skill_drafts',)
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0007_review_indexes',)
         assert 'graph_id' in {row[1] for row in db.execute('PRAGMA table_info(runtime_profiles)')}
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
 

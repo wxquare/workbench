@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 status: stable
-verified_commit: 16c4617
+verified_commit: a3396e9
 ---
 
 # 配置参考（Agent 与 MCP Server）
@@ -489,6 +489,15 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 `public_base_url` 默认 null；可配置无凭据、query、fragment 的 HTTP(S) URL，用于生成来源地址。部署时还需设置 MCP 的 `allowed_source_hosts` 和匹配的 source/principal 范围。示例配置里的 UUID、范围和令牌引用均需按实际环境替换；启用配置本身不证明业务查询或模型质量通过验收。
 
 启用 `knowledge.citation_review` 时，还需将它加入 worker 支持的图版本，在 Agent 的 `service.mcp_connections` 配置 MCP 连接与对应工具权限和范围，并配置可用的模型凭据。MCP Server 的 knowledge source 指向 Agent 内部查询端点，source ID、业务团队和具体范围须与 Agent grant 及 MCP principal 的授权一致；源出站令牌须匹配 grant，MCP 入站令牌使用独立凭据。配置文件变更后需重启相关进程，当前不支持在线重载。
+
+### `web_search` 部署声明
+
+`web_search` 是外部 MCP 工具，不属于内置 DoD MCP 的四类查询工具。部署连接需要
+同时配置 `read_tools`、`tool_conversation_allowed_tools` 和钉住 mapping/schema
+哈希的 `mapping_policies`；一个 Agent 只能匹配一个网页 grant。模型只生成
+`query`，`limit`、`domain_policy_id` 和三个 context ID 由部署配置注入。
+示例见 `config/examples/web-search-deployment.yaml`，其 endpoint 与凭据引用均为
+占位值。未提供兼容上游时不能启用或声称真实网页搜索可用。
 
 ## 知识问答引用审查配置
 

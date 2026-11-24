@@ -1,7 +1,7 @@
 ---
 title: 决策记录
 status: stable
-verified_commit: 16c4617
+verified_commit: a3396e9
 ---
 
 # 决策记录

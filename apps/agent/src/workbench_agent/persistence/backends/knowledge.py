@@ -70,10 +70,24 @@ class SQLiteKnowledgeStore:
                 'chunker_version': chunk.chunker_version})
 
     async def search_current(self, uow, scope, query, *, limit):
+        tokens, params, predicate, ordering = self._compile_query(scope, query, limit)
+        statement = text(f'''SELECT kb_fts.*, v.content_json, v.created_at FROM kb_fts
+            JOIN kb_entries e ON e.team_id=kb_fts.team_id AND e.entry_id=kb_fts.entry_id
+                AND e.status='published' AND e.published_version=kb_fts.version
+            JOIN kb_entry_versions v ON v.team_id=e.team_id AND v.entry_id=e.entry_id
+                AND v.version=e.published_version
+            WHERE e.team_id=:team
+              AND (json_extract(v.content_json,'$.service') IS NULL OR json_extract(v.content_json,'$.service')=:service)
+              AND (json_extract(v.content_json,'$.environment') IS NULL OR json_extract(v.content_json,'$.environment')=:environment)
+              AND (json_extract(v.content_json,'$.region') IS NULL OR json_extract(v.content_json,'$.region')=:region)
+              AND {predicate} ORDER BY {ordering} LIMIT :limit''')
+        return [dict(row) for row in (await uow.execute(statement, params)).mappings()]
+
+    def _compile_query(self, scope, query, limit):
         import re
         tokens = re.findall(r'[\u4e00-\u9fff]+|[A-Za-z0-9_./-]+', query)[:32]
         if not tokens:
-            return []
+            raise ValueError('query has no searchable token')
         # Scope is already enforced below. OR-ing its repeated labels into
         # content search turns a topic query into a listing of the whole service.
         scope_terms = {getattr(scope, key).casefold() for key in ('service', 'environment', 'region')}
@@ -103,17 +117,7 @@ class SQLiteKnowledgeStore:
                     for column in ('title', 'content', 'tags', 'aliases')) + ')')
             predicate = '(' + ' OR '.join(clauses) + ')'
             ordering = 'e.entry_id, kb_fts.chunk_id'
-        statement = text(f'''SELECT kb_fts.*, v.content_json, v.created_at FROM kb_fts
-            JOIN kb_entries e ON e.team_id=kb_fts.team_id AND e.entry_id=kb_fts.entry_id
-                AND e.status='published' AND e.published_version=kb_fts.version
-            JOIN kb_entry_versions v ON v.team_id=e.team_id AND v.entry_id=e.entry_id
-                AND v.version=e.published_version
-            WHERE e.team_id=:team
-              AND (json_extract(v.content_json,'$.service') IS NULL OR json_extract(v.content_json,'$.service')=:service)
-              AND (json_extract(v.content_json,'$.environment') IS NULL OR json_extract(v.content_json,'$.environment')=:environment)
-              AND (json_extract(v.content_json,'$.region') IS NULL OR json_extract(v.content_json,'$.region')=:region)
-              AND {predicate} ORDER BY {ordering} LIMIT :limit''')
-        return [dict(row) for row in (await uow.execute(statement, params)).mappings()]
+        return tokens, params, predicate, ordering
 
     async def indexed_chunks(self, uow, team_id):
         rows = await uow.execute(text('''SELECT entry_id,version,chunk_id,content_hash,content,title,tags,aliases,

@@ -145,6 +145,65 @@ async def test_admission_uses_frozen_summary_role_model_before_first_claim(platf
     assert view.context.default_model==published.default_model
     assert view.context.model_for('summary')==model.ref
 
+
+@pytest.mark.asyncio
+async def test_bounded_summary_graph_uses_compact_input_policy(platform):
+    from uuid import uuid4
+    from workbench_agent.domain.profiles import ProfileDraft
+
+    context = await platform.contexts.resolve(platform.auth, platform.agent_id)
+    from workbench_agent.domain.tools import ToolBinding
+    from workbench_agent.tools.registry import ToolRegistry
+    binding = ToolBinding(
+        alias='kb.search',
+        provider='mcp',
+        tool_name='knowledge_search',
+        server='local',
+        credential_scope='read',
+        permission='knowledge.read',
+        input_schema={'type': 'object', 'properties': {'query': {'type': 'string'}}},
+    )
+    ref = await ToolRegistry(platform.backend).publish(
+        platform.auth, platform.agent_id, binding, key=str(uuid4())
+    )
+    current = await platform.profiles.get_agent(platform.auth, platform.agent_id)
+    changed = await platform.profiles.save_draft(
+        platform.auth,
+        platform.agent_id,
+        ProfileDraft(
+            default_model=context.default_model,
+            graph_id='conversation.tool_use',
+            tools=(ref,),
+        ),
+        expected_revision=current['revision'],
+        key=str(uuid4()),
+    )
+    await platform.profiles.publish(
+        platform.auth,
+        platform.agent_id,
+        expected_revision=changed['revision'],
+        key=str(uuid4()),
+    )
+    from support.runs import make_run_payload
+    from workbench_agent.application.runs import RunService
+    from workbench_agent.domain.runs import CreateRun
+
+    payload = make_run_payload(platform.agent_id)
+    from test_tool_conversation_graph import SCOPE
+
+    payload['business_context'] = {
+        'conversation': True,
+        'query_scope': dict(SCOPE, start_at='2026-11-13T00:00:00.000Z',
+                             end_at='2026-11-13T00:10:00.000Z'),
+    }
+    run = await RunService(platform.backend).create(
+        platform.auth, CreateRun.model_validate(payload), 'bounded-summary'
+    )
+    summary = await platform.budgets.snapshot(platform.auth, run.run_id)
+
+    assert summary.summary_token_reserve == 16_384 + 256 * 8 + 4_096
+
+
 @pytest.mark.asyncio
 async def test_admission_rolls_back_summary_policy_with_run_failure(platform,monkeypatch):
     async def fail_after_admission_writes(*args,**kwargs):

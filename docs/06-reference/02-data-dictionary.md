@@ -4,7 +4,7 @@ status: stable
 verified_commit: 590a15e
 ---
 
-# 数据字典（schema_agent_v6：多文件 Skill 草稿）
+# 数据字典（schema_agent_v7：审核候选索引）
 
 > **读者**：查字段、写迁移、核对数据的人。**以代码为准**，由 SQLAlchemy 元数据抽取。
 > 小节编号保留 `A.x` 前缀，便于从旧文档迁移引用；接口见 [01 接口参考](01-api.md)，配置见 [03 配置参考](03-configuration.md)。
@@ -17,8 +17,8 @@ verified_commit: 590a15e
 
 | 项 | 取值（来源） |
 | --- | --- |
-| 最终 Schema | `schema_agent_v6.metadata`（`persistence/schema.py` 导出） |
-| Agent 迁移头 | `0006_multifile_skill_drafts`（链：0001_agent_domain → 0002_shared_skills → 0003_run_trace_contexts → 0004_knowledge_base → 0005_graph_id → 0006_multifile_skill_drafts） |
+| 最终 Schema | `schema_agent_v7.metadata`（`persistence/schema.py` 导出） |
+| Agent 迁移头 | `0007_review_indexes`（链：0001_agent_domain → … → 0006_multifile_skill_drafts → 0007_review_indexes） |
 | 存储协议 / Codec | `dod-storage-agent-v1` / `dod-checkpoint-v1`（`schema_agent_v1.py` 常量；写入 `dod_storage_metadata`） |
 | 历史 Workspace 链 | `schema_v1…schema_v20`，对应 `migrations/versions/0001_core…0021_synthetic_batch_policy`（共 21 个迁移，其中 `0005_resume_protocol` 仅数据规整，无 Schema 变化，所以 `schema_vN` 与迁移编号自 v5 起错位 1） |
 | Agent 基线生成方式 | `schema_agent_v1` 在导入时遍历 `schema_v20`，把表名 `workspaces→agents`、列名 `workspace_id→agent_id` 机械替换，约束/索引名同步替换；`0001_agent_domain` 仅允许在**全新库**上 `create_all`，已有库直接报错，不迁移 Workspace 数据 |
@@ -140,7 +140,9 @@ erDiagram
 - 唯一约束：无
 - 外键：无
 - CHECK：`active_executions >= 0`（ck_teams_active_executions_nonnegative）
-- 显式索引：无（不含 PK/UNIQUE 隐式索引）
+- 显式索引：`(team_id, agent_id, version)` 唯一约束的隐式索引；审核 inbox 另有
+  `runs(team_id, agent_id, status, waiting_deadline_at, created_at)` 与
+  `interrupts(team_id, status, created_at, interrupt_id)`（Agent v7）。
 
 #### A.1.2 `team_members`：团队成员
 
@@ -1674,6 +1676,12 @@ erDiagram
 | `source_trace` | `TEXT` | 否 | — | v1 | 来源轨迹 JSON；至少关联 Run，知识问题还需关联真实调用/证据。 |
 | `problem_type` | `VARCHAR(32)` | 否 | — | v1 | 反馈或知识问题分类；工具不可用不能直接记为知识缺失。 |
 | `review_status` | `VARCHAR(32)` | 否 | — | v1 | 人工审核状态；pending 不能当作已审核知识或质量真值。 |
+
+### Agent v7 审核索引
+
+`0007_review_indexes` 为现有 Run、Interrupt、Action、Approval 和 Agent 表增加只读
+inbox 查询索引，不改写任何业务状态。索引存在不能替代 R1 的当前 actor、审批人、
+权限和 checkpoint 复核；候选过滤后仍有精确资格校验。
 | `payload` | `TEXT` | 否 | — | v1 | 版本化正文；具体格式和可信边界见本表说明及 13.8。 |
 | `created_at` | `BIGINT` | 否 | `0` | v1 | 创建时间，UTC 毫秒；DDL 默认 0，不代表有效时间 |
 | `updated_at` | `BIGINT` | 否 | `0` | v1 | 最后变更时间，UTC 毫秒；DDL 默认 0，不代表有效时间 |

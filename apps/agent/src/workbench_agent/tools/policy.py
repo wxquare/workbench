@@ -261,7 +261,44 @@ class PolicyToolExecutor:
                     await self.budgets.quarantine(guard,ident,ActualUsage(input_tokens=0,output_tokens=0),uow=uow)
                 raise
             if status=='ok':
-                if (
+                if binding.tool_name == 'web_search':
+                    from workbench_agent.tools.web_search_result import (
+                        validate_web_search_response,
+                    )
+                    web_result = validate_web_search_response(
+                        response,
+                        policy=self.transport.policy,
+                        team_id=context.team_id,
+                        agent_id=context.agent_id,
+                        binding=binding,
+                    )
+                    web_status = web_result['status']
+                    if web_status in {'empty', 'denied'}:
+                        if web_status == 'empty':
+                            return await self._complete_empty(
+                                context, guard, binding, binding_ref,
+                                scope_id, ident, expected_business_scope,
+                                expected_knowledge_scope,
+                            )
+                        return ToolResult(
+                            status='denied',
+                            error=ToolError(code=web_result['error']),
+                        )
+                    if web_status in {'unavailable', 'unknown'}:
+                        return ToolResult(
+                            status=(
+                                'unavailable'
+                                if web_status == 'unavailable'
+                                else 'unknown'
+                            ),
+                            error=ToolError(code=web_result['error']),
+                        )
+                    response = {
+                        key: value
+                        for key, value in web_result.items()
+                        if key != 'grant'
+                    }
+                elif (
                     binding.argument_mapping is None
                     and binding.tool_name in DOD_MCP_TOOLS
                 ):

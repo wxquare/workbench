@@ -15,6 +15,7 @@ from workbench_agent.domain.usage import ReservationRequest,ActualUsage
 from workbench_agent.persistence.errors import StaleExecution
 from workbench_agent.runtime.budgets.service import BudgetService
 from workbench_agent.runtime.models.json_output import validate_json_output
+from workbench_agent.runtime.models.request_bound import request_token_bound
 from workbench_agent.observability import current_telemetry, span_or_none
 
 logger=logging.getLogger("workbench.models")
@@ -45,6 +46,7 @@ class ModelResult:
     validated_data: object | None = None
     message: object | None = None
     error_code: str | None = None
+    structured_output_repairs: int = 0
 
 class ModelInvoker:
     def __init__(self,backend,factory,secrets,*,execution=None):
@@ -103,7 +105,11 @@ class ModelInvoker:
                 # UTF-8 bytes, envelope allowance and declared completion cap form
                 # a conservative bound; refuse requests larger than frozen context.
                 envelope={'messages':messages_to_dict(prompt),'tools':[convert_to_openai_tool(t) for t in (tools or [])]}
-                size=len(json.dumps(envelope,ensure_ascii=False,separators=(',',':')).encode('utf-8'))+256*len(prompt)+config.max_output_tokens
+                size=request_token_bound(
+                    envelope=envelope,
+                    message_count=len(prompt),
+                    max_output_tokens=config.max_output_tokens,
+                )
                 request=ReservationRequest(invocation_id=ident,kind='summary' if role=='summary' else ('evaluation' if role=='evaluation' else 'expert'),
                     model_attempts=1,token_upper_bound=size,role=role)
                 async with self.backend.create_uow().begin_write() as uow:
@@ -201,9 +207,17 @@ class ModelInvoker:
                 if not text.strip() and not getattr(response,'tool_calls',None): return ModelResult('error',error_code='MODEL_EMPTY_OUTPUT',**result)
                 return ModelResult('ok',**result)
             try:
-                return ModelResult('ok',validated_data=validate_json_output(text,output_schema,meta.get('finish_reason')),**result)
+                return ModelResult('ok',validated_data=validate_json_output(text,output_schema,meta.get('finish_reason')),
+                    structured_output_repairs=repairs,**result)
             except ValueError:
-                if repairs>=1: return ModelResult('invalid_output',error_code='MODEL_INVALID_OUTPUT',**result)
-                if attempts>=config.invocation_max_attempts: return ModelResult('invalid_output',error_code='MODEL_INVALID_OUTPUT',**result)
+                if repairs>=1 or attempts>=config.invocation_max_attempts:
+                    logger.warning('model output invalid',extra={'event':'model.output_invalid',
+                        'run_id':guard.run_id,'logical_call_id':logical_call_id,'role':role,
+                        'attempts':attempts,'repairs':repairs,'error_code':'MODEL_INVALID_OUTPUT'})
+                    return ModelResult('invalid_output',error_code='MODEL_INVALID_OUTPUT',
+                        structured_output_repairs=repairs,**result)
                 repairs+=1
+                logger.info('model output repair',extra={'event':'model.output_repair',
+                    'run_id':guard.run_id,'logical_call_id':logical_call_id,'role':role,
+                    'attempts':attempts,'repairs':repairs})
                 prompt=[*prompt,response,HumanMessage(content='The prior JSON was invalid. Return a corrected JSON object only, matching the schema.')]

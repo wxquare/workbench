@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import Field,model_validator
 from workbench_agent.domain.profiles import FrozenModel
 from workbench_agent.domain.knowledge_answers import KnowledgeAnswer
+from workbench_agent.domain.tools import WebSearchSource
 
 class Finding(FrozenModel):
     summary:str=Field(min_length=1,max_length=16384)
@@ -41,6 +42,11 @@ class UsageSummary(FrozenModel):
             raise ValueError('unknown usage must remain pending')
         return self
 
+class ResultDiagnostics(FrozenModel):
+    retrieval_truncated:bool=False
+    structured_output_repairs:int=Field(default=0,ge=0,le=1,strict=True)
+    structured_output_failed:bool=False
+
 class RunOutcome(FrozenModel):
     schema_version:Literal['1']='1'
     kind:Literal['foundation.recorded.v1','analysis.v1']
@@ -54,6 +60,14 @@ class RunOutcome(FrozenModel):
     proposed_actions:tuple[ProposedAction,...]
     knowledge_gaps:tuple[str,...]
     usage_summary:UsageSummary
+    diagnostics:ResultDiagnostics=Field(
+        default_factory=ResultDiagnostics,
+        exclude_if=lambda value: value == ResultDiagnostics(),
+    )
+    web_search_sources:tuple[WebSearchSource,...]=Field(
+        default=(),
+        exclude_if=lambda value: not value,
+    )
     knowledge_answer:KnowledgeAnswer|None=Field(default=None,exclude_if=lambda value:value is None)
 
     @model_validator(mode='after')

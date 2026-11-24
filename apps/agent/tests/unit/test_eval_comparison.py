@@ -4,6 +4,8 @@ from workbench_agent.evaluation.comparison import compare_reports
 def report(**changes):
     value = {
         'dataset_hash': 'd',
+        'dataset_kind': 'business',
+        'purpose': 'business',
         'split': 'dev',
         'repeats': 3,
         'scoring_version': 'v1',

@@ -463,6 +463,23 @@ def build_tool_conversation(saver):
             if item.get('payload', {}).get('status') == 'ok'
             and item['payload'].get('evidence_ref')
         ]
+        web_sources = []
+        for item in results:
+            payload = item.get('payload') or {}
+            data = payload.get('data') or {}
+            if (
+                item.get('alias') == 'web.search'
+                and payload.get('status') == 'ok'
+                and isinstance(data, dict)
+                and data.get('content_kind') == 'search_snippet'
+                and isinstance(data.get('results'), list)
+            ):
+                for result in data['results']:
+                    if isinstance(result, dict):
+                        web_sources.append({
+                            **result,
+                            'retrieved_at': data.get('retrieved_at'),
+                        })
         if not results:
             return {
                 'phase': 'compose',
@@ -515,6 +532,7 @@ def build_tool_conversation(saver):
                 'summary': summary,
                 'unresolved_items': unresolved,
                 'evidence_refs': evidence,
+                'web_search_sources': web_sources,
             },
         }
 

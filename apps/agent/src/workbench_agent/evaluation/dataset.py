@@ -134,14 +134,23 @@ def _definition(case: dict) -> dict:
     }
 
 
-def validate_dataset(value: dict, *, require_complete: bool = False) -> dict:
+def validate_dataset(
+    value: dict, *, require_complete: bool = False, purpose: str = 'business'
+) -> dict:
     """Validate schema, unique cases, split coverage and safe checks."""
+    if purpose not in {'business', 'engineering'}:
+        raise ValueError('purpose must be business or engineering')
     if not isinstance(value, dict):
         raise ValueError('dataset must be an object')
     if value.get('schema_version') != 'knowledge-eval-v1':
         raise ValueError('invalid dataset schema')
-    if value.get('dataset_kind') != 'business':
+    kind = value.get('dataset_kind')
+    if purpose == 'business' and kind != 'business':
         raise ValueError('baseline datasets must be declared as business')
+    if purpose == 'engineering' and kind != 'synthetic':
+        raise ValueError('engineering purpose only accepts synthetic datasets')
+    if kind not in {'business', 'synthetic'}:
+        raise ValueError('dataset_kind must be business or synthetic')
     if set(value) - {'schema_version', 'dataset_kind', 'cases', 'access'}:
         raise ValueError('unexpected dataset fields')
     cases = value.get('cases')
@@ -230,6 +239,8 @@ def validate_dataset(value: dict, *, require_complete: bool = False) -> dict:
         split = case.get('split', 'dev')
         if split not in SPLITS:
             raise ValueError('unsupported split')
+        if purpose == 'engineering' and split != 'dev':
+            raise ValueError('synthetic engineering datasets only allow dev holdout')
         checks = case.get('checks', [])
         if not isinstance(checks, list) or len(checks) > 16:
             raise ValueError('invalid checks')
@@ -272,7 +283,7 @@ def validate_dataset(value: dict, *, require_complete: bool = False) -> dict:
     return value
 
 
-def load_dataset(path: str | Path) -> dict:
+def load_dataset(path: str | Path, *, purpose: str = 'business') -> dict:
     path = Path(path)
     try:
         raw = path.read_bytes()
@@ -284,11 +295,11 @@ def load_dataset(path: str | Path) -> dict:
         value = json.loads(raw)
     except (ValueError, UnicodeError):
         raise ValueError('dataset is not valid JSON') from None
-    return validate_dataset(value, require_complete=True)
+    return validate_dataset(value, require_complete=True, purpose=purpose)
 
 
-def dataset_fingerprint(dataset: dict) -> str:
-    validate_dataset(dataset, require_complete=True)
+def dataset_fingerprint(dataset: dict, *, purpose: str = 'business') -> str:
+    validate_dataset(dataset, require_complete=True, purpose=purpose)
     definitions = sorted(
         (_definition(case) for case in dataset['cases']),
         key=lambda item: item['id'],
@@ -303,8 +314,10 @@ def dataset_fingerprint(dataset: dict) -> str:
     return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
 
 
-def select_cases(dataset: dict, split: str) -> list[dict]:
-    validate_dataset(dataset)
+def select_cases(
+    dataset: dict, split: str, *, purpose: str = 'business'
+) -> list[dict]:
+    validate_dataset(dataset, purpose=purpose)
     if split not in SPLITS:
         raise ValueError('unsupported split')
     selected = [

@@ -32,3 +32,25 @@ class ReapprovalRequest(BaseModel):
 @router.post('/actions/{action_id}/reapproval')
 async def request_reapproval(action_id:UUID,body:ReapprovalRequest,request:Request,auth=Depends(authenticate),idempotency_key:str=Header()):
     return response(await request.app.state.actions.reapprove(auth,str(action_id),body.expected_args_hash,key=idempotency_key,receipt=True))
+
+
+@router.post('/actions/{action_id}/reconcile')
+async def reconcile_action(
+    action_id: UUID,
+    request: Request,
+    auth=Depends(authenticate),
+    idempotency_key: str = Header(alias='Idempotency-Key'),
+):
+    from workbench_agent.application.reconciliation import ReconciliationService
+    return response(await _reconcile(
+        ReconciliationService(request.app.state.backend),
+        auth,
+        str(action_id),
+        key=idempotency_key,
+    ))
+
+
+async def _reconcile(service, auth, action_id, *, key):
+    result = await service.reconcile(auth, action_id, key=key)
+    from workbench_agent.application.idempotency import MutationResult
+    return MutationResult(result, 202)

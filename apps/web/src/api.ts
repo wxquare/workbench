@@ -7,7 +7,14 @@ export interface QaRequest { agent_id: string; text: string; scope?: QueryScope 
 export type QaMode = 'llm' | 'knowledge'
 export interface KnowledgeCitation { evidence_ref: string; source_id: string; quote: string; title: string; source_locator: string | null; source_uri: string | null }
 export interface KnowledgeAnswer { schema_version: 'knowledge-answer-v1'; review_kind: 'model_reviewed'; verification: 'passed' | 'failed'; claims: { text: string; citations: KnowledgeCitation[] }[] }
-export interface RunOutcome { summary: string; completed?: boolean; unresolved_items?: string[]; knowledge_gaps?: string[]; findings?: { summary: string; evidence_refs?: string[] }[]; evidence_refs?: string[]; knowledge_answer?: KnowledgeAnswer | null }
+export interface WebSearchSource {
+  title: string
+  url: string
+  snippet: string
+  retrieved_at: string
+  published_at: string | null
+}
+export interface RunOutcome { summary: string; completed?: boolean; unresolved_items?: string[]; knowledge_gaps?: string[]; findings?: { summary: string; evidence_refs?: string[] }[]; evidence_refs?: string[]; knowledge_answer?: KnowledgeAnswer | null; diagnostics?: { retrieval_truncated?: boolean; structured_output_repairs?: number; structured_output_failed?: boolean }; web_search_sources?: WebSearchSource[] }
 export interface WaitingView { name: string; kind: string; actor?: string; interrupt_id: string; revision: number; expires_at_ms: number; created_at_ms: number; schema: Record<string, unknown>; approval_id?: string; args_hash?: string; expected_scope_id?: string }
 export type ResumeResponse = { kind: "user_input"; values: Record<string, string> } | { kind: "approval"; approval_id: string; decision: "approve" | "reject"; expected_args_hash: string }
 export interface ResumeBody { interrupt_id: string; expected_revision: number; response: ResumeResponse }

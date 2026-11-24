@@ -30,7 +30,7 @@ def test_populated_v5_preserves_draft_and_published_records(tmp_path):
     engine.dispose()
     migrate('sqlite+aiosqlite:///' + str(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0006_multifile_skill_drafts',)
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0007_review_indexes',)
         row = db.execute('SELECT skill_id,files_json,created_at,updated_at FROM skill_drafts').fetchone()
         assert row[0] == 's' and row[2:] == (11, 12)
         assert json.loads(row[1]) == {'SKILL.md': {'encoding': 'utf-8', 'content': body}}

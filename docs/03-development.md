@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 16c4617
+verified_commit: a3396e9
 ---
 
 # 开发指南
@@ -711,13 +711,13 @@ SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4
 
 ### 5.2 Schema 与显式迁移
 
-当前业务 Schema 在 `persistence/schema_agent_v4.py`，Agent 独立迁移链在 `persistence/agent_migrations/versions/`。历史 Workspace 迁移在 `persistence/migrations/versions/`，供旧规格和历史理解使用，不能对旧 Workspace 数据库运行 Agent 初始化。`cli/db.py::_preflight` 在写入之前检查版本元数据、revision、WAL 和必需结构；未知旧库安全拒绝。`workbench db migrate` 是维护命令，API/Worker/Scheduler 启动不自动迁移。
+当前业务 Schema 在 `persistence/schema_agent_v7.py`，迁移 head 为 `0007_review_indexes`；Agent 独立迁移链在 `persistence/agent_migrations/versions/`。历史 Workspace 迁移在 `persistence/migrations/versions/`，供旧规格和历史理解使用，不能对旧 Workspace 数据库运行 Agent 初始化。`cli/db.py::_preflight` 在写入之前检查版本元数据、revision、WAL 和必需结构；未知旧库安全拒绝。`workbench db migrate` 是维护命令，API/Worker/Scheduler 启动不自动迁移。
 
 | 情形 | 预期行为 | 核对点 |
 | --- | --- | --- |
 | 新的空路径 | 显式 `db migrate` 建立 Agent Schema | `cli/db.py::migrate`、`agent_migrations/versions/0001_agent_domain.py` |
 | 已在当前 revision 的 Agent 库 | 迁移命令可重复运行，不重建业务数据 | `cli/db.py::_preflight` |
-| 受支持的早期 Agent revision | 在维护窗口升级到 head，并做外键检查 | `0002_shared_skills.py`、`0003_run_trace_contexts.py`、`0004_knowledge_base.py` |
+| 受支持的早期 Agent revision | 在维护窗口升级到 head，并做外键检查 | `0002_shared_skills.py` 至 `0007_review_indexes.py` |
 | 旧 Workspace 或结构不兼容的库 | 拒绝并保留原库 | `FreshAgentDatabaseRequired` |
 
 版本与表字段的快照见[02 数据字典](06-reference/02-data-dictionary.md)。安装与迁移、备份恢复的步骤见 [04 运维](04-operations.md)。
@@ -772,7 +772,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 ### 8.1 页面与路由
 
-`apps/web/src/router.ts` 使用 `/app/` 作为 history base。实际路由：工作台 `/`、任务 `/runs`、任务详情 `/runs/:id`、Agent `/agents`、模型 `/models`、会话 `/threads`、Skill `/skills`。`tools`、`schedules`、`incidents`、`statistics` 映射 `views/Placeholder.vue`，页面路由存在不代表业务功能已交付。`/demo/runs/:id` 是演示页，不能作为真实任务详情验收依据。
+`apps/web/src/router.ts` 使用 `/app/` 作为 history base。实际路由：工作台 `/`、任务 `/runs`、任务详情 `/runs/:id`、Agent `/agents`、模型 `/models`、会话 `/threads`、Skill `/skills`、知识库 `/knowledge`、工具连接 `/tools`、数据统计 `/statistics`、审核中心 `/reviews`。`/incidents` 重定向 `/reviews`；仅 `schedules` 仍映射 `views/Placeholder.vue`。页面路由存在不代表业务功能已通过真实浏览器和外部连接器验收。`/demo/runs/:id` 是演示页，不能作为真实任务详情验收依据。
 
 任务详情支持取消、区域补充输入和 Run 级审批；外部 Action 审批不在该页面处理。
 
@@ -820,7 +820,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 `.github/workflows/ci.yml` 在 PR 和推送到 main 时运行五个独立检查：`agent`、`mcp-server`、`web`、`scripts` 和 `docs`，`ci-ok` 要求全部成功。完整本地命令见[文档入口的测试步骤](README.md#快速开始)。脚本测试调用 agent 虚拟环境中的 Python，因此先执行 agent 的 `uv sync --frozen`。
 
-Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3，再运行离线测试（不启用 `--run-live`）。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22。`docs` 检查链接、图和元信息，超 800 行及代码关联文档只警告；纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
+Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3，再运行离线测试（不启用 `--run-live`）。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22。`docs` 检查链接、图、元信息和代码关联文档；代码关联文档缺同步仅警告，文档拆分按主题、职责与阅读成本判断，不设机械行数阈值。纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
 
 ## 10 开发指引
 
@@ -929,7 +929,7 @@ cd apps/agent
 | --- | --- | --- |
 | 命令写作 `dod` | `apps/agent/pyproject.toml` 中入口是 `workbench` | 所有可执行命令统一为 `workbench`；历史文档中的残留已随旧目录删除 |
 | Workspace 是产品容器 | Agent Schema、路由、Web 以 Agent 为主 | Workspace 仅作为历史迁移名或 Runner 内技术目录出现 |
-| 管理端所有页面已可用 | `apps/web/src/router.ts` 的四类路由指向 `Placeholder.vue` | 产品文档标记为占位，不能算已交付 |
+| 管理端所有页面已可用 | `apps/web/src/router.ts` 的定时任务路由仍指向 `Placeholder.vue`；审核中心仍需人工旅程验收 | 产品文档只将未完成页面标记为占位 |
 | MySQL/PostgreSQL 可直接切换 | 只有 `SQLiteBackend` 实现 | [02 架构](02-architecture.md) 保留目标契约，实施状态标为待实现 |
 | 外部业务通知已交付 | `delivery/local_simulator.py` 为本地模拟，真实发送器默认未配置 | 合成验收与真实接入分开 |
 | MCP `check` 证明业务数据源可用 | `interfaces/cli.py` 输出 `business_query: not_checked` | 真实业务源需要独立验收 |

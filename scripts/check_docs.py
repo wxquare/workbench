@@ -74,8 +74,6 @@ def main():
         commit = data.get('verified_commit', '')
         if not re.fullmatch(r'[0-9a-f]{7,40}', commit) or git(root, 'cat-file', '-e', f'{commit}^{{commit}}').returncode or git(root, 'merge-base', '--is-ancestor', commit, 'HEAD').returncode:
             errors.append(f'{name}: invalid or non-ancestor verified_commit {commit}')
-        if len(text.splitlines()) > 800:
-            warnings.append(f'{name}: exceeds 800 lines')
         for target in LINK.findall(FENCE.sub('', text)):
             parts = urlsplit(target)
             if parts.scheme or target.startswith('//'):

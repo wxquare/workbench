@@ -77,8 +77,10 @@ def validate_required_schema(connection, constrain_lock_wait=lambda:None, *, bas
         from workbench_agent.persistence.schema_agent_v4 import metadata, MIGRATION_HEAD
     elif revision == '0005_graph_id':
         from workbench_agent.persistence.schema_agent_v5 import metadata, MIGRATION_HEAD
-    else:
+    elif revision == '0006_multifile_skill_drafts':
         from workbench_agent.persistence.schema_agent_v6 import metadata, MIGRATION_HEAD
+    else:
+        from workbench_agent.persistence.schema_agent_v7 import metadata, MIGRATION_HEAD
     def query(sql):
         constrain_lock_wait()
         return connection.execute(sql).fetchall()
@@ -129,7 +131,8 @@ def validate_required_schema(connection, constrain_lock_wait=lambda:None, *, bas
                            for constraint in table.constraints if isinstance(constraint, CheckConstraint)}
         if expected_checks and not expected_checks <= _check_expressions(actual_tables[name]):
             return ["required business schema CHECK constraints are missing/incompatible"]
-    if MIGRATION_HEAD in ('0004_knowledge_base', '0005_graph_id', '0006_multifile_skill_drafts'):
+    if MIGRATION_HEAD in ('0004_knowledge_base', '0005_graph_id',
+                          '0006_multifile_skill_drafts', '0007_review_indexes'):
         sql = actual_tables.get('kb_fts', '')
         expected = ('title', 'content', 'tags', 'aliases', 'team_id', 'entry_id', 'version',
                     'chunk_id', 'heading_path', 'line_start', 'line_end', 'content_hash', 'chunker_version')

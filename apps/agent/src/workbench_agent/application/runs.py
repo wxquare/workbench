@@ -10,6 +10,11 @@ from workbench_agent.application.context import ContextResolver
 from workbench_agent.application.profiles import ProfileService
 from workbench_agent.application.errors import DomainError, not_found
 from workbench_agent.application.idempotency import Idempotency, canonical, digest
+from workbench_agent.application.summary_policy import (
+    SUMMARY_INPUT_BYTE_LIMIT,
+    SUMMARY_MESSAGE_LIMIT,
+    choose_summary_reserve,
+)
 from workbench_agent.observability import observe_run_admission, current_telemetry
 
 # wall_seconds limits active execution; runs.wall_deadline_at separately caps total lifetime at 48h.
@@ -223,7 +228,22 @@ class RunService:
                     if not self.secret_availability.available(model_version.secret_ref):
                         raise DomainError('MODEL_PROFILE_UNAVAILABLE',409)
                 summary_model=(await self.profiles.model_version(uow,auth,context.model_for('summary'))).configuration
-                summary_tokens=request.summary_token_reserve or summary_model.max_context_tokens
+                bounded_summary_graph = profile.graph_id in (
+                    GraphId.KNOWLEDGE_CITATION_REVIEW,
+                    GraphId.CONVERSATION_TOOL_USE,
+                )
+                try:
+                    summary_tokens=choose_summary_reserve(
+                        context_limit=summary_model.max_context_tokens,
+                        output_limit=summary_model.max_output_tokens,
+                        input_byte_limit=SUMMARY_INPUT_BYTE_LIMIT,
+                        message_limit=SUMMARY_MESSAGE_LIMIT,
+                        explicit=request.summary_token_reserve,
+                    ) if bounded_summary_graph else (
+                        request.summary_token_reserve or summary_model.max_context_tokens
+                    )
+                except ValueError:
+                    raise DomainError('SUMMARY_RESERVE_INVALID',422) from None
                 if summary_tokens>summary_model.max_context_tokens:
                     raise DomainError('SUMMARY_RESERVE_INVALID',422)
                 thread_map = None

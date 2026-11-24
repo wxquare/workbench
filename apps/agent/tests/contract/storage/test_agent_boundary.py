@@ -80,7 +80,7 @@ def test_fresh_and_repeated_agent_initialization(tmp_path):
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT * FROM dod_storage_metadata').fetchall() == [
             ('dod-storage-agent-v1', 'dod-checkpoint-v1')]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0006_multifile_skill_drafts',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_review_indexes',)]
         assert not validate_required_schema(db)
         db.execute("INSERT INTO teams(team_id,name,status) VALUES ('a','a','active')")
         db.execute("INSERT INTO agents(team_id,agent_id,name) VALUES ('a','agent','Agent')")
@@ -110,7 +110,7 @@ def test_upgrade_existing_agent_database_preserves_agents_and_private_skills(tmp
         assert not validate_required_schema(db)
         assert db.execute('SELECT agent_id FROM agents').fetchall() == [('a',)]
         assert db.execute('SELECT agent_id,name FROM skills').fetchall() == [('a', 'private')]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0006_multifile_skill_drafts',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_review_indexes',)]
 
 
 def test_upgrade_shared_skills_database_keeps_drafts(tmp_path):
@@ -132,7 +132,7 @@ def test_upgrade_shared_skills_database_keeps_drafts(tmp_path):
     migrate(f'sqlite+aiosqlite:///{path}')
     with closing(sqlite3.connect(path)) as db:
         assert __import__('json').loads(db.execute('SELECT files_json FROM skill_drafts').fetchone()[0]) == {'SKILL.md': {'encoding': 'utf-8', 'content': 'keep me'}}
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0006_multifile_skill_drafts',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_review_indexes',)]
         assert not validate_required_schema(db)
 
 
@@ -224,7 +224,7 @@ async def test_missing_or_weakened_check_is_unready_and_migration_rejects(tmp_pa
     from sqlalchemy import CheckConstraint, MetaData, create_engine
     from workbench_agent.persistence.backends.sqlite import SQLiteBackend
     from workbench_agent.persistence.schema_agent_v1 import CHECKPOINT_CODEC_VERSION, SCHEMA_VERSION
-    from workbench_agent.persistence.schema_agent_v6 import MIGRATION_HEAD
+    from workbench_agent.persistence.schema_agent_v7 import MIGRATION_HEAD
 
     path = tmp_path / 'invalid-check.db'
     url = f'sqlite+aiosqlite:///{path}'

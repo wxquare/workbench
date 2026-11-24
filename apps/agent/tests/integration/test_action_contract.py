@@ -276,6 +276,41 @@ async def test_action_approval_http_is_scoped_and_idempotent(platform,client):
 
 
 @pytest.mark.asyncio
+async def test_review_projection_matches_live_action_approval_eligibility(platform):
+    from workbench_agent.application.review_facts import action_review_facts
+    from workbench_agent.application.review_eligibility import review_eligibility
+    service,action=await setup_action(platform)
+    async with platform.backend.create_uow().begin_read() as uow:
+        action_row=await platform.backend.actions.one(uow,'actions',team_id=platform.auth.team_id,action_id=action['action_id'])
+        outbox=await platform.backend.actions.one(uow,'outbox',team_id=platform.auth.team_id,action_id=action['action_id'])
+        facts=await action_review_facts(platform.backend,uow,platform.auth,action_row,outbox)
+    result=review_eligibility('action_approval',facts=facts,now_ms=facts.get('now_ms',0))
+    assert result.visible is True
+    assert result.operations==('approve','reject')
+
+
+@pytest.mark.asyncio
+async def test_review_projection_limits_unknown_delivery_to_reconcile(platform):
+    from workbench_agent.application.review_facts import action_review_facts
+    from workbench_agent.application.review_eligibility import review_eligibility
+    from workbench_agent.delivery.dispatcher import Dispatcher
+    service,action=await setup_action(platform)
+    await service.authorize(platform.auth,action['approval_id'],'approve',action['payload_hash'])
+    class Connector:
+        async def send(self,*args): raise TimeoutError()
+        async def lookup(self,*args): return None
+    platform.backend._delivery_senders={'ticket':Connector()}
+    assert await Dispatcher(platform.backend,'delivery-test').dispatch_one()=='unknown'
+    async with platform.backend.create_uow().begin_read() as uow:
+        action_row=await platform.backend.actions.one(uow,'actions',team_id=platform.auth.team_id,action_id=action['action_id'])
+        outbox=await platform.backend.actions.one(uow,'outbox',team_id=platform.auth.team_id,action_id=action['action_id'])
+        facts=await action_review_facts(platform.backend,uow,platform.auth,action_row,outbox)
+    result=review_eligibility('action_reconcile',facts=facts,now_ms=facts.get('now_ms',0))
+    assert result.visible is True
+    assert result.operations==('reconcile',)
+
+
+@pytest.mark.asyncio
 async def test_reconcile_scope_change_does_not_send_payload(platform):
     from workbench_agent.delivery.dispatcher import Dispatcher
     from workbench_agent.delivery.reconcile import ActionReconciler

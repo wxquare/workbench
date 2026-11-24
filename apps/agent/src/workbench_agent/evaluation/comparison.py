@@ -4,12 +4,22 @@ from __future__ import annotations
 
 
 def compare_reports(baseline: dict, candidate: dict, policy: dict) -> dict:
-    required = {'dataset_hash', 'split', 'repeats', 'scoring_version'}
+    required = {
+        'dataset_hash', 'dataset_kind', 'purpose', 'split', 'repeats',
+        'scoring_version',
+    }
     if any(baseline.get(key) != candidate.get(key) for key in required):
         return {
             'comparable': False,
             'status': 'incomparable',
             'reason': 'evaluation identity changed',
+            'regressions': [],
+        }
+    if not baseline.get('metrics') or not candidate.get('metrics'):
+        return {
+            'comparable': False,
+            'status': 'unavailable',
+            'reason': 'evaluation metrics are missing',
             'regressions': [],
         }
     base_metrics = baseline.get('metrics') or {}

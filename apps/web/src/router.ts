@@ -13,6 +13,7 @@ import KnowledgeEntry from './views/KnowledgeEntry.vue'
 import Placeholder from './views/Placeholder.vue'
 import Statistics from './views/Statistics.vue'
 import Tools from './views/Tools.vue'
+import Reviews from './views/Reviews.vue'
 
 export default createRouter({
   history: createWebHistory('/app/'),
@@ -31,6 +32,8 @@ export default createRouter({
     { path: '/knowledge/:id/versions/:version', name: 'knowledge-version', component: KnowledgeEntry },
     { path: '/statistics', name: 'statistics', component: Statistics },
     { path: '/tools', name: 'tools', component: Tools },
-    { path: '/:section(schedules|incidents)', name: 'section', component: Placeholder },
+    { path: '/reviews', name: 'reviews', component: Reviews },
+    { path: '/incidents', redirect: '/reviews' },
+    { path: '/schedules', name: 'schedules', component: Placeholder },
   ],
 })

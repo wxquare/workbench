@@ -70,6 +70,9 @@ def main() -> None:
     eval_subcommands = eval_command.add_subparsers(dest="eval_command", required=True)
     eval_validate = eval_subcommands.add_parser("validate", help="validate a versioned knowledge dataset")
     eval_validate.add_argument("--dataset", required=True)
+    eval_validate.add_argument(
+        "--purpose", choices=("business", "engineering"), default="business"
+    )
     eval_run = eval_subcommands.add_parser("run", help="run or resume a versioned experiment")
     eval_run.add_argument("--dataset")
     eval_run.add_argument("--config")
@@ -77,13 +80,18 @@ def main() -> None:
     eval_run.add_argument("--resume")
     eval_run.add_argument("--split", choices=("dev", "holdout"), default="dev")
     eval_run.add_argument("--repeats", type=int, default=3)
-    eval_run.add_argument("--purpose", choices=("release",), default=None)
+    eval_run.add_argument(
+        "--purpose", choices=("business", "engineering", "release"), default=None
+    )
     eval_score = eval_subcommands.add_parser("score", help="score an existing experiment without model calls")
     eval_score.add_argument("--experiment", required=True)
     eval_score.add_argument("--dataset", required=True)
     eval_score.add_argument("--output", required=True)
     eval_score.add_argument("--split", choices=("dev", "holdout"), default="dev")
     eval_score.add_argument("--repeats", type=int, default=1)
+    eval_score.add_argument(
+        "--purpose", choices=("business", "engineering"), default="business"
+    )
     eval_compare = eval_subcommands.add_parser("compare", help="compare two compatible experiments")
     eval_compare.add_argument("--baseline", required=True)
     eval_compare.add_argument("--candidate", required=True)

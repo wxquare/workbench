@@ -5,6 +5,14 @@ from pydantic import Field
 from workbench_agent.domain.profiles import FrozenModel, VersionRef
 from workbench_agent.tools.scope_mapping import ArgumentMapping
 
+
+class WebSearchSource(FrozenModel):
+    title:str=Field(min_length=1,max_length=512)
+    url:str=Field(min_length=1,max_length=2048)
+    snippet:str=Field(min_length=1,max_length=4000)
+    retrieved_at:str
+    published_at:str|None=None
+
 class ToolStatus(StrEnum):
     OK='ok'
     EMPTY='empty'

@@ -13,7 +13,7 @@ provide(chatSidebarKey, chatSidebar)
 const home = computed(() => route.path === '/')
 const primary = [
   { label: '工作台', path: '/', icon: Grid }, { label: '任务记录', path: '/runs', icon: List },
-  { label: '会话', path: '/threads', icon: ChatLineRound }, { label: '事件中心', path: '/incidents', icon: Warning },
+  { label: '会话', path: '/threads', icon: ChatLineRound }, { label: '审核中心', path: '/reviews', icon: Warning },
 ]
 const manage = [
   { label: 'Agent 管理', path: '/agents', icon: FolderOpened }, { label: '模型配置', path: '/models', icon: Cpu },

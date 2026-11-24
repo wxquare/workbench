@@ -6,6 +6,15 @@ import random
 import statistics
 
 
+def apply_dataset_boundary(report: dict, *, dataset_kind: str) -> dict:
+    if dataset_kind not in {'business', 'synthetic'}:
+        raise ValueError('DATASET_KIND_REQUIRED')
+    value = {**report, 'dataset_kind': dataset_kind}
+    if dataset_kind == 'synthetic':
+        value.update(quality_status='unavailable', release_passed=False)
+    return value
+
+
 def summarize_repeats(scores: list[dict], *, expected_cases: list[str], k: int) -> dict:
     if type(k) is not int or not 1 <= k <= 5:
         raise ValueError('k must be between 1 and 5')

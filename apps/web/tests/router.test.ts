@@ -37,3 +37,8 @@ it('provides the authorized statistics route', () => {
 it('provides the authorized tool management route', () => {
   expect(router.resolve({name: 'tools'}).href).toBe('/app/tools')
 })
+
+it('redirects incidents to the review center', () => {
+  expect(router.resolve({path: '/incidents'}).matched[0].redirect).toBe('/reviews')
+  expect(router.resolve({name: 'reviews'}).href).toBe('/app/reviews')
+})

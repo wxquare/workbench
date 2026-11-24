@@ -6,6 +6,7 @@ from support.jobs import claim, row
 from workbench_agent.persistence import schema as s
 from workbench_agent.jobs.worker import Execution
 from test_storage_boundary_migration import upgrade_historical, seed_historical_run, snapshot
+from workbench_agent.application.review_facts import run_eligibility, run_review_facts
 
 @pytest.mark.asyncio
 async def test_resume_protocol_is_submitted_applying_applied_consumed(platform):
@@ -24,6 +25,33 @@ async def test_resume_protocol_is_submitted_applying_applied_consumed(platform):
     await executor.apply_resume(Execution(platform.backend,owned))
     assert await p.resume_status(run)=='applied'
     assert (await row(platform,s.interrupts,interrupt_id=w['interrupt_id']))['status']=='consumed'
+
+
+@pytest.mark.asyncio
+async def test_review_projection_matches_live_run_input_eligibility(platform):
+    p=InterruptPlatform(platform); run,_=await p.waiting_run()
+    async with platform.backend.create_uow().begin_read() as uow:
+        run_row=await platform.backend.runs.one(uow,'runs',team_id=platform.auth.team_id,run_id=run.run_id)
+        interrupt=await platform.backend.runs.waiting(uow,platform.auth.team_id,run.run_id)
+        checkpoint=await platform.backend.runs.checkpoint(uow,platform.auth.team_id,run.run_id)
+        facts=await run_review_facts(platform.backend,uow,platform.auth,run_row,interrupt,checkpoint)
+    result=run_eligibility(run_row,interrupt,checkpoint,facts)
+    assert result.visible is True and result.expired is False
+    assert result.operations==('resume',)
+
+
+@pytest.mark.asyncio
+async def test_review_projection_hides_input_from_a_different_operator(platform):
+    from workbench_agent.domain.identity import AuthContext
+    p=InterruptPlatform(platform); run,_=await p.waiting_run()
+    other=AuthContext(team_id=platform.auth.team_id,subject='other-operator',roles=('operator',),identity_kind='user')
+    async with platform.backend.create_uow().begin_read() as uow:
+        run_row=await platform.backend.runs.one(uow,'runs',team_id=platform.auth.team_id,run_id=run.run_id)
+        interrupt=await platform.backend.runs.waiting(uow,platform.auth.team_id,run.run_id)
+        checkpoint=await platform.backend.runs.checkpoint(uow,platform.auth.team_id,run.run_id)
+        facts=await run_review_facts(platform.backend,uow,other,run_row,interrupt,checkpoint)
+    result=run_eligibility(run_row,interrupt,checkpoint,facts)
+    assert result.visible is False and result.operations==()
 
 
 def prepare_v4_resume(config_data, applied=False):

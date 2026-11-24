@@ -1,0 +1,42 @@
+{
+  "schema_version": "web-search-result-v1",
+  "tool_name": "web_search",
+  "permission": "web.read",
+  "mapping_hash": "be23220925cf59ed07953cc28e6a98c49b66fd0ee23e369472efde241a9f4fe3",
+  "schema_hash": "600a4f35e2c8093094e52965199f49dbfdee49344badeb828f5f47f438a4c7b0",
+  "mapping_fingerprint": "561306947537fde6ac79da5a05f1c500cb1a267d206325fba3892d020389a798",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "query": {"type": "string", "minLength": 1, "maxLength": 1000},
+      "limit": {"type": "integer", "minimum": 1, "maximum": 5},
+      "domain_policy_id": {"type": "string"},
+      "context": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {"type": "string"},
+          "invocation_id": {"type": "string"},
+          "query_scope_ref": {"type": "string"}
+        },
+        "required": ["run_id", "invocation_id", "query_scope_ref"]
+      }
+    },
+    "required": ["query", "limit", "domain_policy_id", "context"]
+  },
+  "result_schema": {
+    "schema_version": "web-search-result-v1",
+    "required": [
+      "schema_version",
+      "status",
+      "results",
+      "retrieved_at",
+      "truncated",
+      "domain_policy_id",
+      "content_kind"
+    ],
+    "status": ["ok", "empty", "unavailable", "denied"],
+    "content_kind": "search_snippet"
+  }
+}

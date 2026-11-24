@@ -1,6 +1,6 @@
 """Agent-only maintenance environment using an explicitly supplied connection."""
 from alembic import context
-from workbench_agent.persistence.schema_agent_v6 import metadata
+from workbench_agent.persistence.schema_agent_v7 import metadata
 
 connection = context.config.attributes.get('connection')
 if connection is None:

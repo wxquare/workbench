@@ -284,6 +284,18 @@ sequenceDiagram
 | `GET /v1/agents/{agent_id}/tool-bindings/{alias}` | admin | - | 200 草稿、revision、版本摘要 | 403/404 |
 | `GET /v1/agents/{agent_id}/tool-bindings/{alias}/versions/{version}` | admin | - | 200 精确 binding 与 VersionRef | 403/404 |
 | `conversation.tool_use` Run | operator | 需 `mode=qa`、`business_context.conversation=true` 和完整 `query_scope`；Profile 引用 1–4 个已发布只读 `knowledge_search` binding | 202/409/422 | 工具回答固定标注“未经独立校验” |
+
+## 人工审核中心
+
+`GET /v1/reviews` 返回当前操作员可处理的事项，默认读取 `state=pending`；五种类型为
+`run_input`、`run_approval`、`action_approval`、`action_reapproval`、
+`action_reconcile`。`GET /v1/reviews/summary` 返回同一权限投影下的精确计数，
+`GET /v1/reviews/{item_id}` 返回受授权的最小详情。游标绑定当前 team、subject、
+角色、team revision 和筛选条件；篡改或不匹配返回 `INVALID_CURSOR`。
+
+`POST /v1/actions/{action_id}/reconcile` 只处理具有当前权限的 `unknown`
+动作，要求 `Idempotency-Key`。该接口只调用部署发送器的只读 `lookup`，不会调用
+`send`；查无回执时保持 `unknown`，同 key 重放已提交结果。
 | `GET /v1/artifacts/{artifact_id}/url` | viewer | - | 200 `{url,expires_in:60,sha256,size}` | 409 `ARTIFACT_CHANGED`/`ARTIFACT_UNAVAILABLE`；503 `OBJECT_STORAGE_UNAVAILABLE` |
 | `POST /v1/runs/{run_id}/uploads` | operator | `{kind, sha256, size(0..MAX_BYTES, 严格 int)}` | **201** `{artifact_id,status,sha256,size}`（无需幂等键） | 422 `INVALID_UPLOAD` |
 | `POST /v1/uploads/{artifact_id}/complete`（幂） | operator | 请求体为原始文件字节（流式）；可选 Header `Upload-Replay: true`（体必须为空，仅重放回执） | **202** 上传任务回执 | 413 `UPLOAD_TOO_LARGE`；409 `IDEMPOTENCY_CONFLICT`/`UPLOAD_REPLAY_NOT_FOUND`；422 `UPLOAD_DIGEST_MISMATCH`/`UPLOAD_REPLAY_BODY_FORBIDDEN`；503 `UPLOAD_STAGING_*` |
@@ -415,7 +427,7 @@ flowchart LR
 | 1 | `/v1/model-profiles`、`/v1/tool-bindings`、`/v1/schedules` 为顶层资源 | 均挂在 `/v1/agents/{agent_id}/...` 之下 | 以代码为准 |
 | 2 | `/v1/artifact-uploads`、`.../{upload_id}/complete` | `POST /v1/runs/{run_id}/uploads` 与 `POST /v1/uploads/{artifact_id}/complete`；complete 返回 202，body 为原始字节 | 以代码为准 |
 | 3 | 仓库同步 `POST /agents/{id}/repositories/sync` | `.../repositories/{repo_id}/sync`，体 `{commit}` | 以代码为准 |
-| 4 | 列出 `GET /v1/runs/{id}/artifacts`、`POST /v1/actions/{id}/reconcile`、`POST /v1/incidents/{id}/actions`、`/v1/ingress/seatalk|alerts/{id}` | 代码中无前三者；产物为 `GET /v1/artifacts/{id}/url`；入口统一为 `/v1/ingress/{connector_id}` 且仅非生产；另有 retry/reapproval/approvals decision | 以代码为准 |
+| 4 | 列出 `GET /v1/runs/{id}/artifacts`、`POST /v1/actions/{id}/reconcile`、`POST /v1/incidents/{id}/actions`、`/v1/ingress/seatalk|alerts/{id}` | 前两者现为 `GET /v1/artifacts/{id}/url` 与幂等 `POST /v1/actions/{id}/reconcile`；无 incident actions；入口统一为 `/v1/ingress/{connector_id}` 且仅非生产 | 以代码为准 |
 | 5 | 创建 Thread 201；取消 202 或终态 | Thread 201 一致；取消路由返回 200 RunView | 差异 |
 | 6 | 错误体 `{error:{code,message,request_id,retryable,details}}` | 仅 `{code[,links]}`；无 message/request_id | 差异 |
 | 7 | 错误码如 `AUTHENTICATION_REQUIRED`、`RESOURCE_NOT_FOUND`、`INVALID_INPUT`、`PAYLOAD_TOO_LARGE`、`QUOTA_EXCEEDED`、`RUN_NOT_WAITING`、`INTERRUPT_ALREADY_RESOLVED`、`INTERRUPT_REVISION_CONFLICT`；有 429 | 对应为 `UNAUTHENTICATED`、`NOT_FOUND`、`INVALID_REQUEST`、`INPUT_TOO_LARGE`、`INTERRUPT_CONFLICT`、`REVISION_CONFLICT`；未发现 429 路径（`BUDGET_EXCEEDED` 为 409/422） | 差异 |
