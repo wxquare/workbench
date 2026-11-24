@@ -1,4 +1,5 @@
 """Usage upgrades preserve raw historical rows and refuse ambiguous history."""
+
 import sqlite3
 
 import pytest
@@ -11,29 +12,38 @@ def legacy(path, status=None):
     upgrade_historical(path, '0005_resume_protocol')
     seed_historical_run(path)
     with sqlite3.connect(path) as db:
-        db.execute("""INSERT INTO graph_checkpoints(team_id,run_id,namespace_hash,namespace,checkpoint_id,
+        db.execute(
+            """INSERT INTO graph_checkpoints(team_id,run_id,namespace_hash,namespace,checkpoint_id,
             payload_type,payload,metadata_type,metadata,codec_version,run_epoch,created_at)
             VALUES ('team','run',?,'','old-checkpoint','bytes',?,'bytes',?,'1',0,1234)""",
-                   ('0'*64, b'old typed checkpoint', b'old metadata'))
+            ('0' * 64, b'old typed checkpoint', b'old metadata'),
+        )
         if status == 'record':
             db.execute("""INSERT INTO usage_records(team_id,record_id,run_id,invocation,pricing_version,status)
                 VALUES ('team','record','run','legacy','unknown','pending')""")
         elif status is not None:
-            db.execute("""INSERT INTO usage_reservations(team_id,reservation_id,run_id,invocation,tokens,pricing_version,status)
-                VALUES ('team','reservation','run','legacy',0,'unknown',?)""", (status,))
+            db.execute(
+                """INSERT INTO usage_reservations(team_id,reservation_id,run_id,invocation,tokens,pricing_version,status)
+                VALUES ('team','reservation','run','legacy',0,'unknown',?)""",
+                (status,),
+            )
 
 
 def test_usage_upgrade_without_usage_preserves_all_legacy_rows(tmp_path):
     path = tmp_path / 'legacy.db'
     legacy(path)
     with sqlite3.connect(path) as db:
-        before = {name: db.execute('SELECT * FROM "'+name+'"').fetchall() for name in old.tables}
+        before = {
+            name: db.execute('SELECT * FROM "' + name + '"').fetchall() for name in old.tables
+        }
     upgrade_historical(path)
     with sqlite3.connect(path) as db:
         for name, rows in before.items():
-            columns = ','.join('"'+column.name+'"' for column in old.tables[name].columns)
-            assert db.execute('SELECT '+columns+' FROM "'+name+'"').fetchall() == rows
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0021_synthetic_batch_policy',)
+            columns = ','.join('"' + column.name + '"' for column in old.tables[name].columns)
+            assert db.execute('SELECT ' + columns + ' FROM "' + name + '"').fetchall() == rows
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == (
+            '0021_synthetic_batch_policy',
+        )
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
     assert 'model_attempts' not in old.tables['usage_reservations'].c
 
@@ -67,5 +77,7 @@ def test_tool_draft_upgrade_preserves_0006_data(tmp_path):
     upgrade_historical(path)
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT * FROM teams').fetchall() == before
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == ('0021_synthetic_batch_policy',)
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone() == (
+            '0021_synthetic_batch_policy',
+        )
         assert db.execute('SELECT COUNT(*) FROM tool_binding_drafts').fetchone() == (0,)

@@ -38,11 +38,19 @@ def config(tmp_path):
 def settings(*, graph='knowledge.citation_review'):
     grant = SimpleNamespace(team_id='team-1', token_secret_ref='env://KNOWLEDGE_TOKEN')
     return SimpleNamespace(
-        service=SimpleNamespace(mcp_connections=[SimpleNamespace(
-            endpoint='http://127.0.0.1:8001/mcp', allow_loopback_http=True,
-            read_tools=('knowledge_search',), team_id='team-1')]),
-        knowledge=SimpleNamespace(enabled=True, grants=[grant],
-            public_base_url='http://127.0.0.1:8000'),
+        service=SimpleNamespace(
+            mcp_connections=[
+                SimpleNamespace(
+                    endpoint='http://127.0.0.1:8001/mcp',
+                    allow_loopback_http=True,
+                    read_tools=('knowledge_search',),
+                    team_id='team-1',
+                )
+            ]
+        ),
+        knowledge=SimpleNamespace(
+            enabled=True, grants=[grant], public_base_url='http://127.0.0.1:8000'
+        ),
         worker=SimpleNamespace(supported_graph_ids=[graph]),
     )
 

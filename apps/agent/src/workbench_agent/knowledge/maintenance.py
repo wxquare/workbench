@@ -1,4 +1,5 @@
 """Explicit, team-scoped inspection and rebuild of derived search data."""
+
 from hashlib import sha256
 from collections import Counter
 
@@ -32,7 +33,9 @@ class KnowledgeMaintenance:
                 expected = ()
                 draft = None
                 if row['status'] == 'published':
-                    version = await self.store.version(uow, team_id, entry_id, row['published_version'])
+                    version = await self.store.version(
+                        uow, team_id, entry_id, row['published_version']
+                    )
                     if not version:
                         raise DomainError('KB_INDEX_UNAVAILABLE', 503)
                     draft = KBDraft.model_validate_json(version['content_json'])
@@ -44,17 +47,41 @@ class KnowledgeMaintenance:
                 mismatches = []
                 for indexed in actual:
                     source = expected_by_id.get(indexed['chunk_id'])
-                    if source and draft and (indexed['title'] != draft.title or indexed['tags'] != ' '.join(draft.tags)
-                        or indexed['aliases'] != ' '.join(draft.aliases) or indexed['heading_path'] != canonical(source.heading_path)
-                        or str(indexed['line_start']) != str(source.line_start) or str(indexed['line_end']) != str(source.line_end)
-                        or indexed['chunker_version'] != source.chunker_version):
+                    if (
+                        source
+                        and draft
+                        and (
+                            indexed['title'] != draft.title
+                            or indexed['tags'] != ' '.join(draft.tags)
+                            or indexed['aliases'] != ' '.join(draft.aliases)
+                            or indexed['heading_path'] != canonical(source.heading_path)
+                            or str(indexed['line_start']) != str(source.line_start)
+                            or str(indexed['line_end']) != str(source.line_end)
+                            or indexed['chunker_version'] != source.chunker_version
+                        )
+                    ):
                         mismatches.append(indexed['chunk_id'])
-                report = {'missing': sorted(expected_set - actual_set), 'unexpected': sorted(actual_set - expected_set),
-                    'stale_version': sorted({str(chunk['version']) for chunk in actual if str(chunk['version']) != str(row['published_version'])}),
-                    'hash_mismatch': sorted(chunk['chunk_id'] for chunk in actual
-                        if sha256(chunk['content'].encode('utf-8')).hexdigest() != chunk['content_hash']),
-                    'duplicate_chunks': sorted(chunk_id for chunk_id, count in counts.items() if count > 1),
-                    'metadata_mismatch': sorted(set(mismatches))}
+                report = {
+                    'missing': sorted(expected_set - actual_set),
+                    'unexpected': sorted(actual_set - expected_set),
+                    'stale_version': sorted(
+                        {
+                            str(chunk['version'])
+                            for chunk in actual
+                            if str(chunk['version']) != str(row['published_version'])
+                        }
+                    ),
+                    'hash_mismatch': sorted(
+                        chunk['chunk_id']
+                        for chunk in actual
+                        if sha256(chunk['content'].encode('utf-8')).hexdigest()
+                        != chunk['content_hash']
+                    ),
+                    'duplicate_chunks': sorted(
+                        chunk_id for chunk_id, count in counts.items() if count > 1
+                    ),
+                    'metadata_mismatch': sorted(set(mismatches)),
+                }
                 if any(report.values()):
                     reports[entry_id] = report
             for entry_id, chunks in grouped.items():
@@ -75,5 +102,12 @@ class KnowledgeMaintenance:
                 if version is None:
                     raise DomainError('KB_INDEX_UNAVAILABLE', 503)
                 draft = KBDraft.model_validate_json(version['content_json'])
-                await self.store.replace_chunks(uow, team_id, entry_id, row['published_version'], draft, chunk_markdown(draft.body_md))
+                await self.store.replace_chunks(
+                    uow,
+                    team_id,
+                    entry_id,
+                    row['published_version'],
+                    draft,
+                    chunk_markdown(draft.body_md),
+                )
             return {'entry_id': entry_id, 'revision': expected_revision, 'rebuilt': True}

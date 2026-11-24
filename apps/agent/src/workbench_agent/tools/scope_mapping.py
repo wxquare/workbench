@@ -128,12 +128,12 @@ def validate_mapping(mapping: ArgumentMapping, full_schema: dict, deployment_pol
     validate_model_schema(mapping.model_input_schema)
     targets = [field.target for field in mapping.fields]
     for index, target in enumerate(targets):
-        for other in targets[index + 1:]:
+        for other in targets[index + 1 :]:
             if target == other:
                 raise ValueError('duplicate mapping target')
-            if len(target) < len(other) and other[:len(target)] == target:
+            if len(target) < len(other) and other[: len(target)] == target:
                 raise ValueError('mapping parent-child overlap')
-            if len(other) < len(target) and target[:len(other)] == other:
+            if len(other) < len(target) and target[: len(other)] == other:
                 raise ValueError('mapping parent-child overlap')
     protected = {
         tuple(value)
@@ -177,9 +177,7 @@ def bind_arguments(
     validate_model_schema(mapping.model_input_schema)
     if not Draft202012Validator(mapping.model_input_schema).is_valid(model_args):
         raise PermissionError('INVALID_MODEL_ARGUMENTS')
-    allowed_model = {
-        field.source for field in mapping.fields if field.origin == 'model'
-    }
+    allowed_model = {field.source for field in mapping.fields if field.origin == 'model'}
     if set(model_args) - allowed_model:
         raise PermissionError('UNDECLARED_MODEL_ARGUMENT')
     if any(not isinstance(value, (str, int, float, bool)) for value in model_args.values()):

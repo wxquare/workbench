@@ -16,9 +16,7 @@ def choose_summary_reserve(
     if context_limit <= 0 or output_limit <= 0 or input_byte_limit <= 0 or message_limit <= 0:
         raise ValueError('SUMMARY_RESERVE_INVALID')
     value = (
-        explicit
-        if explicit is not None
-        else input_byte_limit + 256 * message_limit + output_limit
+        explicit if explicit is not None else input_byte_limit + 256 * message_limit + output_limit
     )
     if value <= 0 or value > context_limit:
         raise ValueError('SUMMARY_RESERVE_INVALID')

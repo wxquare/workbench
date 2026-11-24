@@ -65,10 +65,18 @@ def test_cross_process_traceparent_connects_distinct_providers():
 
 def test_unsampled_parent_stays_unsampled_across_providers():
     exporter = InMemorySpanExporter()
-    api = Telemetry(ObservabilitySettings.model_validate({'tracing': {'enabled': True, 'sample_ratio': 0}}),
-                    'api', 'test', processor=SimpleSpanProcessor(exporter))
-    worker = Telemetry(ObservabilitySettings.model_validate({'tracing': {'enabled': True, 'sample_ratio': 1}}),
-                       'worker', 'test', processor=SimpleSpanProcessor(exporter))
+    api = Telemetry(
+        ObservabilitySettings.model_validate({'tracing': {'enabled': True, 'sample_ratio': 0}}),
+        'api',
+        'test',
+        processor=SimpleSpanProcessor(exporter),
+    )
+    worker = Telemetry(
+        ObservabilitySettings.model_validate({'tracing': {'enabled': True, 'sample_ratio': 1}}),
+        'worker',
+        'test',
+        processor=SimpleSpanProcessor(exporter),
+    )
     try:
         with api.span('run.accept'):
             parent = api.traceparent()
@@ -87,7 +95,9 @@ def test_langfuse_requires_explicit_credentials_and_tracing():
 
 def test_enabled_langfuse_requires_explicit_deployment_credentials(monkeypatch):
     monkeypatch.delenv('LANGFUSE_BASE_URL', raising=False)
-    config = ObservabilitySettings.model_validate({'tracing': {'enabled': True}, 'langfuse': {'enabled': True}})
+    config = ObservabilitySettings.model_validate(
+        {'tracing': {'enabled': True}, 'langfuse': {'enabled': True}}
+    )
     with pytest.raises(ValueError):
         Telemetry(config, 'worker', 'test')
 
@@ -116,15 +126,27 @@ def test_langfuse_sdk_exports_our_spans_without_credentials_in_attributes(monkey
     from uuid import uuid4
 
     exported = []
-    monkeypatch.setattr(OTLPSpanExporter, 'export', lambda self, spans: (exported.extend(spans), SpanExportResult.SUCCESS)[1])
+    monkeypatch.setattr(
+        OTLPSpanExporter,
+        'export',
+        lambda self, spans: (exported.extend(spans), SpanExportResult.SUCCESS)[1],
+    )
     monkeypatch.setenv('LANGFUSE_BASE_URL', 'https://langfuse.example.test')
     monkeypatch.setenv('LANGFUSE_PUBLIC_KEY', f'pk-test-{uuid4()}')
     monkeypatch.setenv('LANGFUSE_SECRET_KEY', 'sk-test-private-value')
-    settings = ObservabilitySettings.model_validate({'tracing': {'enabled': True}, 'langfuse': {'enabled': True}})
+    settings = ObservabilitySettings.model_validate(
+        {'tracing': {'enabled': True}, 'langfuse': {'enabled': True}}
+    )
     telemetry = Telemetry(settings, 'worker', 'test')
     try:
-        with telemetry.span('model.generate', attributes={'langfuse.observation.type': 'generation',
-                'session.id': 'thread-test', 'workbench.invocation_id': 'invocation-test'}):
+        with telemetry.span(
+            'model.generate',
+            attributes={
+                'langfuse.observation.type': 'generation',
+                'session.id': 'thread-test',
+                'workbench.invocation_id': 'invocation-test',
+            },
+        ):
             pass
         assert telemetry.provider.force_flush(timeout_millis=5000)
         assert len(exported) == 1
@@ -141,11 +163,17 @@ def test_langfuse_export_failure_does_not_change_span_body(monkeypatch):
     from uuid import uuid4
 
     attempts = []
-    monkeypatch.setattr(OTLPSpanExporter, 'export', lambda self, spans: (attempts.append(len(spans)), SpanExportResult.FAILURE)[1])
+    monkeypatch.setattr(
+        OTLPSpanExporter,
+        'export',
+        lambda self, spans: (attempts.append(len(spans)), SpanExportResult.FAILURE)[1],
+    )
     monkeypatch.setenv('LANGFUSE_BASE_URL', 'https://langfuse.example.test')
     monkeypatch.setenv('LANGFUSE_PUBLIC_KEY', f'pk-test-{uuid4()}')
     monkeypatch.setenv('LANGFUSE_SECRET_KEY', 'sk-test-private-value')
-    settings = ObservabilitySettings.model_validate({'tracing': {'enabled': True}, 'langfuse': {'enabled': True}})
+    settings = ObservabilitySettings.model_validate(
+        {'tracing': {'enabled': True}, 'langfuse': {'enabled': True}}
+    )
     telemetry = Telemetry(settings, 'worker', 'test')
     try:
         with telemetry.span('job.execute'):
@@ -164,6 +192,7 @@ async def test_shutdown_timeout_does_not_wait_for_stuck_exporter():
     from workbench_agent.observability import shutdown_telemetry
 
     release = threading.Event()
+
     class SlowTelemetry:
         def shutdown(self):
             release.wait(2)
@@ -182,12 +211,18 @@ async def test_scheduler_tick_is_a_short_independent_trace(monkeypatch):
     from workbench_agent.jobs.scheduler import Scheduler, TickReport
 
     exporter = InMemorySpanExporter()
-    telemetry = Telemetry(ObservabilitySettings.model_validate({'tracing': {'enabled': True}}),
-                          'scheduler', 'test', processor=SimpleSpanProcessor(exporter))
+    telemetry = Telemetry(
+        ObservabilitySettings.model_validate({'tracing': {'enabled': True}}),
+        'scheduler',
+        'test',
+        processor=SimpleSpanProcessor(exporter),
+    )
     scheduler = object.__new__(Scheduler)
     scheduler.backend = SimpleNamespace(_telemetry=telemetry)
+
     async def tick():
         return TickReport(scanned=1)
+
     monkeypatch.setattr(scheduler, '_tick', tick, raising=False)
     try:
         assert (await scheduler.tick()).scanned == 1

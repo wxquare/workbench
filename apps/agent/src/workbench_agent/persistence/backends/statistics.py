@@ -27,39 +27,77 @@ class SQLiteStatisticsStore:
     ) -> dict:
         if not agent_ids:
             return self._empty()
-        runs = (await uow.execute(select(schema.runs).where(
-            schema.runs.c.team_id == team_id,
-            schema.runs.c.agent_id.in_(agent_ids),
-            schema.runs.c.created_at >= start_ms,
-            schema.runs.c.created_at < end_ms,
-        ))).mappings().all()
+        runs = (
+            (
+                await uow.execute(
+                    select(schema.runs).where(
+                        schema.runs.c.team_id == team_id,
+                        schema.runs.c.agent_id.in_(agent_ids),
+                        schema.runs.c.created_at >= start_ms,
+                        schema.runs.c.created_at < end_ms,
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
         ids = [row['run_id'] for row in runs]
         if not ids:
             return self._empty()
         outcomes = {
             row['run_id']: json.loads(row['payload'])
-            for row in (await uow.execute(select(schema.run_outcomes).where(
-                schema.run_outcomes.c.team_id == team_id,
-                schema.run_outcomes.c.run_id.in_(ids),
-            ))).mappings()
+            for row in (
+                await uow.execute(
+                    select(schema.run_outcomes).where(
+                        schema.run_outcomes.c.team_id == team_id,
+                        schema.run_outcomes.c.run_id.in_(ids),
+                    )
+                )
+            ).mappings()
         }
-        feedback_rows = (await uow.execute(select(schema.feedback).where(
-            schema.feedback.c.team_id == team_id,
-            schema.feedback.c.run_id.in_(ids),
-        ).order_by(schema.feedback.c.created_at, schema.feedback.c.feedback_id))).mappings().all()
-        gaps = (await uow.execute(select(schema.knowledge_gaps).where(
-            schema.knowledge_gaps.c.team_id == team_id,
-            schema.knowledge_gaps.c.run_id.in_(ids),
-        ))).mappings().all()
-        usage_rows = (await uow.execute(select(
-            schema.usage_records.c.run_id,
-            schema.usage_records.c.amount_micros,
-            schema.usage_records.c.currency,
-            schema.usage_records.c.status,
-        ).where(
-            schema.usage_records.c.team_id == team_id,
-            schema.usage_records.c.run_id.in_(ids),
-        ))).mappings().all()
+        feedback_rows = (
+            (
+                await uow.execute(
+                    select(schema.feedback)
+                    .where(
+                        schema.feedback.c.team_id == team_id,
+                        schema.feedback.c.run_id.in_(ids),
+                    )
+                    .order_by(schema.feedback.c.created_at, schema.feedback.c.feedback_id)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        gaps = (
+            (
+                await uow.execute(
+                    select(schema.knowledge_gaps).where(
+                        schema.knowledge_gaps.c.team_id == team_id,
+                        schema.knowledge_gaps.c.run_id.in_(ids),
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+        usage_rows = (
+            (
+                await uow.execute(
+                    select(
+                        schema.usage_records.c.run_id,
+                        schema.usage_records.c.amount_micros,
+                        schema.usage_records.c.currency,
+                        schema.usage_records.c.status,
+                    ).where(
+                        schema.usage_records.c.team_id == team_id,
+                        schema.usage_records.c.run_id.in_(ids),
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
         latest_feedback = {}
         for row in feedback_rows:
             payload = json.loads(row['payload'])
@@ -68,13 +106,15 @@ class SQLiteStatisticsStore:
         statuses = Counter(row['status'] for row in runs)
         terminal = [row for row in runs if row['status'] in TERMINAL]
         succeeded = [
-            row for row in terminal
+            row
+            for row in terminal
             if row['status'] == 'succeeded'
             and (outcomes.get(row['run_id']) or {}).get('completed') is True
         ]
         partial = [row for row in terminal if row['status'] == 'partial']
         inconsistent = [
-            row for row in terminal
+            row
+            for row in terminal
             if row['status'] == 'succeeded'
             and (outcomes.get(row['run_id']) or {}).get('completed') is not True
         ]
@@ -87,10 +127,7 @@ class SQLiteStatisticsStore:
             if row['status'] == 'pending' or row['amount_micros'] is None:
                 pending += 1
         gaps_summary = Counter(row['review_status'] for row in gaps)
-        negative = sum(
-            1 for value in latest_feedback.values()
-            if value.get('rating') == -1
-        )
+        negative = sum(1 for value in latest_feedback.values() if value.get('rating') == -1)
         trend = self._trend(runs, outcomes)
         return {
             'counts': {
@@ -108,9 +145,15 @@ class SQLiteStatisticsStore:
             'failure_top5': errors.most_common(5),
             'latency': {
                 'average_ms': (
-                    sum(row['active_elapsed_ms'] for row in terminal if row['started_at'] is not None)
+                    sum(
+                        row['active_elapsed_ms']
+                        for row in terminal
+                        if row['started_at'] is not None
+                    )
                     / len([row for row in terminal if row['started_at'] is not None])
-                ) if any(row['started_at'] is not None for row in terminal) else None,
+                )
+                if any(row['started_at'] is not None for row in terminal)
+                else None,
             },
             'costs': {'known': costs, 'pending_run_count': pending},
             'gaps': {
@@ -128,7 +171,14 @@ class SQLiteStatisticsStore:
     @staticmethod
     def _empty():
         return {
-            'counts': {'runs': 0, 'active': 0, 'terminal': 0, 'succeeded': 0, 'partial': 0, 'state_inconsistent': 0},
+            'counts': {
+                'runs': 0,
+                'active': 0,
+                'terminal': 0,
+                'succeeded': 0,
+                'partial': 0,
+                'state_inconsistent': 0,
+            },
             'rates': {'success': None, 'partial': None},
             'failure_top5': [],
             'latency': {'average_ms': None},
@@ -148,6 +198,9 @@ class SQLiteStatisticsStore:
             bucket['runs'] += 1
             if row['status'] == 'partial':
                 bucket['partial'] += 1
-            elif row['status'] == 'succeeded' and (outcomes.get(row['run_id']) or {}).get('completed') is True:
+            elif (
+                row['status'] == 'succeeded'
+                and (outcomes.get(row['run_id']) or {}).get('completed') is True
+            ):
                 bucket['succeeded'] += 1
         return [{'day': day, **values} for day, values in sorted(buckets.items())]

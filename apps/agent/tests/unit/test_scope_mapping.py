@@ -89,10 +89,14 @@ def knowledge_mapping():
         FieldMapping(origin='query_scope', source='region', target=('scope', 'region')),
         FieldMapping(origin='query_scope', source='service', target=('scope', 'service')),
         FieldMapping(origin='grant', source='team', target=('scope', 'team')),
-        FieldMapping(origin='grant', source='sources.knowledge_search', target=('scope', 'source_id')),
+        FieldMapping(
+            origin='grant', source='sources.knowledge_search', target=('scope', 'source_id')
+        ),
         FieldMapping(origin='context', source='run_id', target=('context', 'run_id')),
         FieldMapping(origin='context', source='invocation_id', target=('context', 'invocation_id')),
-        FieldMapping(origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')),
+        FieldMapping(
+            origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')
+        ),
     )
 
 
@@ -121,6 +125,7 @@ def test_valid_mapping_binds_only_declared_sources_and_has_stable_hash():
     value = knowledge_mapping()
     validate_mapping(value, FULL_SCHEMA, policy(value))
     from workbench_agent.tools.scope_mapping import mapping_fingerprint
+
     assert len(mapping_fingerprint(value, FULL_SCHEMA)) == 64
 
     result = bind_arguments(
@@ -166,13 +171,18 @@ def test_model_cannot_override_identity_or_undeclared_fields(model_args):
 
 
 def test_mapping_rejects_duplicate_targets_and_parent_child_overlap():
-    duplicate = knowledge_mapping().model_copy(update={
-        'fields': (*knowledge_mapping().fields, FieldMapping(
-            origin='model',
-            source='query',
-            target=('query',),
-        )),
-    })
+    duplicate = knowledge_mapping().model_copy(
+        update={
+            'fields': (
+                *knowledge_mapping().fields,
+                FieldMapping(
+                    origin='model',
+                    source='query',
+                    target=('query',),
+                ),
+            ),
+        }
+    )
     with pytest.raises(ValueError):
         validate_mapping(duplicate, FULL_SCHEMA, policy())
 
@@ -185,21 +195,25 @@ def test_mapping_rejects_duplicate_targets_and_parent_child_overlap():
 
 
 def test_mapping_rejects_unknown_sources_bad_types_and_unpinned_hash():
-    unknown = knowledge_mapping().model_copy(update={
-        'fields': (
-            FieldMapping(origin='grant', source='unknown', target=('scope', 'team')),
-            *knowledge_mapping().fields[1:],
-        ),
-    })
+    unknown = knowledge_mapping().model_copy(
+        update={
+            'fields': (
+                FieldMapping(origin='grant', source='unknown', target=('scope', 'team')),
+                *knowledge_mapping().fields[1:],
+            ),
+        }
+    )
     with pytest.raises(ValueError):
         validate_mapping(unknown, FULL_SCHEMA, policy())
 
-    bad_type = knowledge_mapping().model_copy(update={
-        'fields': (
-            FieldMapping(origin='model', source='query', target=('scope', 'region')),
-            *knowledge_mapping().fields[1:],
-        ),
-    })
+    bad_type = knowledge_mapping().model_copy(
+        update={
+            'fields': (
+                FieldMapping(origin='model', source='query', target=('scope', 'region')),
+                *knowledge_mapping().fields[1:],
+            ),
+        }
+    )
     with pytest.raises(ValueError):
         validate_mapping(bad_type, FULL_SCHEMA, policy())
 
@@ -225,12 +239,14 @@ def test_field_target_is_a_bounded_object_path(target):
 
 def test_expression_text_is_plain_data():
     text = '${grant.team} AND {{ scope.region }}'
-    value = knowledge_mapping().model_copy(update={
-        'fields': (
-            FieldMapping(origin='model', source='query', target=('query',)),
-            *knowledge_mapping().fields[1:],
-        ),
-    })
+    value = knowledge_mapping().model_copy(
+        update={
+            'fields': (
+                FieldMapping(origin='model', source='query', target=('query',)),
+                *knowledge_mapping().fields[1:],
+            ),
+        }
+    )
     result = bind_arguments(
         value,
         {'query': text},
@@ -254,38 +270,47 @@ def test_binding_legacy_json_is_unchanged_when_mapping_is_absent():
         'permission': 'knowledge.read',
         'input_schema': {'type': 'object'},
     }
-    binding = ToolBinding.model_validate({
-        **legacy,
-        'output_schema': None,
-        'read_only': True,
-        'timeout_seconds': 10,
-        'max_output_bytes': 65536,
-    })
+    binding = ToolBinding.model_validate(
+        {
+            **legacy,
+            'output_schema': None,
+            'read_only': True,
+            'timeout_seconds': 10,
+            'max_output_bytes': 65536,
+        }
+    )
     dumped = binding.model_dump(mode='json')
     assert 'argument_mapping' not in dumped
-    assert digest(dumped) == digest({
-        **legacy,
-        'output_schema': None,
-        'read_only': True,
-        'timeout_seconds': 10.0,
-        'max_output_bytes': 65536,
-    })
+    assert digest(dumped) == digest(
+        {
+            **legacy,
+            'output_schema': None,
+            'read_only': True,
+            'timeout_seconds': 10.0,
+            'max_output_bytes': 65536,
+        }
+    )
 
 
 def test_mapping_hash_is_over_canonical_mapping_only():
     value = knowledge_mapping()
-    expected = __import__('hashlib').sha256(
-        json.dumps(
-            value.model_dump(mode='json'),
-            sort_keys=True,
-            separators=(',', ':'),
-        ).encode()
-    ).hexdigest()
+    expected = (
+        __import__('hashlib')
+        .sha256(
+            json.dumps(
+                value.model_dump(mode='json'),
+                sort_keys=True,
+                separators=(',', ':'),
+            ).encode()
+        )
+        .hexdigest()
+    )
     assert mapping_hash(value) == expected
 
 
 def test_mapping_fingerprint_pins_both_mapping_and_full_schema():
     from workbench_agent.tools.scope_mapping import mapping_fingerprint
+
     first = mapping_fingerprint(knowledge_mapping(), FULL_SCHEMA)
     changed_schema = json.loads(json.dumps(FULL_SCHEMA))
     changed_schema['properties']['query']['type'] = 'number'
@@ -337,7 +362,9 @@ def test_legacy_and_declarative_mappings_have_identical_semantics(
                 )
                 for key in args
             ),
-            FieldMapping(origin='query_scope', source='environment', target=('scope', 'environment')),
+            FieldMapping(
+                origin='query_scope', source='environment', target=('scope', 'environment')
+            ),
             FieldMapping(origin='query_scope', source='region', target=('scope', 'region')),
             FieldMapping(origin='query_scope', source='service', target=('scope', 'service')),
             FieldMapping(origin='grant', source='team', target=('scope', 'team')),
@@ -345,20 +372,18 @@ def test_legacy_and_declarative_mappings_have_identical_semantics(
             FieldMapping(origin='grant', source='start', target=('start',)),
             FieldMapping(origin='grant', source='end', target=('end',)),
             FieldMapping(origin='context', source='run_id', target=('context', 'run_id')),
-            FieldMapping(origin='context', source='invocation_id', target=('context', 'invocation_id')),
-            FieldMapping(origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')),
+            FieldMapping(
+                origin='context', source='invocation_id', target=('context', 'invocation_id')
+            ),
+            FieldMapping(
+                origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')
+            ),
         ),
         model_input_schema={
             'type': 'object',
             'additionalProperties': False,
             'properties': {
-                key: {
-                    'type': (
-                        'string'
-                        if isinstance(args[key], str)
-                        else 'object'
-                    )
-                }
+                key: {'type': ('string' if isinstance(args[key], str) else 'object')}
                 for key in args
             },
             'required': list(args),

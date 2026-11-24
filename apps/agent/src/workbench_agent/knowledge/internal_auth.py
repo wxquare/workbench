@@ -1,4 +1,5 @@
 """Bind a dedicated service identity to a team and exact allowed scopes."""
+
 import hmac
 
 from workbench_agent.application.errors import DomainError
@@ -18,7 +19,9 @@ class KBInternalAccess:
             self.grants.append((grant, token))
 
     def authenticate(self, authorization):
-        supplied = authorization[7:] if authorization and authorization.startswith('Bearer ') else ''
+        supplied = (
+            authorization[7:] if authorization and authorization.startswith('Bearer ') else ''
+        )
         matched = None
         for grant, token in self.grants:
             if supplied and hmac.compare_digest(token.encode('utf-8'), supplied.encode('utf-8')):
@@ -29,8 +32,17 @@ class KBInternalAccess:
 
     def authorize(self, authorization, raw_scope):
         matched = self.authenticate(authorization)
-        allowed = any(all(raw_scope.get(k) == getattr(scope, k) for k in ('service', 'environment', 'region'))
-                      for scope in matched.allowed_scopes)
-        if raw_scope.get('team') != matched.business_team or raw_scope.get('source_id') != matched.source_id or not allowed:
+        allowed = any(
+            all(raw_scope.get(k) == getattr(scope, k) for k in ('service', 'environment', 'region'))
+            for scope in matched.allowed_scopes
+        )
+        if (
+            raw_scope.get('team') != matched.business_team
+            or raw_scope.get('source_id') != matched.source_id
+            or not allowed
+        ):
             raise DomainError('KB_SCOPE_DENIED', 403)
-        return KBScope(team_id=str(matched.team_id), **{k: raw_scope[k] for k in ('service', 'environment', 'region')})
+        return KBScope(
+            team_id=str(matched.team_id),
+            **{k: raw_scope[k] for k in ('service', 'environment', 'region')},
+        )

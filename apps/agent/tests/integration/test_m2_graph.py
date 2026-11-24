@@ -1,4 +1,5 @@
 """Missing evidence and safe stage recovery on the retained knowledge graph."""
+
 from integration.test_graph_catalog_api import publish_graph
 from integration.test_graph_catalog_admission import SCOPE
 from support.jobs import claim, expire_lease
@@ -10,8 +11,14 @@ from workbench_agent.runtime.graphs.registry import foundation_worker_registry
 
 async def knowledge_run(platform):
     await publish_graph(platform, platform.auth, platform.agent_id, 'knowledge.scoped_excerpt')
-    request = CreateRun.model_validate({'agent_id': platform.agent_id, 'mode': 'qa',
-        'input': {'text': 'question'}, 'business_context': {'query_scope': SCOPE}})
+    request = CreateRun.model_validate(
+        {
+            'agent_id': platform.agent_id,
+            'mode': 'qa',
+            'input': {'text': 'question'},
+            'business_context': {'query_scope': SCOPE},
+        }
+    )
     return await RunService(platform.backend).create(platform.auth, request, 'knowledge-run')
 
 
@@ -31,11 +38,18 @@ async def test_reconciler_continues_checkpointed_knowledge_stage(platform):
     registry = foundation_worker_registry(platform.backend)
     owned = await claim(platform)
     executor = registry._executors['knowledge.scoped_excerpt']
-    graph = executor.registry.resolve('knowledge.scoped_excerpt', executor.registry.state_schema_version('knowledge.scoped_excerpt'))
+    graph = executor.registry.resolve(
+        'knowledge.scoped_excerpt',
+        executor.registry.state_schema_version('knowledge.scoped_excerpt'),
+    )
     with executor.guard_provider.bind(owned.guard):
-        await graph.ainvoke({'run_id': run.run_id, 'input_text': 'question', 'mode': 'qa', 'messages': []},
-            {'configurable': {'thread_id': run.run_id}}, context=Execution(platform.backend, owned),
-            interrupt_after=['route'], durability='sync')
+        await graph.ainvoke(
+            {'run_id': run.run_id, 'input_text': 'question', 'mode': 'qa', 'messages': []},
+            {'configurable': {'thread_id': run.run_id}},
+            context=Execution(platform.backend, owned),
+            interrupt_after=['route'],
+            durability='sync',
+        )
     await expire_lease(platform, owned.guard)
     assert (await registry.reconciler.recover(run.run_id)).action == 'continue'
     assert await Worker(platform.backend, 'knowledge-recovery', registry).run_once() == 'projected'

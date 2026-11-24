@@ -23,10 +23,7 @@ def summarize_repeats(scores: list[dict], *, expected_cases: list[str], k: int) 
         case_id = score.get('case_id')
         if case_id in by_case:
             by_case[case_id].append(score)
-    missing = sum(
-        max(0, k - len(by_case[case]))
-        for case in expected_cases
-    )
+    missing = sum(max(0, k - len(by_case[case])) for case in expected_cases)
     pass_at: list[int] = []
     pass_power: list[int] = []
     for case in expected_cases:
@@ -62,13 +59,14 @@ def summarize_repeats(scores: list[dict], *, expected_cases: list[str], k: int) 
         intervals.append(sum(sample) / len(sample) if sample else 0)
     intervals.sort()
     runnable = [
-        value for value in observed
+        value
+        for value in observed
         if value.get('rules_status') in {'passed', 'failed', 'needs_review'}
     ]
     rule_rate = (
-        sum(value.get('rules_status') == 'passed' for value in runnable)
-        / len(runnable)
-        if runnable else None
+        sum(value.get('rules_status') == 'passed' for value in runnable) / len(runnable)
+        if runnable
+        else None
     )
     return {
         'schema_version': 'eval-metrics-v1',
@@ -82,21 +80,17 @@ def summarize_repeats(scores: list[dict], *, expected_cases: list[str], k: int) 
         'rule_rate': rule_rate,
         'rule_n': len(runnable),
         'unauthorized_accesses': sum(
-            'unauthorized_access' in (value.get('reasons') or [])
-            for value in observed
+            'unauthorized_access' in (value.get('reasons') or []) for value in observed
         ),
         'incorrect_conclusions': sum(
-            'unanswerable_conclusion' in (value.get('reasons') or [])
-            for value in observed
+            'unanswerable_conclusion' in (value.get('reasons') or []) for value in observed
         ),
         'variance': statistics.pvariance(rates) if len(rates) > 1 else 0,
         'latency_p50': statistics.median(latency) if latency else None,
-        'latency_p95': _percentile(latency, .95) if latency else None,
+        'latency_p95': _percentile(latency, 0.95) if latency else None,
         'known_costs': costs,
         'pending_cost_runs': pending,
-        'bootstrap_pass_ci95': (
-            [intervals[24], intervals[974]] if intervals else None
-        ),
+        'bootstrap_pass_ci95': ([intervals[24], intervals[974]] if intervals else None),
     }
 
 

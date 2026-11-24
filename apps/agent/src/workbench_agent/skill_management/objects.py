@@ -1,4 +1,5 @@
 """Local content-addressed object adapter; object names are never caller paths."""
+
 import hashlib
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import stat
 
 _REF = re.compile(r'^sha256:([0-9a-f]{64})$')
 _MAX_BYTES = 20 * 1024 * 1024
+
 
 class LocalSkillObjects:
     def __init__(self, root):
@@ -27,21 +29,33 @@ class LocalSkillObjects:
         temporary = '.pending-' + secrets.token_hex(16)
         created = False
         try:
-            descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+            descriptor = os.open(
+                temporary,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=directory,
+            )
             created = True
             with os.fdopen(descriptor, 'wb') as handle:
                 handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
             try:
-                os.link(temporary, value, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
+                os.link(
+                    temporary,
+                    value,
+                    src_dir_fd=directory,
+                    dst_dir_fd=directory,
+                    follow_symlinks=False,
+                )
             except FileExistsError:
                 if self.get('sha256:' + value) != data:
                     raise ValueError('object collision')
             os.fsync(directory)
         finally:
             try:
-                if created: os.unlink(temporary, dir_fd=directory)
+                if created:
+                    os.unlink(temporary, dir_fd=directory)
             finally:
                 os.close(directory)
         return 'sha256:' + value

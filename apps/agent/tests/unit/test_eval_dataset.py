@@ -115,20 +115,27 @@ def test_literal_and_simple_regex_check():
 
 def test_split_selection_and_file_load(tmp_path):
     data = dataset()
-    data['cases'].extend([
-        case('h1', 'answerable', split='holdout', index=4),
-        case('h2', 'multiple_sources', split='holdout', index=5),
-        case('h3', 'no_answer', split='holdout', index=6),
-        case('h4', 'conflict', split='holdout', index=7),
-        case('h5', 'stale', split='holdout', index=8),
-        case('h6', 'unauthorized', split='holdout', index=9),
-    ])
+    data['cases'].extend(
+        [
+            case('h1', 'answerable', split='holdout', index=4),
+            case('h2', 'multiple_sources', split='holdout', index=5),
+            case('h3', 'no_answer', split='holdout', index=6),
+            case('h4', 'conflict', split='holdout', index=7),
+            case('h5', 'stale', split='holdout', index=8),
+            case('h6', 'unauthorized', split='holdout', index=9),
+        ]
+    )
     path = tmp_path / 'dataset.json'
     path.write_text(json.dumps(data))
     loaded = load_dataset(path)
     assert [item['id'] for item in select_cases(loaded, 'dev')] == ['a', 'b', 'c', 'd']
     assert [item['id'] for item in select_cases(loaded, 'holdout')] == [
-        'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
     ]
 
 

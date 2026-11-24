@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from workbench_agent.domain.query_scope import validate_qa_scope
+
 SCENARIOS = {
     'answerable',
     'multiple_sources',
@@ -70,9 +71,7 @@ def _normalized_scope(scope: dict) -> dict:
     for field in ('start_at', 'end_at'):
         value = result[field]
         try:
-            parsed = datetime.strptime(value, '%Y-%m-%d %H:%M:%S').replace(
-                tzinfo=timezone.utc
-            )
+            parsed = datetime.strptime(value, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
         except ValueError:
             parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
         result[field] = parsed.astimezone(timezone.utc).isoformat()
@@ -195,9 +194,7 @@ def validate_dataset(
             definition = {
                 'question': ' '.join((question or '').split()).casefold(),
                 'query_scope': (
-                    _normalized_scope(case.get('query_scope'))
-                    if 'query_scope' in case
-                    else None
+                    _normalized_scope(case.get('query_scope')) if 'query_scope' in case else None
                 ),
             }
             if any(
@@ -207,9 +204,7 @@ def validate_dataset(
             ):
                 raise ValueError('duplicate question and scope')
             key_records.append(definition)
-            counts[case.get('split', 'dev')] = counts.get(
-                case.get('split', 'dev'), 0
-            ) + 1
+            counts[case.get('split', 'dev')] = counts.get(case.get('split', 'dev'), 0) + 1
             continue
         scenario = case.get('scenario')
         if scenario not in SCENARIOS:
@@ -232,9 +227,7 @@ def validate_dataset(
                 or len(labels) != len(set(labels))
             ):
                 raise ValueError(f'{field} must contain unique nonempty strings')
-        if case['answerable'] and (
-            not case['expected_source_ids'] or not case['must_include']
-        ):
+        if case['answerable'] and (not case['expected_source_ids'] or not case['must_include']):
             raise ValueError('answerable cases require sources and required facts')
         split = case.get('split', 'dev')
         if split not in SPLITS:
@@ -257,14 +250,9 @@ def validate_dataset(
                 safe_regex(check['value'])
             elif len(check['value'].encode('utf-8')) > MAX_MATCH_TEXT_LENGTH:
                 raise ValueError('literal check too large')
-        if (
-            'review_status' in case
-            and case['review_status'] not in {'pending', 'reviewed'}
-        ):
+        if 'review_status' in case and case['review_status'] not in {'pending', 'reviewed'}:
             raise ValueError('invalid review status')
-        if 'reviewer' in case and case['reviewer'] is not None and not _text(
-            case['reviewer']
-        ):
+        if 'reviewer' in case and case['reviewer'] is not None and not _text(case['reviewer']):
             raise ValueError('invalid reviewer')
         definition = _definition(case)
         duplicate = any(
@@ -314,18 +302,12 @@ def dataset_fingerprint(dataset: dict, *, purpose: str = 'business') -> str:
     return hashlib.sha256(encoded.encode('utf-8')).hexdigest()
 
 
-def select_cases(
-    dataset: dict, split: str, *, purpose: str = 'business'
-) -> list[dict]:
+def select_cases(dataset: dict, split: str, *, purpose: str = 'business') -> list[dict]:
     validate_dataset(dataset, purpose=purpose)
     if split not in SPLITS:
         raise ValueError('unsupported split')
-    selected = [
-        case for case in dataset['cases'] if case.get('split', 'dev') == split
-    ]
-    if split == 'holdout' and selected and {
-        case['scenario'] for case in selected
-    } != SCENARIOS:
+    selected = [case for case in dataset['cases'] if case.get('split', 'dev') == split]
+    if split == 'holdout' and selected and {case['scenario'] for case in selected} != SCENARIOS:
         raise ValueError('holdout split must cover all scenarios')
     return selected
 
@@ -363,9 +345,7 @@ def validate_manifest(actual: dict, expected: dict) -> None:
         'scoring_version',
         'limits',
     }
-    changed = sorted(
-        key for key in immutable if canonical(actual[key]) != canonical(expected[key])
-    )
+    changed = sorted(key for key in immutable if canonical(actual[key]) != canonical(expected[key]))
     if changed:
         raise ValueError('experiment identity changed: ' + ', '.join(changed))
     for key in ('graph_id', 'profile_ref', 'model_refs', 'kb_versions'):

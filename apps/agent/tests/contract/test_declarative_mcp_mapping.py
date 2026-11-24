@@ -16,14 +16,22 @@ def knowledge_mapping():
         fields=(
             FieldMapping(origin='model', source='query', target=('query',)),
             FieldMapping(origin='model', source='scene', target=('scene',)),
-            FieldMapping(origin='query_scope', source='environment', target=('scope', 'environment')),
+            FieldMapping(
+                origin='query_scope', source='environment', target=('scope', 'environment')
+            ),
             FieldMapping(origin='query_scope', source='region', target=('scope', 'region')),
             FieldMapping(origin='query_scope', source='service', target=('scope', 'service')),
             FieldMapping(origin='grant', source='team', target=('scope', 'team')),
-            FieldMapping(origin='grant', source='sources.knowledge_search', target=('scope', 'source_id')),
+            FieldMapping(
+                origin='grant', source='sources.knowledge_search', target=('scope', 'source_id')
+            ),
             FieldMapping(origin='context', source='run_id', target=('context', 'run_id')),
-            FieldMapping(origin='context', source='invocation_id', target=('context', 'invocation_id')),
-            FieldMapping(origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')),
+            FieldMapping(
+                origin='context', source='invocation_id', target=('context', 'invocation_id')
+            ),
+            FieldMapping(
+                origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')
+            ),
         ),
         model_input_schema={
             'type': 'object',
@@ -115,17 +123,19 @@ class Adapter:
 def adapter():
     return MCPAdapter(
         None,
-        ConnectionPolicy([
-            TrustedConnection(
-                'team',
-                'agent',
-                'local',
-                'read',
-                frozenset({'test_read_counter'}),
-                (GRANT,),
-                (policy(),),
-            )
-        ]),
+        ConnectionPolicy(
+            [
+                TrustedConnection(
+                    'team',
+                    'agent',
+                    'local',
+                    'read',
+                    frozenset({'test_read_counter'}),
+                    (GRANT,),
+                    (policy(),),
+                )
+            ]
+        ),
     )
 
 
@@ -182,17 +192,19 @@ def test_real_adapter_prepares_unlisted_tool_only_with_signed_mapping():
     signed['mapping_hash'] = mapping_hash(value)
     real = MCPAdapter(
         None,
-        ConnectionPolicy([
-            TrustedConnection(
-                'team',
-                'agent',
-                'local',
-                'read',
-                frozenset({'test_read_counter'}),
-                (GRANT,),
-                (signed,),
-            )
-        ]),
+        ConnectionPolicy(
+            [
+                TrustedConnection(
+                    'team',
+                    'agent',
+                    'local',
+                    'read',
+                    frozenset({'test_read_counter'}),
+                    (GRANT,),
+                    (signed,),
+                )
+            ]
+        ),
     )
     mapped = real.prepare(
         'local',
@@ -263,30 +275,34 @@ def test_adapter_rejects_signed_policy_when_mapping_has_changed():
     signed['mapping_hash'] = mapping_hash(value)
     real = MCPAdapter(
         None,
-        ConnectionPolicy([
-            TrustedConnection(
-                'team',
-                'agent',
-                'local',
-                'read',
-                frozenset({'test_read_counter'}),
-                (GRANT,),
-                (signed,),
-            )
-        ]),
+        ConnectionPolicy(
+            [
+                TrustedConnection(
+                    'team',
+                    'agent',
+                    'local',
+                    'read',
+                    frozenset({'test_read_counter'}),
+                    (GRANT,),
+                    (signed,),
+                )
+            ]
+        ),
     )
-    changed = knowledge_mapping().model_copy(update={
-        'model_input_schema': {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'query': {'type': 'string'},
-                'scene': {'type': 'string'},
-                'limit': {'type': 'integer'},
+    changed = knowledge_mapping().model_copy(
+        update={
+            'model_input_schema': {
+                'type': 'object',
+                'additionalProperties': False,
+                'properties': {
+                    'query': {'type': 'string'},
+                    'scene': {'type': 'string'},
+                    'limit': {'type': 'integer'},
+                },
+                'required': ['query', 'scene'],
             },
-            'required': ['query', 'scene'],
-        },
-    })
+        }
+    )
     with pytest.raises(PermissionError):
         real.prepare(
             'local',
@@ -331,21 +347,31 @@ def test_adapter_rejects_signed_policy_when_mapping_has_changed():
 async def test_declarative_mapping_pins_published_schema_against_drift():
     class Session:
         called = False
-        async def __aenter__(self): return self
-        async def __aexit__(self, *args): pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
         async def list_tools(self):
             from types import SimpleNamespace
+
             return SimpleNamespace(
-                tools=[{
-                    'name': 'test_read_counter',
-                    'inputSchema': {
-                        'type': 'object',
-                        'properties': {'query': {'type': 'integer'}},
-                    },
-                }],
+                tools=[
+                    {
+                        'name': 'test_read_counter',
+                        'inputSchema': {
+                            'type': 'object',
+                            'properties': {'query': {'type': 'integer'}},
+                        },
+                    }
+                ],
                 nextCursor=None,
             )
-        async def call_tool(self, *args): self.called = True
+
+        async def call_tool(self, *args):
+            self.called = True
 
     value = knowledge_mapping()
     signed = policy()
@@ -353,20 +379,23 @@ async def test_declarative_mapping_pins_published_schema_against_drift():
     signed['mapping_hash'] = mapping_hash(value)
     real = MCPAdapter(
         None,
-        ConnectionPolicy([
-            TrustedConnection(
-                'team',
-                'agent',
-                'local',
-                'read',
-                frozenset({'test_read_counter'}),
-                (GRANT,),
-                (signed,),
-            )
-        ]),
+        ConnectionPolicy(
+            [
+                TrustedConnection(
+                    'team',
+                    'agent',
+                    'local',
+                    'read',
+                    frozenset({'test_read_counter'}),
+                    (GRANT,),
+                    (signed,),
+                )
+            ]
+        ),
     )
     real.session_factory = lambda *_: Session()
     from workbench_agent.tools.mcp import SchemaChanged
+
     with pytest.raises(SchemaChanged):
         await real.call(
             'local',

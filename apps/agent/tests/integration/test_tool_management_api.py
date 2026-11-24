@@ -38,19 +38,23 @@ async def test_connection_projection_is_admin_scoped_and_redacted(platform, clie
         [deployment(platform.auth.team_id, platform.agent_id)],
     )
     result = await service.connections(platform.auth, platform.agent_id)
-    assert result['items'] == [{
-        'server': 'local',
-        'credential_scope': 'reader',
-        'read_tools': ['knowledge_search', 'test_read_counter'],
-        'status': 'configured',
-        'tool_conversation_tools': ['test_read_counter'],
-        'mapping_policies': [{
-            'tool_name': 'test_read_counter',
-            'mapping_hash': 'a' * 64,
-            'model_input_fields': ['query'],
-            'protected_targets': [['scope', 'team']],
-        }],
-    }]
+    assert result['items'] == [
+        {
+            'server': 'local',
+            'credential_scope': 'reader',
+            'read_tools': ['knowledge_search', 'test_read_counter'],
+            'status': 'configured',
+            'tool_conversation_tools': ['test_read_counter'],
+            'mapping_policies': [
+                {
+                    'tool_name': 'test_read_counter',
+                    'mapping_hash': 'a' * 64,
+                    'model_input_fields': ['query'],
+                    'protected_targets': [['scope', 'team']],
+                }
+            ],
+        }
+    ]
     assert 'private.example' not in str(result)
     assert 'PRIVATE_TOKEN' not in str(result)
     path = f'/v1/agents/{platform.agent_id}/tool-connections'
@@ -117,9 +121,7 @@ async def test_binding_list_exposes_only_publish_projections_needed_by_agent_edi
     await ToolRegistry(platform.backend).publish(
         platform.auth, platform.agent_id, binding, key='binding-list'
     )
-    response = await client.get(
-        f'/v1/agents/{platform.agent_id}/tool-bindings?limit=100'
-    )
+    response = await client.get(f'/v1/agents/{platform.agent_id}/tool-bindings?limit=100')
 
     assert response.status_code == 200
     item = response.json()['items'][0]
@@ -150,15 +152,25 @@ async def test_tool_discovery_worker_filters_unlisted_tools(platform):
         },
         'tool-discovery-job',
     )
+
     class Adapter:
         async def discover(self, *args, **kwargs):
             return ToolCatalog(
                 ('knowledge_search', 'hidden_write'),
                 (
-                    {'name': 'knowledge_search', 'description': 'query', 'inputSchema': {'type': 'object'}},
-                    {'name': 'hidden_write', 'description': 'write', 'inputSchema': {'type': 'object'}},
+                    {
+                        'name': 'knowledge_search',
+                        'description': 'query',
+                        'inputSchema': {'type': 'object'},
+                    },
+                    {
+                        'name': 'hidden_write',
+                        'description': 'write',
+                        'inputSchema': {'type': 'object'},
+                    },
                 ),
             )
+
     registry = ExecutorRegistry()
     registry.register_admin(
         'tool_discovery',

@@ -3,5 +3,6 @@ class DomainError(Exception):
         self.code, self.status = code, status
         super().__init__(code)
 
+
 def not_found():
     return DomainError('NOT_FOUND', 404)

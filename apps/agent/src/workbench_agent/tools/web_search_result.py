@@ -1,4 +1,5 @@
 """Strict validation and safe projection of public web search snippets."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -44,12 +45,7 @@ def _timestamp(value, *, nullable=False):
 
 def _host(value):
     parsed = urlsplit(value)
-    if (
-        parsed.scheme != 'https'
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-    ):
+    if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError('WEB_SEARCH_URL_DENIED')
     host = parsed.hostname.rstrip('.').encode('idna').decode('ascii').casefold()
     try:
@@ -121,10 +117,7 @@ def validate_web_search_result(
         'retrieved_at': retrieved_at,
         'results': [],
     }
-    allowed = {
-        host.rstrip('.').encode('idna').decode('ascii').casefold()
-        for host in allowed_hosts
-    }
+    allowed = {host.rstrip('.').encode('idna').decode('ascii').casefold() for host in allowed_hosts}
     for result in results:
         if not isinstance(result, dict) or set(result) != RESULT_FIELDS:
             raise ValueError('WEB_SEARCH_INVALID')
@@ -133,22 +126,20 @@ def validate_web_search_result(
             result.get('url'),
             result.get('snippet'),
         )
-        if (
-            not _text(title, 512)
-            or not _text(snippet, 4000)
-            or not _text(url, 2048)
-        ):
+        if not _text(title, 512) or not _text(snippet, 4000) or not _text(url, 2048):
             raise ValueError('WEB_SEARCH_INVALID')
         host = _host(url)
         if host not in allowed:
             raise ValueError('WEB_SEARCH_URL_DENIED')
         published = _timestamp(result.get('published_at'), nullable=True)
-        normalized['results'].append({
-            'title': title,
-            'url': url,
-            'snippet': snippet,
-            'published_at': published,
-        })
+        normalized['results'].append(
+            {
+                'title': title,
+                'url': url,
+                'snippet': snippet,
+                'published_at': published,
+            }
+        )
     return normalized
 
 
@@ -160,9 +151,7 @@ def validate_web_search_response(
     agent_id,
     binding,
 ):
-    grant = web_search_grant(
-        policy, team_id=team_id, agent_id=agent_id, binding=binding
-    )
+    grant = web_search_grant(policy, team_id=team_id, agent_id=agent_id, binding=binding)
     try:
         value = response.structuredContent
     except AttributeError:
@@ -180,10 +169,6 @@ def validate_web_search_response(
             allowed_hosts=tuple(grant['allowed_result_hosts']),
         )
     except ValueError as error:
-        status = (
-            'denied'
-            if str(error) == 'WEB_SEARCH_URL_DENIED'
-            else 'unknown'
-        )
+        status = 'denied' if str(error) == 'WEB_SEARCH_URL_DENIED' else 'unknown'
         return {'status': status, 'error': str(error), 'grant': grant}
     return {**normalized, 'grant': grant}

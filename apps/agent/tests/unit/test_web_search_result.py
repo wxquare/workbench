@@ -7,12 +7,14 @@ def result(**changes):
     value = {
         'schema_version': 'web-search-result-v1',
         'status': 'ok',
-        'results': [{
-            'title': 'SQLite documentation',
-            'url': 'https://docs.example.com/sqlite',
-            'snippet': 'Use WAL for concurrent readers and one writer.',
-            'published_at': None,
-        }],
+        'results': [
+            {
+                'title': 'SQLite documentation',
+                'url': 'https://docs.example.com/sqlite',
+                'snippet': 'Use WAL for concurrent readers and one writer.',
+                'published_at': None,
+            }
+        ],
         'retrieved_at': '2026-11-24T00:00:00Z',
         'truncated': False,
         'domain_policy_id': 'public-docs-v1',
@@ -31,16 +33,12 @@ def validate(value):
 
 
 def test_valid_search_snippet_is_normalized():
-    assert validate(result())['results'][0]['url'] == (
-        'https://docs.example.com/sqlite'
-    )
+    assert validate(result())['results'][0]['url'] == ('https://docs.example.com/sqlite')
 
 
 def test_approved_https_url_may_have_query_and_fragment():
     value = result()
-    value['results'][0]['url'] = (
-        'https://docs.example.com/sqlite?view=wal#concurrency'
-    )
+    value['results'][0]['url'] = 'https://docs.example.com/sqlite?view=wal#concurrency'
     assert validate(value)['results'][0]['url'].endswith('#concurrency')
 
 

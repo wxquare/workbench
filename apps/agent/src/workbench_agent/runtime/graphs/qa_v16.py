@@ -1,4 +1,5 @@
 """Pinned scoped QA graph with evidence-backed extractive synthesis."""
+
 from dataclasses import asdict
 from typing import Annotated, TypedDict
 
@@ -29,7 +30,10 @@ def build_dod(saver):
         await runtime.context.check_operation()
         if state['run_id'] != config['configurable']['thread_id']:
             raise ValueError('graph thread_id must equal run_id')
-        return {'phase': 'prepare_context', 'messages': [HumanMessage(state['input_text'], id=state['run_id'] + ':input')]}
+        return {
+            'phase': 'prepare_context',
+            'messages': [HumanMessage(state['input_text'], id=state['run_id'] + ':input')],
+        }
 
     async def route(state, runtime: Runtime):
         await runtime.context.check_operation()
@@ -51,45 +55,93 @@ def build_dod(saver):
         factory = getattr(execution.backend, '_diagnosis_factory', None)
         context = execution.claim.context
         if state['route'] not in ('qa',) or factory is None:
-            return {'phase': 'investigate', 'unresolved': [
-                'Required expert execution and verifiable evidence are not available for this Run.'
-            ], 'evidence_refs': [], 'diagnosis_done': False}
+            return {
+                'phase': 'investigate',
+                'unresolved': [
+                    'Required expert execution and verifiable evidence are not available for this Run.'
+                ],
+                'evidence_refs': [],
+                'diagnosis_done': False,
+            }
         import json
         from workbench_agent.application.idempotency import digest
         from workbench_agent.tools.policy import load_published_binding
+
         bindings = []
         async with execution.backend.create_uow().begin_read() as uow:
-            scope = await execution.backend.runs.current_scope(uow, execution.guard.team_id, state['run_id'])
+            scope = await execution.backend.runs.current_scope(
+                uow, execution.guard.team_id, state['run_id']
+            )
             if scope:
                 for ref in context.tools:
-                    row = await execution.backend.configuration.one(uow, 'tool_bindings', team_id=context.team_id,
-                        binding_id=ref.resource_id, agent_id=context.agent_id,
-                        version=int(ref.version), hash=ref.content_hash)
+                    row = await execution.backend.configuration.one(
+                        uow,
+                        'tool_bindings',
+                        team_id=context.team_id,
+                        binding_id=ref.resource_id,
+                        agent_id=context.agent_id,
+                        version=int(ref.version),
+                        hash=ref.content_hash,
+                    )
                     if row:
                         raw = json.loads(row['schema'])
                         if digest(raw) == ref.content_hash:
                             binding = load_published_binding(raw)
-                            if binding and binding.read_only and binding.tool_name == 'knowledge_search':
+                            if (
+                                binding
+                                and binding.read_only
+                                and binding.tool_name == 'knowledge_search'
+                            ):
                                 from workbench_agent.tools.mcp import BUSINESS_TOOLS, DOD_MCP_TOOLS
-                                if binding.tool_name not in BUSINESS_TOOLS or binding.tool_name in DOD_MCP_TOOLS or binding.tool_name in ('SRE-Log-Query', 'Common-DoD-GetInfo'):
+
+                                if (
+                                    binding.tool_name not in BUSINESS_TOOLS
+                                    or binding.tool_name in DOD_MCP_TOOLS
+                                    or binding.tool_name in ('SRE-Log-Query', 'Common-DoD-GetInfo')
+                                ):
                                     bindings.append((ref, binding))
         if not bindings or len(bindings) > 4:
-            return {'phase': 'investigate', 'unresolved': ['A scoped, published knowledge tool is unavailable.'],
-                    'evidence_refs': [], 'diagnosis_done': False}
+            return {
+                'phase': 'investigate',
+                'unresolved': ['A scoped, published knowledge tool is unavailable.'],
+                'evidence_refs': [],
+                'diagnosis_done': False,
+            }
         from workbench_agent.runtime.experts.knowledge import KnowledgeExpert, ExpertTask
         from workbench_agent.application.errors import DomainError
         from workbench_agent.jobs.worker import CapabilityBlocked
+
         try:
             with execution._tool_owner.expert_execution(execution, 'knowledge') as child:
                 invoker, executor = factory(child)
-                expert = KnowledgeExpert(child, invoker, executor, bindings,
-                    saver=saver, guard_provider=saver.guard_provider)
-                result = await expert.invoke(ExpertTask(task_id='baseline', instruction=state['input_text']))
+                expert = KnowledgeExpert(
+                    child,
+                    invoker,
+                    executor,
+                    bindings,
+                    saver=saver,
+                    guard_provider=saver.guard_provider,
+                )
+                result = await expert.invoke(
+                    ExpertTask(task_id='baseline', instruction=state['input_text'])
+                )
         except ValueError:
-            return {'phase': 'investigate', 'unresolved': ['Knowledge tool schema is unavailable.'],
-                    'evidence_refs': [], 'diagnosis_done': False}
+            return {
+                'phase': 'investigate',
+                'unresolved': ['Knowledge tool schema is unavailable.'],
+                'evidence_refs': [],
+                'diagnosis_done': False,
+            }
         except DomainError as error:
-            if error.code not in ('BUDGET_EXCEEDED', 'MAX_CONTEXT_EXCEEDED', 'SUMMARY_RESERVE_REQUIRED', 'MODEL_PROFILE_UNAVAILABLE', 'INVOCATION_ALREADY_SENT', 'RESERVATION_CONFLICT', 'STALE_QUERY_SCOPE'):
+            if error.code not in (
+                'BUDGET_EXCEEDED',
+                'MAX_CONTEXT_EXCEEDED',
+                'SUMMARY_RESERVE_REQUIRED',
+                'MODEL_PROFILE_UNAVAILABLE',
+                'INVOCATION_ALREADY_SENT',
+                'RESERVATION_CONFLICT',
+                'STALE_QUERY_SCOPE',
+            ):
                 raise
             if error.code == 'STALE_QUERY_SCOPE':
                 reason = 'Query scope changed; prior model or tool results cannot be reused under the current scope.'
@@ -99,37 +151,66 @@ def build_dod(saver):
                 reason = 'The configured knowledge model is unavailable.'
             else:
                 reason = 'Knowledge could not run within the remaining budget.'
-            return {'phase': 'investigate', 'unresolved': [reason],
-                    'evidence_refs': [], 'diagnosis_done': False}
+            return {
+                'phase': 'investigate',
+                'unresolved': [reason],
+                'evidence_refs': [],
+                'diagnosis_done': False,
+            }
         except CapabilityBlocked:
-            return {'phase': 'investigate', 'unresolved': ['Knowledge capability is unavailable.'],
-                    'evidence_refs': [], 'diagnosis_done': False}
+            return {
+                'phase': 'investigate',
+                'unresolved': ['Knowledge capability is unavailable.'],
+                'evidence_refs': [],
+                'diagnosis_done': False,
+            }
         # The agent's free text is not an evidence-backed business finding.
-        return {'phase': 'investigate', 'unresolved': ['Knowledge results require verification before a definitive answer.'],
-                'evidence_refs': list(result.evidence_refs), 'diagnosis_done': True}
+        return {
+            'phase': 'investigate',
+            'unresolved': ['Knowledge results require verification before a definitive answer.'],
+            'evidence_refs': list(result.evidence_refs),
+            'diagnosis_done': True,
+        }
 
     async def validate_evidence(state, runtime: Runtime):
         await runtime.context.check_operation()
         from workbench_agent.runtime.graphs.validation import EvidenceValidator
+
         async with runtime.context.backend.create_uow().begin_read() as uow:
             scope = await runtime.context.backend.runs.current_scope(
-                uow, runtime.context.guard.team_id, state['run_id'])
-            rows = await runtime.context.backend.results.evidence(uow, runtime.context.guard.team_id,
-                state['run_id'], set(state.get('evidence_refs', []))) if state.get('evidence_refs') else []
+                uow, runtime.context.guard.team_id, state['run_id']
+            )
+            rows = (
+                await runtime.context.backend.results.evidence(
+                    uow,
+                    runtime.context.guard.team_id,
+                    state['run_id'],
+                    set(state.get('evidence_refs', [])),
+                )
+                if state.get('evidence_refs')
+                else []
+            )
             evidence = {}
             for row in rows:
                 value = dict(row)
-                payload = await runtime.context.backend.tools.evidence_payload(uow, runtime.context.guard.team_id,
-                    state['run_id'], value['evidence_id'])
+                payload = await runtime.context.backend.tools.evidence_payload(
+                    uow, runtime.context.guard.team_id, state['run_id'], value['evidence_id']
+                )
                 value['reference_accessible'] = bool(payload and not payload['truncated'])
                 evidence[value['evidence_id']] = value
         completed = {'investigate'} if state.get('diagnosis_done') else set()
-        result = EvidenceValidator().validate(scope['scope_id'] if scope else None, evidence,
-            {'investigate'}, completed_steps=completed, referenced_ids=set(state.get('evidence_refs', [])))
+        result = EvidenceValidator().validate(
+            scope['scope_id'] if scope else None,
+            evidence,
+            {'investigate'},
+            completed_steps=completed,
+            referenced_ids=set(state.get('evidence_refs', [])),
+        )
         return {'phase': 'validate_evidence', 'validation': asdict(result)}
 
     async def compose_outcome(state, runtime: Runtime):
         from workbench_agent.runtime.graphs.qa_synthesis import compose_qa_outcome
+
         return await compose_qa_outcome(state, runtime.context)
 
     async def finalize(state, runtime: Runtime):
@@ -137,8 +218,16 @@ def build_dod(saver):
         return {'phase': 'finalize'}
 
     graph = StateGraph(DoDState)
-    nodes = (prepare_context, route, select_skills, collect_baseline, investigate,
-             validate_evidence, compose_outcome, finalize)
+    nodes = (
+        prepare_context,
+        route,
+        select_skills,
+        collect_baseline,
+        investigate,
+        validate_evidence,
+        compose_outcome,
+        finalize,
+    )
     for node in nodes:
         graph.add_node(node.__name__, node)
     graph.add_edge(START, nodes[0].__name__)

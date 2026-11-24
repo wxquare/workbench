@@ -1,4 +1,5 @@
 """Usage summary for a currently authorized run."""
+
 from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 from workbench_agent.api.auth import authenticate

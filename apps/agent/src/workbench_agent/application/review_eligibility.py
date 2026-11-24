@@ -1,4 +1,5 @@
 """Side-effect-free eligibility projection for the review inbox."""
+
 from dataclasses import dataclass
 from typing import Literal
 

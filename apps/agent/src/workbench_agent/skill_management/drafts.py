@@ -1,4 +1,5 @@
 """Canonical draft resources and the explicit publication-only script policy."""
+
 import base64
 import binascii
 from io import BytesIO
@@ -9,23 +10,34 @@ import zipfile
 import yaml
 
 from workbench_agent.application.errors import DomainError
-from workbench_agent.skill_management.validator import InvalidBundle, validate_bundle, validate_bundle_path
+from workbench_agent.skill_management.validator import (
+    InvalidBundle,
+    validate_bundle,
+    validate_bundle_path,
+)
 
 MAX_DRAFT_FILES = 64
 MAX_DRAFT_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_TEXT_BYTES = 256 * 1024
 MAX_DRAFT_PAYLOAD = 12 * 1024 * 1024
-IMAGE_TYPES = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-               '.gif': 'image/gif', '.webp': 'image/webp'}
+IMAGE_TYPES = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+}
 
 
 def image_matches(path, raw):
     suffix = PurePosixPath(path).suffix.lower()
-    return ((suffix == '.png' and raw.startswith(b'\x89PNG\r\n\x1a\n'))
-            or (suffix in ('.jpg', '.jpeg') and raw.startswith(b'\xff\xd8\xff'))
-            or (suffix == '.gif' and raw.startswith((b'GIF87a', b'GIF89a')))
-            or (suffix == '.webp' and len(raw) >= 12 and raw[:4] == b'RIFF' and raw[8:12] == b'WEBP'))
+    return (
+        (suffix == '.png' and raw.startswith(b'\x89PNG\r\n\x1a\n'))
+        or (suffix in ('.jpg', '.jpeg') and raw.startswith(b'\xff\xd8\xff'))
+        or (suffix == '.gif' and raw.startswith((b'GIF87a', b'GIF89a')))
+        or (suffix == '.webp' and len(raw) >= 12 and raw[:4] == b'RIFF' and raw[8:12] == b'WEBP')
+    )
 
 
 def normalize_files(files):
@@ -35,8 +47,13 @@ def normalize_files(files):
             raise ValueError('invalid resource count')
         result, total = {}, 0
         for path, value in files.items():
-            if (not isinstance(path, str) or len(path) > 256 or re.match(r'^[A-Za-z]:', path)
-                    or validate_bundle_path(path) != path or '.claude' in path.split('/')):
+            if (
+                not isinstance(path, str)
+                or len(path) > 256
+                or re.match(r'^[A-Za-z]:', path)
+                or validate_bundle_path(path) != path
+                or '.claude' in path.split('/')
+            ):
                 raise ValueError('invalid resource path')
             path.encode('utf-8')
             if isinstance(value, str):
@@ -88,9 +105,15 @@ def bundle_for_files(name, description, files):
     with zipfile.ZipFile(output, 'w') as archive:
         for path, value in normalized.items():
             content = value['content']
-            raw = content.encode('utf-8') if value['encoding'] == 'utf-8' else base64.b64decode(content)
+            raw = (
+                content.encode('utf-8')
+                if value['encoding'] == 'utf-8'
+                else base64.b64decode(content)
+            )
             if path == 'SKILL.md':
-                metadata = yaml.safe_dump({'name': name, 'description': description}, allow_unicode=True, sort_keys=False)
+                metadata = yaml.safe_dump(
+                    {'name': name, 'description': description}, allow_unicode=True, sort_keys=False
+                )
                 raw = ('---\n' + metadata + '---\n' + content.strip() + '\n').encode('utf-8')
             archive.writestr(name + '/' + path, raw)
     try:

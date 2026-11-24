@@ -61,8 +61,7 @@ def _read_manifest(path: Path) -> dict:
 
 def _config_hash(config: dict) -> str:
     behavior = {
-        key: value for key, value in config.items()
-        if key not in {'token_env', 'output_root'}
+        key: value for key, value in config.items() if key not in {'token_env', 'output_root'}
     }
     return hashlib.sha256(
         json.dumps(
@@ -130,10 +129,7 @@ async def run_experiment(
         raise ValueError('config does not match manifest')
     cases = select_cases(dataset, split)
     output_path = Path(journal.path).with_name('results.jsonl')
-    existing = {
-        (row['case_id'], row['repeat']): row
-        for row in read_rows(output_path)
-    }
+    existing = {(row['case_id'], row['repeat']): row for row in read_rows(output_path)}
     for event in journal.events():
         request_key = event.get('request_key')
         if isinstance(event.get('row'), dict):
@@ -160,9 +156,14 @@ async def run_experiment(
             if (
                 recovered
                 and recovered.get('run_id')
-                and recovered.get('run_status') in {
-                    'succeeded', 'partial', 'failed', 'cancelled',
-                    'timed_out', 'expired',
+                and recovered.get('run_status')
+                in {
+                    'succeeded',
+                    'partial',
+                    'failed',
+                    'cancelled',
+                    'timed_out',
+                    'expired',
                 }
             ):
                 continue
@@ -184,10 +185,8 @@ async def run_experiment(
             write_rows(output_path, list(existing.values()))
     rows = list(existing.values())
     return {
-        'complete': all(
-            row.get('transport_status') in {'completed', 'rejected'}
-            for row in rows
-        ) and len(rows) == len(cases) * repeats,
+        'complete': all(row.get('transport_status') in {'completed', 'rejected'} for row in rows)
+        and len(rows) == len(cases) * repeats,
         'rows': rows,
         'expected': len(cases) * repeats,
     }

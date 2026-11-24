@@ -1,4 +1,5 @@
 """Scoped retrieval of current published knowledge."""
+
 import json
 import re
 
@@ -24,12 +25,26 @@ class KnowledgeSearch:
         result = []
         for row in rows:
             content = json.loads(row['content_json'])
-            chunk = KBChunk(chunk_id=row['chunk_id'], heading_path=tuple(json.loads(row['heading_path'])),
-                line_start=int(row['line_start']), line_end=int(row['line_end']), content=row['content'],
-                content_hash=row['content_hash'], chunker_version=row['chunker_version'])
-            result.append(SearchHit(entry_id=row['entry_id'], version=int(row['version']), chunk=chunk,
-                title=content['title'], kind=content['kind'], updated_at=row['created_at'],
-                source_id=f"kb:{row['entry_id']}@{row['version']}#{row['chunk_id']}"))
+            chunk = KBChunk(
+                chunk_id=row['chunk_id'],
+                heading_path=tuple(json.loads(row['heading_path'])),
+                line_start=int(row['line_start']),
+                line_end=int(row['line_end']),
+                content=row['content'],
+                content_hash=row['content_hash'],
+                chunker_version=row['chunker_version'],
+            )
+            result.append(
+                SearchHit(
+                    entry_id=row['entry_id'],
+                    version=int(row['version']),
+                    chunk=chunk,
+                    title=content['title'],
+                    kind=content['kind'],
+                    updated_at=row['created_at'],
+                    source_id=f'kb:{row["entry_id"]}@{row["version"]}#{row["chunk_id"]}',
+                )
+            )
         return result
 
     async def preview(self, auth, scope: KBScope, query: str, *, limit=3):

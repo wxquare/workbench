@@ -50,10 +50,7 @@ class API:
 
 
 def dataset():
-    path = (
-        Path(__file__).parents[4]
-        / 'evaluation/tool-conversation/dataset.example.json'
-    )
+    path = Path(__file__).parents[4] / 'evaluation/tool-conversation/dataset.example.json'
     value = load_tool_dataset(path)
     value['cases'] = [value['cases'][4]]
     value['cases'][0]['review_status'] = 'reviewed'
@@ -87,6 +84,7 @@ def config():
 
 def manifest(data, cfg):
     from workbench_agent.evaluation.runner import _config_hash
+
     return {
         'experiment_id': 'tool-e1',
         'dataset_hash': tool_dataset_fingerprint(data),

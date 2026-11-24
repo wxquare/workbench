@@ -1,4 +1,5 @@
 """Current Agent schema, with semantic graph IDs on runtime profiles."""
+
 from sqlalchemy import Column, MetaData, String
 from workbench_agent.persistence.schema_agent_v4 import metadata as baseline
 

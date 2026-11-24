@@ -1,4 +1,5 @@
 """Team-wide Skill library endpoints."""
+
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -29,26 +30,42 @@ class SkillCreate(SkillDraft):
 
 def library(request):
     root = request.app.state.settings.storage.skill_object_root
+
     def objects():
         if root is None:
             return None
         from workbench_agent.skill_management.objects import LocalSkillObjects
+
         try:
             return LocalSkillObjects(root)
         except (OSError, ValueError):
             raise DomainError('OBJECT_STORAGE_UNAVAILABLE', 503) from None
+
     return SharedSkillLibrary(request.app.state.backend, objects)
 
 
 @router.get('')
-async def list_skills(request: Request, auth=Depends(authenticate), limit: int = Query(default=100, ge=1, le=100),
-                      after: UUID | None = None, q: str | None = Query(default=None, max_length=128)):
-    return await library(request).list(auth, limit, str(after) if after else None, q.strip() if q else None)
+async def list_skills(
+    request: Request,
+    auth=Depends(authenticate),
+    limit: int = Query(default=100, ge=1, le=100),
+    after: UUID | None = None,
+    q: str | None = Query(default=None, max_length=128),
+):
+    return await library(request).list(
+        auth, limit, str(after) if after else None, q.strip() if q else None
+    )
 
 
 @router.post('')
-async def create_skill(body: SkillCreate, request: Request, auth=Depends(authenticate), idempotency_key: str = Header()):
-    return response(await library(request).create(auth, body.name, body.description, body.content, idempotency_key, files=body.files))
+async def create_skill(
+    body: SkillCreate, request: Request, auth=Depends(authenticate), idempotency_key: str = Header()
+):
+    return response(
+        await library(request).create(
+            auth, body.name, body.description, body.content, idempotency_key, files=body.files
+        )
+    )
 
 
 @router.get('/{skill_id}')
@@ -57,14 +74,35 @@ async def get_skill(skill_id: UUID, request: Request, auth=Depends(authenticate)
 
 
 @router.patch('/{skill_id}')
-async def save_skill(skill_id: UUID, body: SkillDraft, request: Request, auth=Depends(authenticate),
-                     expected: int = Depends(revision), idempotency_key: str = Header()):
-    return response(await library(request).save(auth, str(skill_id), body.description, body.content, expected, idempotency_key, files=body.files))
+async def save_skill(
+    skill_id: UUID,
+    body: SkillDraft,
+    request: Request,
+    auth=Depends(authenticate),
+    expected: int = Depends(revision),
+    idempotency_key: str = Header(),
+):
+    return response(
+        await library(request).save(
+            auth,
+            str(skill_id),
+            body.description,
+            body.content,
+            expected,
+            idempotency_key,
+            files=body.files,
+        )
+    )
 
 
 @router.post('/{skill_id}/publish')
-async def publish_skill(skill_id: UUID, request: Request, auth=Depends(authenticate),
-                        expected: int = Depends(revision), idempotency_key: str = Header()):
+async def publish_skill(
+    skill_id: UUID,
+    request: Request,
+    auth=Depends(authenticate),
+    expected: int = Depends(revision),
+    idempotency_key: str = Header(),
+):
     return response(await library(request).publish(auth, str(skill_id), expected, idempotency_key))
 
 

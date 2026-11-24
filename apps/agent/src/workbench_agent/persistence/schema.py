@@ -3,6 +3,7 @@
 Immutable versioned modules preserve historical migration snapshots.
 Application code consumes Store ports; SQLAlchemy tables belong to adapters.
 """
+
 from workbench_agent.persistence.schema_agent_v7 import metadata
 
 # Explicitly expose table names without duplicating schema declarations.

@@ -1,4 +1,5 @@
 """Structured knowledge answers distinguish exact citation and model review."""
+
 from typing import Literal
 from uuid import UUID
 from pydantic import Field, model_validator
@@ -24,8 +25,13 @@ class AnswerDraft(FrozenModel):
     @model_validator(mode='after')
     def coherent_answer(self):
         if self.answerable != bool(self.claims) or self.answerable == bool(self.missing):
-            raise ValueError('answerable requires claims; unanswerable requires missing information')
-        if any(not claim.text.strip() or any(not c.quote.strip() for c in claim.citations) for claim in self.claims):
+            raise ValueError(
+                'answerable requires claims; unanswerable requires missing information'
+            )
+        if any(
+            not claim.text.strip() or any(not c.quote.strip() for c in claim.citations)
+            for claim in self.claims
+        ):
             raise ValueError('claims and quotations must be nonempty')
         if any(not item.strip() or len(item) > 512 for item in self.missing):
             raise ValueError('invalid missing information')
@@ -57,7 +63,11 @@ class SupportReview(FrozenModel):
     checks: tuple[SupportCheck, ...] = Field(min_length=1, max_length=8)
 
     def approves(self, count: int) -> bool:
-        return {item.index for item in self.checks} == set(range(count)) and len(self.checks) == count and all(item.supported for item in self.checks)
+        return (
+            {item.index for item in self.checks} == set(range(count))
+            and len(self.checks) == count
+            and all(item.supported for item in self.checks)
+        )
 
 
 class KnowledgeAnswer(ValidatedAnswer):

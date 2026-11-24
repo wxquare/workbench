@@ -1,4 +1,5 @@
 """Idempotent human reconciliation of an unknown external delivery."""
+
 from workbench_agent.application.errors import DomainError, not_found
 from workbench_agent.application.idempotency import Idempotency
 from workbench_agent.delivery.reconcile import ActionReconciler
@@ -23,13 +24,16 @@ class ReconciliationService:
             if not run:
                 raise not_found()
             from workbench_agent.application.authorization import Authorization
-            await Authorization(self.backend).current(
-                uow, auth, run['agent_id'], 'operator'
-            )
+
+            await Authorization(self.backend).current(uow, auth, run['agent_id'], 'operator')
             if auth.identity_kind == 'connector':
                 raise DomainError('OPERATION_DENIED', 403)
             receipt = await Idempotency(self.backend).lookup(
-                uow, auth, run['agent_id'], 'action.reconcile', key,
+                uow,
+                auth,
+                run['agent_id'],
+                'action.reconcile',
+                key,
                 {'action_id': action_id},
             )
         if receipt:
@@ -40,7 +44,11 @@ class ReconciliationService:
             if error.code == 'ACTION_NOT_UNKNOWN':
                 async with self.backend.create_uow().begin_write() as uow:
                     receipt = await Idempotency(self.backend).lookup(
-                        uow, auth, run['agent_id'], 'action.reconcile', key,
+                        uow,
+                        auth,
+                        run['agent_id'],
+                        'action.reconcile',
+                        key,
                         {'action_id': action_id},
                     )
                 if receipt:
@@ -50,7 +58,11 @@ class ReconciliationService:
             return result
         async with self.backend.create_uow().begin_write() as uow:
             receipt = await Idempotency(self.backend).lookup(
-                uow, auth, run['agent_id'], 'action.reconcile', key,
+                uow,
+                auth,
+                run['agent_id'],
+                'action.reconcile',
+                key,
                 {'action_id': action_id},
             )
             if receipt:
@@ -59,14 +71,19 @@ class ReconciliationService:
         # idempotency receipt in its own short transaction.
         async with self.backend.create_uow().begin_write() as uow:
             previous = await self.backend.configuration.one(
-                uow, 'idempotency_records', team_id=auth.team_id,
-                subject=auth.subject, agent_id=run['agent_id'],
-                route='action.reconcile', key=key,
+                uow,
+                'idempotency_records',
+                team_id=auth.team_id,
+                subject=auth.subject,
+                agent_id=run['agent_id'],
+                route='action.reconcile',
+                key=key,
             )
             now = await self.backend.clock.now_ms(uow)
             from hashlib import sha256
             from workbench_agent.application.idempotency import canonical
             from uuid import uuid4
+
             payload = {'action_id': action_id}
             request_hash = sha256(canonical(payload).encode()).hexdigest()
             values = {
@@ -78,12 +95,15 @@ class ReconciliationService:
             }
             if previous:
                 await self.backend.configuration.change(
-                    uow, 'idempotency_records',
-                    {'record_id': previous['record_id']}, values,
+                    uow,
+                    'idempotency_records',
+                    {'record_id': previous['record_id']},
+                    values,
                 )
             else:
                 await self.backend.configuration.insert(
-                    uow, 'idempotency_records',
+                    uow,
+                    'idempotency_records',
                     dict(
                         team_id=auth.team_id,
                         record_id=str(uuid4()),

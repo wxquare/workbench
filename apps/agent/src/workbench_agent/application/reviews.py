@@ -1,4 +1,5 @@
 """Authorized review inbox projection without a second decision state machine."""
+
 import base64
 import json
 import time
@@ -78,11 +79,17 @@ class ReviewService:
                 raise DomainError('REVIEWS_CAPACITY_EXCEEDED', 503)
             now = await self.backend.clock.now_ms(uow)
             member = await self.backend.configuration.one(
-                uow, 'team_members', team_id=auth.team_id,
-                subject=auth.subject, status='active',
+                uow,
+                'team_members',
+                team_id=auth.team_id,
+                subject=auth.subject,
+                status='active',
             )
             team = await self.backend.configuration.one(
-                uow, 'teams', team_id=auth.team_id, status='active',
+                uow,
+                'teams',
+                team_id=auth.team_id,
+                status='active',
             )
             if member is None or team is None:
                 raise DomainError('FORBIDDEN', 403)
@@ -92,51 +99,47 @@ class ReviewService:
                 interrupt = source['interrupts'].get(run['run_id'])
                 if interrupt is None or run['run_id'] not in source['checkpoint_run_ids']:
                     continue
-                checkpoint = await self.backend.runs.checkpoint(
-                    uow, auth.team_id, run['run_id']
-                )
-                facts = await run_review_facts(
-                    self.backend, uow, auth, run, interrupt, checkpoint
-                )
+                checkpoint = await self.backend.runs.checkpoint(uow, auth.team_id, run['run_id'])
+                facts = await run_review_facts(self.backend, uow, auth, run, interrupt, checkpoint)
                 kind = (
                     'run_approval'
                     if json.loads(interrupt['schema']).get('kind') == 'approval'
                     else 'run_input'
                 )
-                eligibility = review_eligibility(
-                    kind, facts=facts, now_ms=facts.get('now_ms', now)
-                )
+                eligibility = review_eligibility(kind, facts=facts, now_ms=facts.get('now_ms', now))
                 expired = eligibility.expired
-                if not eligibility.visible or (
-                    state == 'pending' and expired
-                ) or (state == 'expired' and not expired):
+                if (
+                    not eligibility.visible
+                    or (state == 'pending' and expired)
+                    or (state == 'expired' and not expired)
+                ):
                     continue
                 due = facts.get('deadline_at') if eligibility.visible else None
-                result.append({
-                    'item_id': f"{kind}:{interrupt['interrupt_id']}",
-                    'type': kind,
-                    'agent_id': run['agent_id'],
-                    'run_id': run['run_id'],
-                    'action_id': None,
-                    'title': '审批任务' if kind == 'run_approval' else '补充任务输入',
-                    'due_at': self._timestamp(due),
-                    'created_at': self._timestamp(interrupt['created_at']),
-                    'expired': expired,
-                    'available_operations': list(eligibility.operations),
-                    'simulated': False,
-                    'source_label': 'run',
-                    'links': {'run': f'/v1/runs/{run["run_id"]}'},
-                    'created_at_ms': interrupt['created_at'],
-                    'due_at_ms': due,
-                    'interrupt': interrupt,
-                })
+                result.append(
+                    {
+                        'item_id': f'{kind}:{interrupt["interrupt_id"]}',
+                        'type': kind,
+                        'agent_id': run['agent_id'],
+                        'run_id': run['run_id'],
+                        'action_id': None,
+                        'title': '审批任务' if kind == 'run_approval' else '补充任务输入',
+                        'due_at': self._timestamp(due),
+                        'created_at': self._timestamp(interrupt['created_at']),
+                        'expired': expired,
+                        'available_operations': list(eligibility.operations),
+                        'simulated': False,
+                        'source_label': 'run',
+                        'links': {'run': f'/v1/runs/{run["run_id"]}'},
+                        'created_at_ms': interrupt['created_at'],
+                        'due_at_ms': due,
+                        'interrupt': interrupt,
+                    }
+                )
 
             for action in source['actions']:
                 approval = source['approvals'].get(action['action_id'])
                 outbox = source['outboxes'].get(action['action_id'])
-                facts = await action_review_facts(
-                    self.backend, uow, auth, action, outbox
-                )
+                facts = await action_review_facts(self.backend, uow, auth, action, outbox)
                 kinds = []
                 if action['state'] in ('proposed', 'reapproval_pending'):
                     kinds.append('action_approval')
@@ -151,29 +154,33 @@ class ReviewService:
                     if not eligibility.visible or eligibility.expired:
                         continue
                     due = approval['expires_at'] if approval else None
-                    result.append({
-                        'item_id': f"{kind}:{action['action_id']}",
-                        'type': kind,
-                        'agent_id': source['run_by_id'].get(action['run_id'], {}).get('agent_id'),
-                        'run_id': action['run_id'],
-                        'action_id': action['action_id'],
-                        'title': {
-                            'action_approval': '审批外部动作',
-                            'action_reapproval': '处理失败动作',
-                            'action_reconcile': '核对投递结果',
-                        }[kind],
-                        'due_at': self._timestamp(due),
-                        'created_at': self._timestamp(action['created_at']),
-                        'expired': False,
-                        'available_operations': list(eligibility.operations),
-                        'simulated': False,
-                        'source_label': 'action',
-                        'links': {'run': f'/v1/runs/{action["run_id"]}'},
-                        'created_at_ms': action['created_at'],
-                        'due_at_ms': due,
-                        'action': action,
-                        'approval': approval,
-                    })
+                    result.append(
+                        {
+                            'item_id': f'{kind}:{action["action_id"]}',
+                            'type': kind,
+                            'agent_id': source['run_by_id']
+                            .get(action['run_id'], {})
+                            .get('agent_id'),
+                            'run_id': action['run_id'],
+                            'action_id': action['action_id'],
+                            'title': {
+                                'action_approval': '审批外部动作',
+                                'action_reapproval': '处理失败动作',
+                                'action_reconcile': '核对投递结果',
+                            }[kind],
+                            'due_at': self._timestamp(due),
+                            'created_at': self._timestamp(action['created_at']),
+                            'expired': False,
+                            'available_operations': list(eligibility.operations),
+                            'simulated': False,
+                            'source_label': 'action',
+                            'links': {'run': f'/v1/runs/{action["run_id"]}'},
+                            'created_at_ms': action['created_at'],
+                            'due_at_ms': due,
+                            'action': action,
+                            'approval': approval,
+                        }
+                    )
             return result, prefix
 
     @staticmethod
@@ -181,9 +188,8 @@ class ReviewService:
         if value is None:
             return None
         from datetime import datetime, timezone
-        return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat().replace(
-            '+00:00', 'Z'
-        )
+
+        return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat().replace('+00:00', 'Z')
 
     async def list(self, auth, *, state='pending', kind=None, limit=20, after=None):
         if auth.identity_kind == 'connector':
@@ -202,15 +208,17 @@ class ReviewService:
             items = [item for item in items if _sort_key(item) > cursor]
         page = items[:limit]
         next_cursor = (
-            _encode_cursor({
-                'version': CURSOR_VERSION,
-                'team_id': auth.team_id,
-                'subject': auth.subject,
-                'state': state,
-                'type': kind,
-                'prefix': list(prefix),
-                'after': list(_sort_key(page[-1])),
-            })
+            _encode_cursor(
+                {
+                    'version': CURSOR_VERSION,
+                    'team_id': auth.team_id,
+                    'subject': auth.subject,
+                    'state': state,
+                    'type': kind,
+                    'prefix': list(prefix),
+                    'after': list(_sort_key(page[-1])),
+                }
+            )
             if len(items) > limit
             else None
         )
@@ -246,6 +254,7 @@ class ReviewService:
             match = next((item for item in items if item['item_id'] == item_id), None)
         if match is None:
             from workbench_agent.application.errors import not_found
+
             raise not_found()
         detail = {}
         if match.get('interrupt'):

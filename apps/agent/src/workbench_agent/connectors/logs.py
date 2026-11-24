@@ -1,6 +1,7 @@
 from workbench_agent.connectors.read import ReadConnector
 
-TOOL_NAME='SRE-Log-Query'
+TOOL_NAME = 'SRE-Log-Query'
+
 
 class LogsConnector(ReadConnector):
-    tool_name=TOOL_NAME
+    tool_name = TOOL_NAME

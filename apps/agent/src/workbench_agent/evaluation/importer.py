@@ -114,8 +114,7 @@ async def import_seed(
             revision = entry['published_version']
         version = await api.get_kb_version(entry_id, int(revision))
         source_ids = [
-            f"kb:{entry_id}@{revision}#{chunk['chunk_id']}"
-            for chunk in version.get('chunks', [])
+            f'kb:{entry_id}@{revision}#{chunk["chunk_id"]}' for chunk in version.get('chunks', [])
         ]
         entry_refresh = await api.get_kb_entry(entry_id)
         if entry_refresh.get('status') != 'published':

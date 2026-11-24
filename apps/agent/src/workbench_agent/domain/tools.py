@@ -1,4 +1,5 @@
 """Frozen tool contracts. Bindings refer only to deployment-owned connections."""
+
 from enum import StrEnum
 from typing import Any
 from pydantic import Field
@@ -7,48 +8,53 @@ from workbench_agent.tools.scope_mapping import ArgumentMapping
 
 
 class WebSearchSource(FrozenModel):
-    title:str=Field(min_length=1,max_length=512)
-    url:str=Field(min_length=1,max_length=2048)
-    snippet:str=Field(min_length=1,max_length=4000)
-    retrieved_at:str
-    published_at:str|None=None
+    title: str = Field(min_length=1, max_length=512)
+    url: str = Field(min_length=1, max_length=2048)
+    snippet: str = Field(min_length=1, max_length=4000)
+    retrieved_at: str
+    published_at: str | None = None
+
 
 class ToolStatus(StrEnum):
-    OK='ok'
-    EMPTY='empty'
-    UNAVAILABLE='unavailable'
-    DENIED='denied'
-    INVALID_INPUT='invalid_input'
-    TIMEOUT='timeout'
-    UNKNOWN='unknown'
+    OK = 'ok'
+    EMPTY = 'empty'
+    UNAVAILABLE = 'unavailable'
+    DENIED = 'denied'
+    INVALID_INPUT = 'invalid_input'
+    TIMEOUT = 'timeout'
+    UNKNOWN = 'unknown'
+
 
 class ToolBinding(FrozenModel):
-    alias: str = Field(min_length=1,max_length=128)
-    provider: str = Field(min_length=1,max_length=128)
-    tool_name: str = Field(min_length=1,max_length=128)
-    server: str = Field(min_length=1,max_length=128)
-    credential_scope: str = Field(min_length=1,max_length=128)
-    permission: str = Field(min_length=1,max_length=128)
-    input_schema: dict[str,Any]
-    output_schema: dict[str,Any] | None = None
+    alias: str = Field(min_length=1, max_length=128)
+    provider: str = Field(min_length=1, max_length=128)
+    tool_name: str = Field(min_length=1, max_length=128)
+    server: str = Field(min_length=1, max_length=128)
+    credential_scope: str = Field(min_length=1, max_length=128)
+    permission: str = Field(min_length=1, max_length=128)
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any] | None = None
     read_only: bool = True
-    timeout_seconds: float = Field(default=10,gt=0,le=60)
-    max_output_bytes: int = Field(default=65536,ge=64,le=1048576)
+    timeout_seconds: float = Field(default=10, gt=0, le=60)
+    max_output_bytes: int = Field(default=65536, ge=64, le=1048576)
     argument_mapping: ArgumentMapping | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
     )
 
+
 class ToolError(FrozenModel):
     code: str
     retryable: bool = False
 
+
 class ActionProposal(FrozenModel):
     binding_ref: VersionRef
     scope_id: str
-    args: dict[str,Any]
+    args: dict[str, Any]
     args_hash: str
     status: str = 'proposed'
+
 
 class ToolResult(FrozenModel):
     status: ToolStatus

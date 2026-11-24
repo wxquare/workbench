@@ -44,9 +44,7 @@ def test_seed_manifest_rejects_invalid_content_and_wildcards():
 
 def test_seed_manifest_allows_empty_template_only_without_seeds():
     with pytest.raises(ValueError):
-        validate_seed_manifest(
-            {'schema_version': 'knowledge-seed-v1', 'seeds': []}
-        )
+        validate_seed_manifest({'schema_version': 'knowledge-seed-v1', 'seeds': []})
 
 
 def test_dataset_template_is_empty_but_labels_are_validated():

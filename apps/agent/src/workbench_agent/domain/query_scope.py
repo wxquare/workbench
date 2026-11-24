@@ -3,6 +3,7 @@
 These values are not themselves persistence or authorization. A caller must
 persist the result through ContextResolver in a guarded transaction.
 """
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -12,9 +13,15 @@ def validate_qa_scope(values):
     keys = {'service', 'environment', 'region', 'start_at', 'end_at'}
     if not isinstance(values, dict) or set(values) != keys:
         raise ValueError('invalid scope')
-    if any(not isinstance(value, str) or not value.strip() or value != value.strip()
-           or len(value) > 128 for value in values.values()):
+    if any(
+        not isinstance(value, str)
+        or not value.strip()
+        or value != value.strip()
+        or len(value) > 128
+        for value in values.values()
+    ):
         raise ValueError('invalid scope')
+
     def parse(raw):
         try:
             return datetime.strptime(raw, '%Y-%m-%d %H:%M:%S')
@@ -23,6 +30,7 @@ def validate_qa_scope(values):
             if result.tzinfo is None or result.utcoffset() is None:
                 raise ValueError('timezone required')
             return result
+
     try:
         start, end = parse(values['start_at']), parse(values['end_at'])
         seconds = (end - start).total_seconds()
@@ -98,7 +106,9 @@ def resolve_alert_scope(alert: AlertScopeInput, *, authoritative_region: str | N
     if authoritative_region is not None:
         region = _field(authoritative_region)
     else:
-        candidates = {value for value in (alert.body_region, alert.link_region) if value is not None}
+        candidates = {
+            value for value in (alert.body_region, alert.link_region) if value is not None
+        }
         if len(candidates) != 1:
             return ScopeResolution(None, ('region',))
         region = candidates.pop()
@@ -106,8 +116,9 @@ def resolve_alert_scope(alert: AlertScopeInput, *, authoritative_region: str | N
         start = anchor - timedelta(seconds=alert.window_seconds)
     except OverflowError:
         raise ValueError('invalid scope window') from None
-    return ScopeResolution(AlertScope(alert.team, alert.service, alert.environment, region,
-                                      anchor, start, anchor))
+    return ScopeResolution(
+        AlertScope(alert.team, alert.service, alert.environment, region, anchor, start, anchor)
+    )
 
 
 def revise_alert_scope(alert: AlertScopeInput, values: dict):

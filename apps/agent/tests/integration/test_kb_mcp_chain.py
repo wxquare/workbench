@@ -8,6 +8,7 @@ async def test_mcp_chain_returns_exact_kb_version(kb_chain):
     assert match['source_uri'] is None
     assert result['evidence_refs']
 
+
 async def test_mcp_chain_empty_is_not_an_error(kb_chain):
     result = await kb_chain.search('不存在的知识')
     assert result['status'] == 'empty'
@@ -44,7 +45,8 @@ async def test_mcp_chain_preserves_allowed_public_url(kb_chain):
     result = await kb_chain.search('扣减失败')
     assert result['status'] == 'ok'
     assert result['data']['matches'][0]['source_uri'].startswith(
-        'https://kb.example.test/app/knowledge/')
+        'https://kb.example.test/app/knowledge/'
+    )
 
 
 async def test_mcp_chain_survives_agent_restart(kb_chain):

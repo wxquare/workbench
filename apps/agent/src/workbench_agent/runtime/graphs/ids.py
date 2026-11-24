@@ -1,4 +1,5 @@
 """Stable identifiers for the graph implementations installed by the worker."""
+
 from enum import StrEnum
 
 

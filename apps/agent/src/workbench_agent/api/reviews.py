@@ -1,4 +1,5 @@
 """Authorized human review inbox."""
+
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -24,7 +25,8 @@ async def list_reviews(
         'action_approval',
         'action_reapproval',
         'action_reconcile',
-    ] | None = None,
+    ]
+    | None = None,
     state: Literal['pending', 'expired'] = 'pending',
     limit: int = Query(default=20, ge=1, le=100),
     after: str | None = None,

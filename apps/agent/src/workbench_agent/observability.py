@@ -1,4 +1,5 @@
 """Bounded, opt-in telemetry; business state never depends on the exporter."""
+
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -19,9 +20,28 @@ from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 _context = ContextVar('dod_log_context', default={})
-_LOG_FIELDS = frozenset({'request_id', 'team_id', 'agent_id', 'thread_id', 'run_id', 'job_id',
-    'run_epoch', 'invocation_id', 'attempt', 'status', 'duration_ms', 'queue_wait_ms',
-    'model_id', 'role', 'input_tokens', 'output_tokens', 'graph_id', 'error_code'})
+_LOG_FIELDS = frozenset(
+    {
+        'request_id',
+        'team_id',
+        'agent_id',
+        'thread_id',
+        'run_id',
+        'job_id',
+        'run_epoch',
+        'invocation_id',
+        'attempt',
+        'status',
+        'duration_ms',
+        'queue_wait_ms',
+        'model_id',
+        'role',
+        'input_tokens',
+        'output_tokens',
+        'graph_id',
+        'error_code',
+    }
+)
 _EVENT = re.compile(r'^[a-z][a-z0-9_.-]{0,79}$')
 
 
@@ -30,14 +50,18 @@ def _redact_text(content, *, json_encoded=False):
         if re.search(r'(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)', key, re.I) and len(secret) >= 4:
             content = content.replace(secret, '[REDACTED]')
             if json_encoded:
-                content = content.replace(json.dumps(secret, ensure_ascii=False)[1:-1], '[REDACTED]')
+                content = content.replace(
+                    json.dumps(secret, ensure_ascii=False)[1:-1], '[REDACTED]'
+                )
     content = re.sub(r'(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*', 'Bearer [REDACTED]', content)
     return re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '[REDACTED_EMAIL]', content)
 
 
 @contextmanager
 def bind_context(**fields):
-    accepted = {key: value for key, value in fields.items() if key in _LOG_FIELDS and value is not None}
+    accepted = {
+        key: value for key, value in fields.items() if key in _LOG_FIELDS and value is not None
+    }
     token = _context.set({**_context.get(), **accepted})
     try:
         yield
@@ -54,11 +78,20 @@ class JsonFormatter(logging.Formatter):
         event = getattr(record, 'event', 'log.record')
         if not isinstance(event, str) or not _EVENT.fullmatch(event):
             event = 'log.record'
-        payload = {'timestamp': datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
-            'level': record.levelname, 'service': self.service, 'environment': self.environment,
-            'event': event, 'message': event}
+        payload = {
+            'timestamp': datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
+            'level': record.levelname,
+            'service': self.service,
+            'environment': self.environment,
+            'event': event,
+            'message': event,
+        }
         for key, value in {**_context.get(), **record.__dict__}.items():
-            if key in _LOG_FIELDS and isinstance(value, (int, float, str)) and not isinstance(value, bool):
+            if (
+                key in _LOG_FIELDS
+                and isinstance(value, (int, float, str))
+                and not isinstance(value, bool)
+            ):
                 payload[key] = _redact_text(value)[:512] if isinstance(value, str) else value
         span_context = trace.get_current_span().get_span_context()
         if span_context.is_valid:
@@ -66,7 +99,10 @@ class JsonFormatter(logging.Formatter):
             payload['span_id'] = f'{span_context.span_id:016x}'
         encoded = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
         if len(encoded.encode('utf-8')) > 32768:
-            payload = {key: payload[key] for key in ('timestamp', 'level', 'service', 'environment', 'event')}
+            payload = {
+                key: payload[key]
+                for key in ('timestamp', 'level', 'service', 'environment', 'event')
+            }
             payload['truncated'] = True
             encoded = json.dumps(payload, separators=(',', ':'))
         return encoded
@@ -90,23 +126,48 @@ class Telemetry:
         if not settings.tracing.enabled:
             return
         self.provider = TracerProvider(
-            resource=Resource.create({'service.name': f'dod-{service}', 'deployment.environment.name': environment}),
+            resource=Resource.create(
+                {'service.name': f'dod-{service}', 'deployment.environment.name': environment}
+            ),
             sampler=ParentBased(TraceIdRatioBased(settings.tracing.sample_ratio)),
-            shutdown_on_exit=False)
+            shutdown_on_exit=False,
+        )
         if processor is not None:
             self.provider.add_span_processor(processor)
         if settings.langfuse.enabled:
             from workbench_agent.settings import resolve_env_reference
             from langfuse import Langfuse
+
             base_url = resolve_env_reference(settings.langfuse.base_url_ref)
             parsed = urlsplit(base_url)
-            if (parsed.scheme != 'https' and not (environment != 'production' and parsed.scheme == 'http'
-                    and parsed.hostname in ('localhost', '127.0.0.1', '::1'))) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            if (
+                (
+                    parsed.scheme != 'https'
+                    and not (
+                        environment != 'production'
+                        and parsed.scheme == 'http'
+                        and parsed.hostname in ('localhost', '127.0.0.1', '::1')
+                    )
+                )
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+            ):
                 raise ValueError('invalid Langfuse endpoint')
-            self.client = Langfuse(base_url=base_url, public_key=resolve_env_reference(settings.langfuse.public_key_ref),
-                secret_key=resolve_env_reference(settings.langfuse.secret_key_ref), environment=environment,
-                tracer_provider=self.provider, timeout=5,
-                should_export_span=lambda span: bool(span.instrumentation_scope and span.instrumentation_scope.name == 'workbench.observability'))
+            self.client = Langfuse(
+                base_url=base_url,
+                public_key=resolve_env_reference(settings.langfuse.public_key_ref),
+                secret_key=resolve_env_reference(settings.langfuse.secret_key_ref),
+                environment=environment,
+                tracer_provider=self.provider,
+                timeout=5,
+                should_export_span=lambda span: bool(
+                    span.instrumentation_scope
+                    and span.instrumentation_scope.name == 'workbench.observability'
+                ),
+            )
         self.tracer = self.provider.get_tracer('workbench.observability')
 
     @contextmanager
@@ -117,8 +178,13 @@ class Telemetry:
         parent = Context() if root else None
         if traceparent:
             parent = TraceContextTextMapPropagator().extract({'traceparent': traceparent})
-        with self.tracer.start_as_current_span(name, context=parent, record_exception=False,
-                set_status_on_exception=False, attributes=attributes or {}) as span:
+        with self.tracer.start_as_current_span(
+            name,
+            context=parent,
+            record_exception=False,
+            set_status_on_exception=False,
+            attributes=attributes or {},
+        ) as span:
             yield span
 
     @staticmethod
@@ -149,8 +215,9 @@ async def shutdown_telemetry(telemetry, *, timeout=5):
         try:
             telemetry.shutdown()
         except Exception:
-            logging.getLogger('workbench.telemetry').warning('telemetry shutdown failed',
-                extra={'event': 'telemetry.shutdown_failed'})
+            logging.getLogger('workbench.telemetry').warning(
+                'telemetry shutdown failed', extra={'event': 'telemetry.shutdown_failed'}
+            )
         finally:
             done.set()
 
@@ -159,8 +226,9 @@ async def shutdown_telemetry(telemetry, *, timeout=5):
     while not done.is_set():
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
-            logging.getLogger('workbench.telemetry').warning('telemetry shutdown timed out',
-                extra={'event': 'telemetry.shutdown_timeout'})
+            logging.getLogger('workbench.telemetry').warning(
+                'telemetry shutdown timed out', extra={'event': 'telemetry.shutdown_timeout'}
+            )
             return
         await asyncio.sleep(min(0.05, remaining))
 
@@ -190,9 +258,16 @@ def observe_run_admission(function):
                 if span is not None:
                     span.set_attribute('workbench.run_id', str(result.run_id))
                     span.set_attribute('session.id', str(result.thread_id))
-                logging.getLogger('workbench.runs').info('run.accepted', extra={'event': 'run.accepted',
-                    'run_id': str(result.run_id), 'thread_id': str(result.thread_id)})
+                logging.getLogger('workbench.runs').info(
+                    'run.accepted',
+                    extra={
+                        'event': 'run.accepted',
+                        'run_id': str(result.run_id),
+                        'thread_id': str(result.thread_id),
+                    },
+                )
                 return result
+
     return wrapped
 
 
@@ -213,6 +288,7 @@ class RequestObservabilityMiddleware:
             await send(message)
 
         import time
+
         started = time.monotonic()
         with bind_context(request_id=request_id):
             with span_or_none(self.backend, 'api.request', root=True) as span:
@@ -221,5 +297,11 @@ class RequestObservabilityMiddleware:
                 finally:
                     if span is not None:
                         span.set_attribute('http.response.status_code', status)
-                    logging.getLogger('workbench.api').info('request.completed', extra={'event': 'request.completed',
-                        'status': str(status), 'duration_ms': int((time.monotonic() - started) * 1000)})
+                    logging.getLogger('workbench.api').info(
+                        'request.completed',
+                        extra={
+                            'event': 'request.completed',
+                            'status': str(status),
+                            'duration_ms': int((time.monotonic() - started) * 1000),
+                        },
+                    )

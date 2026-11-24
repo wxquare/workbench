@@ -1,6 +1,10 @@
 from typing import Protocol
 from workbench_agent.persistence.ports.checkpoints import CheckpointStorage
-from workbench_agent.persistence.ports.execution import ExecutionJobStore, ExecutionLeaseGuard, ExecutionEventStore
+from workbench_agent.persistence.ports.execution import (
+    ExecutionJobStore,
+    ExecutionLeaseGuard,
+    ExecutionEventStore,
+)
 from workbench_agent.persistence.ports.runs import RunStore
 from workbench_agent.persistence.ports.configuration import ConfigurationStore
 from workbench_agent.persistence.ports.uow import UnitOfWork, StorageClock
@@ -16,6 +20,7 @@ from workbench_agent.persistence.ports.runner_cleanup import RunnerCleanupStore
 from workbench_agent.persistence.ports.knowledge import KnowledgeStore
 from workbench_agent.persistence.ports.statistics import StatisticsStore
 from workbench_agent.persistence.ports.reviews import ReviewStore
+
 
 class StorageBackend(Protocol):
     knowledge: KnowledgeStore
@@ -35,6 +40,7 @@ class StorageBackend(Protocol):
     clock: StorageClock
     admin_jobs: AdminJobStore
     capabilities: frozenset[str]
+
     def create_uow(self) -> UnitOfWork: ...
     async def health(self) -> bool: ...
     async def close(self) -> None: ...

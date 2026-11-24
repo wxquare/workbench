@@ -54,14 +54,22 @@ def mapping():
     return ArgumentMapping(
         fields=(
             FieldMapping(origin='model', source='query', target=('query',)),
-            FieldMapping(origin='query_scope', source='environment', target=('scope', 'environment')),
+            FieldMapping(
+                origin='query_scope', source='environment', target=('scope', 'environment')
+            ),
             FieldMapping(origin='query_scope', source='region', target=('scope', 'region')),
             FieldMapping(origin='query_scope', source='service', target=('scope', 'service')),
             FieldMapping(origin='grant', source='team', target=('scope', 'team')),
-            FieldMapping(origin='grant', source='sources.test_read_counter', target=('scope', 'source_id')),
+            FieldMapping(
+                origin='grant', source='sources.test_read_counter', target=('scope', 'source_id')
+            ),
             FieldMapping(origin='context', source='run_id', target=('context', 'run_id')),
-            FieldMapping(origin='context', source='invocation_id', target=('context', 'invocation_id')),
-            FieldMapping(origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')),
+            FieldMapping(
+                origin='context', source='invocation_id', target=('context', 'invocation_id')
+            ),
+            FieldMapping(
+                origin='context', source='query_scope_ref', target=('context', 'query_scope_ref')
+            ),
         ),
         model_input_schema={
             'type': 'object',
@@ -95,17 +103,19 @@ def policy_payload(value=None):
 
 
 def connection(platform, *, value=None):
-    return MCPConnectionBinding.model_validate({
-        'server': 'local',
-        'credential_scope': 'read',
-        'team_id': platform.auth.team_id,
-        'agent_id': platform.agent_id,
-        'endpoint': 'https://example.invalid/mcp',
-        'secret_ref': 'env://MCP_TEST',
-        'read_tools': ['test_read_counter'],
-        'mapping_policies': [policy_payload(value)],
-        'tool_conversation_allowed_tools': ['test_read_counter'],
-    })
+    return MCPConnectionBinding.model_validate(
+        {
+            'server': 'local',
+            'credential_scope': 'read',
+            'team_id': platform.auth.team_id,
+            'agent_id': platform.agent_id,
+            'endpoint': 'https://example.invalid/mcp',
+            'secret_ref': 'env://MCP_TEST',
+            'read_tools': ['test_read_counter'],
+            'mapping_policies': [policy_payload(value)],
+            'tool_conversation_allowed_tools': ['test_read_counter'],
+        }
+    )
 
 
 def binding(value=None):
@@ -145,9 +155,7 @@ def test_configured_policy_normalizes_mapping_metadata_for_runtime(platform):
     )
     rule = connection_policy._bindings()[0]
 
-    assert rule.mapping_policies == (
-        {**policy_payload(), 'schema_hash': None},
-    )
+    assert rule.mapping_policies == ({**policy_payload(), 'schema_hash': None},)
     assert rule.tool_conversation_allowed_tools == frozenset({'test_read_counter'})
 
 
@@ -165,13 +173,18 @@ async def publish(platform, value):
 
 @pytest.mark.asyncio
 async def test_registry_rejects_mapping_without_matching_deployment_policy(platform):
-    changed = mapping().model_copy(update={
-        'fields': (*mapping().fields[:-1], FieldMapping(
-            origin='context',
-            source='run_id',
-            target=('context', 'query_scope_ref'),
-        )),
-    })
+    changed = mapping().model_copy(
+        update={
+            'fields': (
+                *mapping().fields[:-1],
+                FieldMapping(
+                    origin='context',
+                    source='run_id',
+                    target=('context', 'query_scope_ref'),
+                ),
+            ),
+        }
+    )
     with pytest.raises(DomainError) as error:
         await publish(platform, binding(changed))
     assert error.value.code == 'TOOL_MAPPING_DENIED'
@@ -193,6 +206,7 @@ async def test_profile_rejects_mapped_tool_when_deployment_policy_is_revoked(pla
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     platform.backend._mcp_connections = ()
     from workbench_agent.application.profiles import ProfileService
+
     service = ProfileService(platform.backend)
     with pytest.raises(DomainError) as error:
         await service.save_draft(
@@ -249,14 +263,17 @@ async def test_configuration_policy_adapter_accepts_only_allowlisted_mapped_tool
     from workbench_agent.tools.mcp import configured_adapter
 
     data = connection(platform).model_dump(mode='json')
-    settings = Settings.model_validate({
-        'asset_root': str(platform.settings.asset_root),
-        'storage': {
-            'database_url': platform.settings.storage.database_url.get_secret_value(),
-            'persistent_root': str(platform.settings.storage.persistent_root),
-        },
-        'service': {'mcp_connections': [data]},
-    })
+    settings = Settings.model_validate(
+        {
+            'asset_root': str(platform.settings.asset_root),
+            'storage': {
+                'database_url': platform.settings.storage.database_url.get_secret_value(),
+                'persistent_root': str(platform.settings.storage.persistent_root),
+            },
+            'service': {'mcp_connections': [data]},
+        }
+    )
+
     class Secrets:
         def resolve(self, ref):
             return 'fictional-secret'

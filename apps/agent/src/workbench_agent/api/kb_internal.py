@@ -1,4 +1,5 @@
 """Read-only service-to-service knowledge query endpoint."""
+
 import json
 from fastapi import APIRouter, Request
 
@@ -23,5 +24,7 @@ async def query(request: Request):
         raise DomainError('KB_INVALID_CONTENT', 422) from None
     scope, query_text, _scene, limit = normalize_query(body)
     authorized = access.authorize(request.headers.get('authorization'), scope)
-    hits = await KnowledgeSearch(request.app.state.backend).search(authorized, query_text, limit=limit + 1)
+    hits = await KnowledgeSearch(request.app.state.backend).search(
+        authorized, query_text, limit=limit + 1
+    )
     return knowledge_data(hits, public_base_url=access.settings.public_base_url, limit=limit)

@@ -85,32 +85,47 @@ def test_score_and_compare_offline_reports(tmp_path):
     experiment.mkdir()
     rows = []
     for item in dataset()['cases']:
-        rows.append({
-            'case_id': item['id'],
-            'repeat': 0,
-            'transport_status': 'completed',
-            'run_status': 'succeeded',
-            'outcome': {
-                'summary': 'fact retry' if item['answerable'] else 'Insufficient evidence.',
-                'knowledge_answer': {'claims': [
-                    {'text': 'fact retry', 'citations': [{
-                        'evidence_ref': 'ev',
-                        'source_id': 'kb:entry@1#chunk',
-                        'quote': 'fact retry',
-                    }]}
-                ]} if item['answerable'] else [],
-            },
-            'evidence': [{'evidence_id': 'ev', 'content': {'content': 'fact retry'}}],
-            'usage': {'amount_micros': 0, 'currency': 'USD', 'cost_pending': False},
-            'reviewed_unanswerable': not item['answerable'],
-        })
-    (experiment / 'results.jsonl').write_text(
-        ''.join(json.dumps(row) + '\n' for row in rows)
-    )
+        rows.append(
+            {
+                'case_id': item['id'],
+                'repeat': 0,
+                'transport_status': 'completed',
+                'run_status': 'succeeded',
+                'outcome': {
+                    'summary': 'fact retry' if item['answerable'] else 'Insufficient evidence.',
+                    'knowledge_answer': {
+                        'claims': [
+                            {
+                                'text': 'fact retry',
+                                'citations': [
+                                    {
+                                        'evidence_ref': 'ev',
+                                        'source_id': 'kb:entry@1#chunk',
+                                        'quote': 'fact retry',
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                    if item['answerable']
+                    else [],
+                },
+                'evidence': [{'evidence_id': 'ev', 'content': {'content': 'fact retry'}}],
+                'usage': {'amount_micros': 0, 'currency': 'USD', 'cost_pending': False},
+                'reviewed_unanswerable': not item['answerable'],
+            }
+        )
+    (experiment / 'results.jsonl').write_text(''.join(json.dumps(row) + '\n' for row in rows))
     report = tmp_path / 'report.json'
     result = run_cli(
-        'eval', 'score', '--experiment', experiment,
-        '--dataset', dataset_path, '--output', report,
+        'eval',
+        'score',
+        '--experiment',
+        experiment,
+        '--dataset',
+        dataset_path,
+        '--output',
+        report,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     input_data = json.loads(report.read_text())
@@ -121,9 +136,16 @@ def test_score_and_compare_offline_reports(tmp_path):
     comparison = tmp_path / 'comparison.json'
     policy = Path(__file__).parents[4] / 'evaluation/knowledge/regression-policy.json'
     result = run_cli(
-        'eval', 'compare', '--baseline', second,
-        '--candidate', second, '--policy', policy,
-        '--output', comparison,
+        'eval',
+        'compare',
+        '--baseline',
+        second,
+        '--candidate',
+        second,
+        '--policy',
+        policy,
+        '--output',
+        comparison,
     )
     assert result.returncode == 0
     assert json.loads(comparison.read_text())['status'] == 'passed'
@@ -143,19 +165,24 @@ def test_tool_conversation_scoring_uses_its_own_dataset_contract(tmp_path):
         '以下回答基于所列工具返回的结果，未经独立校验\n\n'
         'answer\n\n工具依据：\n- knowledge.search / call-1 / ok'
     )
-    (experiment / 'results.jsonl').write_text(json.dumps({
-        'case_id': 'tool-rule',
-        'repeat': 0,
-        'transport_status': 'completed',
-        'run_status': 'succeeded',
-        'outcome': {
-            'completed': True,
-            'summary': summary,
-            'evidence_refs': ['ev-1'],
-            'unresolved_items': [],
-        },
-        'evidence': [{'evidence_id': 'ev-1', 'content': {'status': 'ok'}}],
-    }) + '\n')
+    (experiment / 'results.jsonl').write_text(
+        json.dumps(
+            {
+                'case_id': 'tool-rule',
+                'repeat': 0,
+                'transport_status': 'completed',
+                'run_status': 'succeeded',
+                'outcome': {
+                    'completed': True,
+                    'summary': summary,
+                    'evidence_refs': ['ev-1'],
+                    'unresolved_items': [],
+                },
+                'evidence': [{'evidence_id': 'ev-1', 'content': {'status': 'ok'}}],
+            }
+        )
+        + '\n'
+    )
     report = tmp_path / 'tool-report.json'
 
     result = run_cli(

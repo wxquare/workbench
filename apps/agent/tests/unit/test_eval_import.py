@@ -36,21 +36,40 @@ async def test_import_is_idempotent_and_saves_exact_chunk_ids(tmp_path):
         calls.append((request.method, request.url.path, request.headers.get('idempotency-key')))
         if request.method == 'POST' and request.url.path == '/v1/kb/entries':
             state['created'] = True
-            return httpx.Response(201, json={'entry_id': 'entry-1', 'revision': 0, 'title': 'Stock policy'})
+            return httpx.Response(
+                201, json={'entry_id': 'entry-1', 'revision': 0, 'title': 'Stock policy'}
+            )
         if request.method == 'GET' and request.url.path == '/v1/kb/entries/entry-1':
-            return httpx.Response(200, json={'entry_id': 'entry-1', 'status': 'published' if state['published'] else 'draft',
-                'revision': 1 if state['published'] else 0,
-                'published_version': 1 if state['published'] else None,
-                'draft': manifest()['seeds'][0]['draft']})
+            return httpx.Response(
+                200,
+                json={
+                    'entry_id': 'entry-1',
+                    'status': 'published' if state['published'] else 'draft',
+                    'revision': 1 if state['published'] else 0,
+                    'published_version': 1 if state['published'] else None,
+                    'draft': manifest()['seeds'][0]['draft'],
+                },
+            )
         if request.method == 'POST' and request.url.path.endswith('/publish'):
             state['published'] = True
-            return httpx.Response(201, json={'entry_id': 'entry-1', 'version': 1, 'content_hash': 'a' * 64})
+            return httpx.Response(
+                201, json={'entry_id': 'entry-1', 'version': 1, 'content_hash': 'a' * 64}
+            )
         if request.method == 'GET' and request.url.path.endswith('/versions/1'):
-            return httpx.Response(200, json={'entry_id': 'entry-1', 'version': 1, 'content_hash': 'a' * 64,
-                'chunks': [{'chunk_id': 'chunk-1'}, {'chunk_id': 'chunk-2'}]})
+            return httpx.Response(
+                200,
+                json={
+                    'entry_id': 'entry-1',
+                    'version': 1,
+                    'content_hash': 'a' * 64,
+                    'chunks': [{'chunk_id': 'chunk-1'}, {'chunk_id': 'chunk-2'}],
+                },
+            )
         raise AssertionError((request.method, request.url.path))
 
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000')
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000'
+    )
     api = EvaluationAPI(client, token='test-token')
     state_path = tmp_path / 'state.json'
     first = await import_seed(api, manifest(), namespace='baseline', state_path=state_path)
@@ -69,14 +88,20 @@ async def test_import_is_idempotent_and_saves_exact_chunk_ids(tmp_path):
 async def test_changed_seed_is_an_explicit_conflict(tmp_path):
     async def handler(request):
         if request.method == 'POST':
-            return httpx.Response(201, json={'entry_id': 'entry-1', 'revision': 0, 'title': 'Stock policy'})
+            return httpx.Response(
+                201, json={'entry_id': 'entry-1', 'revision': 0, 'title': 'Stock policy'}
+            )
         if request.url.path.endswith('/publish'):
             return httpx.Response(201, json={'version': 1})
         if request.url.path.endswith('/versions/1'):
-            return httpx.Response(200, json={'content_hash': 'a' * 64, 'chunks': [{'chunk_id': 'c'}]})
+            return httpx.Response(
+                200, json={'content_hash': 'a' * 64, 'chunks': [{'chunk_id': 'c'}]}
+            )
         return httpx.Response(200, json={'status': 'published', 'published_version': 1})
 
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000')
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000'
+    )
     api = EvaluationAPI(client, token='test-token')
     state_path = tmp_path / 'state.json'
     await import_seed(api, manifest(), namespace='baseline', state_path=state_path)

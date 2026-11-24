@@ -21,25 +21,30 @@ def test_knowledge_search_accepts_complex_published_schema_via_scalar_projection
 
 def test_unknown_nested_schema_is_rejected_for_model_projection():
     with pytest.raises(ValueError):
-        project_model_schema('unknown', {
-            'type': 'object',
-            'additionalProperties': False,
-            'properties': {
-                'nested': {'type': 'object', 'properties': {}},
+        project_model_schema(
+            'unknown',
+            {
+                'type': 'object',
+                'additionalProperties': False,
+                'properties': {
+                    'nested': {'type': 'object', 'properties': {}},
+                },
             },
-        })
+        )
 
 
 def test_closed_scalar_schema_is_accepted():
-    validate_model_schema({
-        'type': 'object',
-        'additionalProperties': False,
-        'properties': {
-            'query': {'type': 'string'},
-            'limit': {'type': 'integer'},
-        },
-        'required': ['query'],
-    })
+    validate_model_schema(
+        {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'query': {'type': 'string'},
+                'limit': {'type': 'integer'},
+            },
+            'required': ['query'],
+        }
+    )
 
 
 def test_knowledge_expert_advertises_and_enforces_query_scene_enum():
@@ -67,8 +72,11 @@ def test_knowledge_expert_advertises_and_enforces_query_scene_enum():
 def test_knowledge_projection_preserves_upstream_scene_restriction():
     from workbench_agent.runtime.experts.knowledge import _schema_model
 
-    published = {'type': 'object', 'properties': {
-        'scene': {'type': 'string', 'enum': ['qa']},
-    }}
+    published = {
+        'type': 'object',
+        'properties': {
+            'scene': {'type': 'string', 'enum': ['qa']},
+        },
+    }
     schema = _schema_model('QAOnlySearch', project_model_schema('knowledge_search', published))
     assert schema.model_json_schema()['properties']['scene'].get('const') == 'qa'

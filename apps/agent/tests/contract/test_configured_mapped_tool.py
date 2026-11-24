@@ -67,10 +67,12 @@ class Session:
 
     async def list_tools(self):
         return SimpleNamespace(
-            tools=[{
-                'name': 'test_read_counter',
-                'inputSchema': FULL_SCHEMA,
-            }],
+            tools=[
+                {
+                    'name': 'test_read_counter',
+                    'inputSchema': FULL_SCHEMA,
+                }
+            ],
             nextCursor=None,
         )
 
@@ -88,18 +90,20 @@ async def setup(platform, client):
     deployment = connection(platform)
     adapter = MCPAdapter(
         lambda *_: Session(seen),
-        ConnectionPolicy([
-            TrustedConnection(
-                platform.auth.team_id,
-                platform.agent_id,
-                'local',
-                'read',
-                frozenset({'test_read_counter'}),
-                (grant(),),
-                (deployment.mapping_policies[0].model_dump(mode='json'),),
-                frozenset({'test_read_counter'}),
-            )
-        ]),
+        ConnectionPolicy(
+            [
+                TrustedConnection(
+                    platform.auth.team_id,
+                    platform.agent_id,
+                    'local',
+                    'read',
+                    frozenset({'test_read_counter'}),
+                    (grant(),),
+                    (deployment.mapping_policies[0].model_dump(mode='json'),),
+                    frozenset({'test_read_counter'}),
+                )
+            ]
+        ),
     )
     registry = ToolRegistry(
         platform.backend,
@@ -197,27 +201,29 @@ class MappedModel:
             return AIMessage(content='counter=7', usage_metadata=usage)
         return AIMessage(
             content='',
-            tool_calls=[{
-                'name': 'counter_read',
-                'args': {'query': 'current'},
-                'id': 'configured-call',
-                'type': 'tool_call',
-            }],
+            tool_calls=[
+                {
+                    'name': 'counter_read',
+                    'args': {'query': 'current'},
+                    'id': 'configured-call',
+                    'type': 'tool_call',
+                }
+            ],
             usage_metadata=usage,
         )
 
 
 @pytest.mark.asyncio
-async def test_unlisted_tool_name_runs_from_configuration_and_evidence_read(
-    platform, client
-):
-    permissions = DeploymentToolPermissions(lambda: {
-        'users': {platform.auth.subject: ['counter.read']},
-        'teams': {platform.auth.team_id: ['counter.read']},
-        'agents': {platform.agent_id: ['counter.read']},
-        'skills': {'__none__': ['counter.read']},
-        'experts': {'knowledge': ['counter.read']},
-    })
+async def test_unlisted_tool_name_runs_from_configuration_and_evidence_read(platform, client):
+    permissions = DeploymentToolPermissions(
+        lambda: {
+            'users': {platform.auth.subject: ['counter.read']},
+            'teams': {platform.auth.team_id: ['counter.read']},
+            'agents': {platform.agent_id: ['counter.read']},
+            'skills': {'__none__': ['counter.read']},
+            'experts': {'knowledge': ['counter.read']},
+        }
+    )
     adapter, seen, run_id = await setup(platform, client)
 
     class Factory:
@@ -245,9 +251,7 @@ async def test_unlisted_tool_name_runs_from_configuration_and_evidence_read(
     )
 
     assert await worker.run_once() == 'projected'
-    view = (
-        await RunService(platform.backend).get(platform.auth, run_id)
-    ).model_dump(mode='json')
+    view = (await RunService(platform.backend).get(platform.auth, run_id)).model_dump(mode='json')
     assert view['status'] == 'succeeded'
     assert 'counter=7' in view['outcome']['summary']
     assert len(seen) == 1

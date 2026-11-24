@@ -18,55 +18,63 @@ async def seed_run(platform, status, *, offset, completed=None, agent_id=None):
         context = await platform.contexts.resolve(
             platform.auth, agent_id or platform.agent_id, uow=uow
         )
-        await uow.execute(insert(schema.threads).values(
-            team_id=platform.auth.team_id,
-            thread_id=thread_id,
-            agent_id=agent_id or platform.agent_id,
-            active_run_id=None,
-            revision=0,
-            created_at=now,
-            updated_at=now,
-        ))
-        await uow.execute(insert(schema.runs).values(
-            team_id=platform.auth.team_id,
-            run_id=run_id,
-            thread_id=thread_id,
-            agent_id=agent_id or platform.agent_id,
-            status=status,
-            phase=None,
-            runtime_profile_id=context.agent_profile.resource_id,
-            versions='{}',
-            budgets='{}',
-            revision=1,
-            last_event_seq=0,
-            wall_deadline_at=now + 10_000,
-            created_at=now,
-            updated_at=now,
-            started_at=None,
-            active_elapsed_ms=100,
-        ))
-        message_id = str(uuid4())
-        await uow.execute(insert(schema.messages).values(
-            team_id=platform.auth.team_id,
-            message_id=message_id,
-            thread_id=thread_id,
-            run_id=run_id,
-            role='assistant',
-            content_ref='{}',
-            created_at=now,
-            updated_at=now,
-        ))
-        if completed is not None:
-            await uow.execute(insert(schema.run_outcomes).values(
+        await uow.execute(
+            insert(schema.threads).values(
+                team_id=platform.auth.team_id,
+                thread_id=thread_id,
+                agent_id=agent_id or platform.agent_id,
+                active_run_id=None,
+                revision=0,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await uow.execute(
+            insert(schema.runs).values(
                 team_id=platform.auth.team_id,
                 run_id=run_id,
-                result_id=str(uuid4()),
-                digest='a' * 64,
-                payload=json.dumps({'completed': completed}),
-                message_id=message_id,
-                response=None,
+                thread_id=thread_id,
+                agent_id=agent_id or platform.agent_id,
+                status=status,
+                phase=None,
+                runtime_profile_id=context.agent_profile.resource_id,
+                versions='{}',
+                budgets='{}',
+                revision=1,
+                last_event_seq=0,
+                wall_deadline_at=now + 10_000,
                 created_at=now,
-            ))
+                updated_at=now,
+                started_at=None,
+                active_elapsed_ms=100,
+            )
+        )
+        message_id = str(uuid4())
+        await uow.execute(
+            insert(schema.messages).values(
+                team_id=platform.auth.team_id,
+                message_id=message_id,
+                thread_id=thread_id,
+                run_id=run_id,
+                role='assistant',
+                content_ref='{}',
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        if completed is not None:
+            await uow.execute(
+                insert(schema.run_outcomes).values(
+                    team_id=platform.auth.team_id,
+                    run_id=run_id,
+                    result_id=str(uuid4()),
+                    digest='a' * 64,
+                    payload=json.dumps({'completed': completed}),
+                    message_id=message_id,
+                    response=None,
+                    created_at=now,
+                )
+            )
     return run_id
 
 
@@ -90,13 +98,11 @@ async def test_statistics_uses_terminal_denominator_and_current_agent_access(cli
 async def test_statistics_rejects_viewer_and_invalid_range(client, platform):
     from uuid import uuid4
     from sqlalchemy import update
+
     await platform.teams.set_member(
-        platform.auth, 'stat-viewer', 'viewer', 'active',
-        expected_revision=0, key=str(uuid4())
+        platform.auth, 'stat-viewer', 'viewer', 'active', expected_revision=0, key=str(uuid4())
     )
-    headers = {
-        'Authorization': f'Bearer development:{platform.auth.team_id}:stat-viewer'
-    }
+    headers = {'Authorization': f'Bearer development:{platform.auth.team_id}:stat-viewer'}
     denied = await client.get(
         '/v1/stats/summary',
         params={'start_at': START, 'end_at': END},

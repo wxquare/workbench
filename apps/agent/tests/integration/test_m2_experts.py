@@ -20,14 +20,25 @@ def test_expert_selection_is_bounded_and_rejects_unpublished_model_choices():
     assert select_experts('qa', {'knowledge'}) == ('knowledge',)
     assert select_experts('auto', {'knowledge'}, classifier_choice='code') == ()
     assert select_experts('auto', {'knowledge'}, classifier_choice='qa') == ()
-    assert select_experts('auto', {'knowledge'}, classifier_choice='qa', published_modes={'qa'}) == ('knowledge',)
+    assert select_experts(
+        'auto', {'knowledge'}, classifier_choice='qa', published_modes={'qa'}
+    ) == ('knowledge',)
     assert len(select_experts('rca', {'diagnosis', 'knowledge', 'code'})) <= 2
 
 
 def test_business_tool_schema_hides_scope_and_message_side_effect_fields():
     from workbench_agent.runtime.experts.diagnosis import model_tool_schema
-    full = {'type': 'object', 'properties': {'query': {'type': 'string'}, 'team': {'type': 'string'},
-        'env': {'type': 'string'}, 'session_key': {'type': 'string'}}, 'additionalProperties': False}
+
+    full = {
+        'type': 'object',
+        'properties': {
+            'query': {'type': 'string'},
+            'team': {'type': 'string'},
+            'env': {'type': 'string'},
+            'session_key': {'type': 'string'},
+        },
+        'additionalProperties': False,
+    }
     exposed = model_tool_schema('SRE-Log-Query', full)
     assert set(exposed['properties']) == {'query', 'limit'}
     assert exposed['required'] == ['query']

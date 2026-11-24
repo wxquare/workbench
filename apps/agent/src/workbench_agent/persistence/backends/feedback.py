@@ -1,4 +1,5 @@
 """Persistence adapter for append-only user feedback."""
+
 from sqlalchemy import insert, select
 from workbench_agent.persistence import schema
 
@@ -12,4 +13,6 @@ class SQLiteFeedbackStore:
         query = select(table).where(table.c.team_id == team_id, table.c.run_id == run_id)
         if after is not None:
             query = query.where(table.c.feedback_id > after)
-        return list((await uow.execute(query.order_by(table.c.feedback_id).limit(limit + 1))).mappings())
+        return list(
+            (await uow.execute(query.order_by(table.c.feedback_id).limit(limit + 1))).mappings()
+        )

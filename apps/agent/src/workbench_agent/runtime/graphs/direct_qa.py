@@ -1,4 +1,5 @@
 """Pinned, tool-free model answers, without a claim of external verification."""
+
 from typing import TypedDict
 from uuid import UUID, uuid5
 
@@ -33,31 +34,58 @@ def build_direct_qa(saver):
         text, error = None, 'MODEL_CAPABILITY_UNAVAILABLE'
         if factory is not None:
             try:
-                result = await factory(execution).invoke(execution.guard, 'summary', [
-                    SystemMessage(content=system_instruction(execution.claim.context)),
-                    HumanMessage(content=state['input_text']),
-                ], logical_call_id=str(uuid5(UUID(state['run_id']), f'{GraphId.CONVERSATION_SINGLE_TURN}:answer')))
+                result = await factory(execution).invoke(
+                    execution.guard,
+                    'summary',
+                    [
+                        SystemMessage(content=system_instruction(execution.claim.context)),
+                        HumanMessage(content=state['input_text']),
+                    ],
+                    logical_call_id=str(
+                        uuid5(UUID(state['run_id']), f'{GraphId.CONVERSATION_SINGLE_TURN}:answer')
+                    ),
+                )
                 if result.status == 'ok' and result.text and len(result.text) <= 65500:
                     text = result.text
                 else:
                     error = result.error_code or 'MODEL_OUTPUT_UNAVAILABLE'
             except DomainError as exc:
-                if exc.code not in ('BUDGET_EXCEEDED', 'SUMMARY_RESERVE_REQUIRED', 'MAX_CONTEXT_EXCEEDED',
-                        'MODEL_PROFILE_UNAVAILABLE', 'INVOCATION_ALREADY_SENT', 'RESERVATION_CONFLICT',
-                        'MODEL_CREDENTIAL_UNAVAILABLE'):
+                if exc.code not in (
+                    'BUDGET_EXCEEDED',
+                    'SUMMARY_RESERVE_REQUIRED',
+                    'MAX_CONTEXT_EXCEEDED',
+                    'MODEL_PROFILE_UNAVAILABLE',
+                    'INVOCATION_ALREADY_SENT',
+                    'RESERVATION_CONFLICT',
+                    'MODEL_CREDENTIAL_UNAVAILABLE',
+                ):
                     raise
                 error = exc.code
             except CapabilityBlocked:
                 pass
         await execution.check_operation()
         context = execution.claim.context
-        auth = AuthContext(team_id=context.team_id, subject=context.subject, roles=context.roles,
-            identity_kind=context.identity_kind, agent_scope=context.agent_scope)
-        outcome = (await BudgetService(execution.backend).partial_outcome(auth, state['run_id'])).model_dump(mode='json')
+        auth = AuthContext(
+            team_id=context.team_id,
+            subject=context.subject,
+            roles=context.roles,
+            identity_kind=context.identity_kind,
+            agent_scope=context.agent_scope,
+        )
+        outcome = (
+            await BudgetService(execution.backend).partial_outcome(auth, state['run_id'])
+        ).model_dump(mode='json')
         if text is not None:
-            outcome.update(completed=True, summary='以下内容由模型生成，未经外部知识源验证。\n\n' + text, unresolved_items=[])
+            outcome.update(
+                completed=True,
+                summary='以下内容由模型生成，未经外部知识源验证。\n\n' + text,
+                unresolved_items=[],
+            )
         else:
-            outcome.update(summary='Model answer unavailable.', unresolved_items=[f'Model invocation did not complete: {error}.'])
+            outcome.update(
+                summary='Model answer unavailable.',
+                unresolved_items=[f'Model invocation did not complete: {error}.'],
+            )
         return {'phase': 'answer', 'outcome': outcome}
 
     graph = StateGraph(DirectQAState)

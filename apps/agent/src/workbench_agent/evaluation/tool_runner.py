@@ -1,4 +1,5 @@
 """Resumable tool-conversation collection without knowledge claim semantics."""
+
 from __future__ import annotations
 
 import time
@@ -15,10 +16,7 @@ from workbench_agent.evaluation.tool_conversation_eval import (
 
 
 def _selected(dataset, split):
-    return [
-        case for case in dataset['cases']
-        if case['split'] == split
-    ]
+    return [case for case in dataset['cases'] if case['split'] == split]
 
 
 async def run_tool_experiment(
@@ -45,10 +43,7 @@ async def run_tool_experiment(
         raise ValueError('tool dataset must be human reviewed')
     cases = _selected(dataset, split)
     output = Path(journal.path).with_name('results.jsonl')
-    rows = {
-        (row.get('case_id'), row.get('repeat')): row
-        for row in read_rows(output)
-    }
+    rows = {(row.get('case_id'), row.get('repeat')): row for row in read_rows(output)}
     for event in journal.events():
         row = event.get('row')
         if isinstance(row, dict) and row.get('case_id') and row.get('repeat') is not None:
@@ -56,14 +51,20 @@ async def run_tool_experiment(
     for case in cases:
         repeat = 0
         recovered = rows.get((case['id'], repeat))
-        if recovered and recovered.get('run_id') and recovered.get('run_status') in {
-            'succeeded', 'partial', 'failed', 'cancelled', 'timed_out', 'expired'
-        }:
+        if (
+            recovered
+            and recovered.get('run_id')
+            and recovered.get('run_status')
+            in {'succeeded', 'partial', 'failed', 'cancelled', 'timed_out', 'expired'}
+        ):
             continue
         existing = rows.get((case['id'], repeat))
-        if existing and existing.get('transport_status') in {
-            'needs_reconciliation', 'interrupted', 'timeout', 'accepted', 'submitted'
-        } and existing.get('run_id'):
+        if (
+            existing
+            and existing.get('transport_status')
+            in {'needs_reconciliation', 'interrupted', 'timeout', 'accepted', 'submitted'}
+            and existing.get('run_id')
+        ):
             # Never issue a second create for an accepted Run.
             experiment = {**manifest, 'config': config}
             row = await collect_case(

@@ -1,4 +1,5 @@
 """Normalize Markdown and derive stable, source-exact bounded passages."""
+
 from hashlib import sha256
 import re
 
@@ -40,7 +41,11 @@ def chunk_markdown(body: str):
             marker = fence.group(1)
             if fence_char is None:
                 fence_char, fence_length = marker[0], len(marker)
-            elif marker[0] == fence_char and len(marker) >= fence_length and not line[fence.end():].strip():
+            elif (
+                marker[0] == fence_char
+                and len(marker) >= fence_length
+                and not line[fence.end() :].strip()
+            ):
                 fence_char = None
             offset += len(line)
             continue
@@ -74,10 +79,25 @@ def chunk_markdown(body: str):
             content = body[start:stop]
             line_start = body.count('\n', 0, start) + 1
             line_end = body.count('\n', 0, stop - 1) + 1
-            identity = {'chunker': CHUNKER_VERSION, 'path': path, 'start': line_start,
-                        'end': line_end, 'start_offset': start, 'end_offset': stop, 'content': content}
-            result.append(KBChunk(chunk_id=sha256(canonical(identity).encode('utf-8')).hexdigest()[:24],
-                heading_path=path, line_start=line_start, line_end=line_end, content=content,
-                content_hash=sha256(content.encode('utf-8')).hexdigest(), chunker_version=CHUNKER_VERSION))
+            identity = {
+                'chunker': CHUNKER_VERSION,
+                'path': path,
+                'start': line_start,
+                'end': line_end,
+                'start_offset': start,
+                'end_offset': stop,
+                'content': content,
+            }
+            result.append(
+                KBChunk(
+                    chunk_id=sha256(canonical(identity).encode('utf-8')).hexdigest()[:24],
+                    heading_path=path,
+                    line_start=line_start,
+                    line_end=line_end,
+                    content=content,
+                    content_hash=sha256(content.encode('utf-8')).hexdigest(),
+                    chunker_version=CHUNKER_VERSION,
+                )
+            )
             start = stop
     return tuple(result)

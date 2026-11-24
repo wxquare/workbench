@@ -1,4 +1,5 @@
 """Explicit knowledge index inspection and repair commands."""
+
 from workbench_agent.knowledge.maintenance import KnowledgeMaintenance
 from workbench_agent.persistence.backends.sqlite import SQLiteBackend
 

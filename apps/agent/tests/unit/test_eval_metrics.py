@@ -17,12 +17,24 @@ def test_repeats_do_not_hide_flaky_or_missing_case():
 
 def test_cost_unknown_and_multicurrency_are_not_coerced():
     scores = [
-        {'case_id': 'a', 'repeat': 0, 'rules_status': 'passed',
-         'usage': {'amount_micros': 0, 'currency': 'USD', 'cost_pending': False}},
-        {'case_id': 'a', 'repeat': 1, 'rules_status': 'passed',
-         'usage': {'amount_micros': 1, 'currency': 'CNY', 'cost_pending': False}},
-        {'case_id': 'a', 'repeat': 2, 'rules_status': 'passed',
-         'usage': {'amount_micros': None, 'currency': None, 'cost_pending': True}},
+        {
+            'case_id': 'a',
+            'repeat': 0,
+            'rules_status': 'passed',
+            'usage': {'amount_micros': 0, 'currency': 'USD', 'cost_pending': False},
+        },
+        {
+            'case_id': 'a',
+            'repeat': 1,
+            'rules_status': 'passed',
+            'usage': {'amount_micros': 1, 'currency': 'CNY', 'cost_pending': False},
+        },
+        {
+            'case_id': 'a',
+            'repeat': 2,
+            'rules_status': 'passed',
+            'usage': {'amount_micros': None, 'currency': None, 'cost_pending': True},
+        },
     ]
     report = summarize_repeats(scores, expected_cases=['a'], k=3)
     assert report['known_costs'] == {'USD': 0, 'CNY': 1}

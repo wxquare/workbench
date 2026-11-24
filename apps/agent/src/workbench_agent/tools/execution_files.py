@@ -1,4 +1,5 @@
 """Read execution-directory files without following symlinks."""
+
 import os
 from pathlib import PurePosixPath
 import stat
@@ -16,10 +17,14 @@ def open_execution_file(root, relative):
     try:
         directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         for part in parts[:-1]:
-            next_directory = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            next_directory = os.open(
+                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+            )
             os.close(directory)
             directory = next_directory
-        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        descriptor = os.open(
+            parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+        )
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise ValueError('not a regular execution file')
         opened = os.fdopen(descriptor, 'rb')

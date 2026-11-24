@@ -1,4 +1,5 @@
 """Team-scoped editable Skill drafts and immutable published versions."""
+
 import json
 from uuid import uuid4
 from sqlalchemy import select
@@ -7,9 +8,20 @@ from workbench_agent.application.authorization import Authorization
 from workbench_agent.application.errors import DomainError, not_found
 from workbench_agent.application.idempotency import Idempotency, canonical
 from workbench_agent.persistence import schema
-from workbench_agent.skill_management.manifest import PREFIX, read_manifest, read_resource, validate_skill_metadata, write_manifest
+from workbench_agent.skill_management.manifest import (
+    PREFIX,
+    read_manifest,
+    read_resource,
+    validate_skill_metadata,
+    write_manifest,
+)
 from workbench_agent.skill_management.validator import validate_bundle
-from workbench_agent.skill_management.drafts import MAX_DRAFT_PAYLOAD, bundle_for_files, encode_resources, normalize_files
+from workbench_agent.skill_management.drafts import (
+    MAX_DRAFT_PAYLOAD,
+    bundle_for_files,
+    encode_resources,
+    normalize_files,
+)
 
 
 def bundle_for(name, description, content):
@@ -45,7 +57,9 @@ class SharedSkillLibrary:
         await self.auth.current(uow, auth, minimum=role)
 
     async def skill(self, uow, auth, skill_id):
-        row = await self.store.one(uow, 'skills', team_id=auth.team_id, skill_id=skill_id, agent_id=None, status='active')
+        row = await self.store.one(
+            uow, 'skills', team_id=auth.team_id, skill_id=skill_id, agent_id=None, status='active'
+        )
         if not row:
             raise not_found()
         return dict(row)
@@ -54,8 +68,15 @@ class SharedSkillLibrary:
         skill = await self.skill(uow, auth, skill_id)
         draft = await self.store.one(uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id)
         files = stored_files(draft) if draft else None
-        skill['draft'] = {'description': draft['description'], 'files': files,
-                          'content': files['SKILL.md']['content']} if draft else None
+        skill['draft'] = (
+            {
+                'description': draft['description'],
+                'files': files,
+                'content': files['SKILL.md']['content'],
+            }
+            if draft
+            else None
+        )
         versions = await self._versions(uow, auth, skill_id)
         skill['versions'] = versions
         skill['latest_version'] = versions[0] if versions else None
@@ -63,23 +84,56 @@ class SharedSkillLibrary:
 
     async def _versions(self, uow, auth, skill_id):
         table = schema.skill_versions
-        rows = (await uow.execute(select(table).where(table.c.team_id == auth.team_id,
-            table.c.skill_id == skill_id, table.c.status == 'published').order_by(table.c.version.desc()))).mappings().all()
-        return [{'resource_id': row['skill_version_id'], 'version': str(row['version']),
-                 'content_hash': row['hash'], 'created_at': row['created_at']} for row in rows]
+        rows = (
+            (
+                await uow.execute(
+                    select(table)
+                    .where(
+                        table.c.team_id == auth.team_id,
+                        table.c.skill_id == skill_id,
+                        table.c.status == 'published',
+                    )
+                    .order_by(table.c.version.desc())
+                )
+            )
+            .mappings()
+            .all()
+        )
+        return [
+            {
+                'resource_id': row['skill_version_id'],
+                'version': str(row['version']),
+                'content_hash': row['hash'],
+                'created_at': row['created_at'],
+            }
+            for row in rows
+        ]
 
     async def list(self, auth, limit=100, after=None, query=None):
         async with self.backend.create_uow().begin_read() as uow:
             await self.authorize(uow, auth)
             table = schema.skills
-            statement = select(table.c.skill_id).where(table.c.team_id == auth.team_id,
-                table.c.agent_id.is_(None), table.c.status == 'active')
+            statement = select(table.c.skill_id).where(
+                table.c.team_id == auth.team_id,
+                table.c.agent_id.is_(None),
+                table.c.status == 'active',
+            )
             if after:
                 statement = statement.where(table.c.skill_id > after)
             if query:
                 from sqlalchemy import or_
-                statement = statement.where(or_(table.c.name.contains(query, autoescape=True), table.c.description.contains(query, autoescape=True)))
-            rows = (await uow.execute(statement.order_by(table.c.skill_id).limit(limit + 1))).scalars().all()
+
+                statement = statement.where(
+                    or_(
+                        table.c.name.contains(query, autoescape=True),
+                        table.c.description.contains(query, autoescape=True),
+                    )
+                )
+            rows = (
+                (await uow.execute(statement.order_by(table.c.skill_id).limit(limit + 1)))
+                .scalars()
+                .all()
+            )
             more = len(rows) > limit
             rows = rows[:limit]
             items = []
@@ -100,59 +154,126 @@ class SharedSkillLibrary:
         bundle_for_files(name, description, normalized)
         async with self.backend.create_uow().begin_write() as uow:
             await self.authorize(uow, auth, 'maintainer')
+
             async def operation():
-                existing = await self.store.one(uow, 'skills', team_id=auth.team_id, agent_id=None, name=name)
+                existing = await self.store.one(
+                    uow, 'skills', team_id=auth.team_id, agent_id=None, name=name
+                )
                 if existing:
                     raise DomainError('SKILL_NAME_CONFLICT', 409)
                 skill_id = str(uuid4())
                 now = await self.backend.clock.now_ms(uow)
-                await self.store.insert(uow, 'skills', dict(team_id=auth.team_id, agent_id=None, skill_id=skill_id,
-                    name=name, description=description, status='active', revision=0, created_at=now, updated_at=now))
-                await self.store.insert(uow, 'skill_drafts', dict(team_id=auth.team_id, skill_id=skill_id, name=name,
-                    description=description, files_json=canonical(normalized), created_at=now, updated_at=now))
+                await self.store.insert(
+                    uow,
+                    'skills',
+                    dict(
+                        team_id=auth.team_id,
+                        agent_id=None,
+                        skill_id=skill_id,
+                        name=name,
+                        description=description,
+                        status='active',
+                        revision=0,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+                await self.store.insert(
+                    uow,
+                    'skill_drafts',
+                    dict(
+                        team_id=auth.team_id,
+                        skill_id=skill_id,
+                        name=name,
+                        description=description,
+                        files_json=canonical(normalized),
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
                 return await self.detail(uow, auth, skill_id)
+
             payload = {'name': name, 'description': description}
-            if files is not None: payload['files'] = files
-            if content is not None: payload['content'] = content
-            return await self.idempotency.execute_team(uow, auth, 'shared-skill.create', key,
-                payload, operation, status=201, max_payload_bytes=MAX_DRAFT_PAYLOAD)
+            if files is not None:
+                payload['files'] = files
+            if content is not None:
+                payload['content'] = content
+            return await self.idempotency.execute_team(
+                uow,
+                auth,
+                'shared-skill.create',
+                key,
+                payload,
+                operation,
+                status=201,
+                max_payload_bytes=MAX_DRAFT_PAYLOAD,
+            )
 
     async def save(self, auth, skill_id, description, content, revision, key, *, files=None):
         async with self.backend.create_uow().begin_write() as uow:
             await self.authorize(uow, auth, 'maintainer')
+
             async def operation():
                 skill = await self.skill(uow, auth, skill_id)
                 if skill['revision'] != revision:
                     raise DomainError('REVISION_CONFLICT', 409)
                 now = await self.backend.clock.now_ms(uow)
-                draft = await self.store.one(uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id)
+                draft = await self.store.one(
+                    uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id
+                )
                 if not draft:
                     raise DomainError('SKILL_DRAFT_UNAVAILABLE', 409)
                 normalized = requested_files(files, content, stored_files(draft))
                 bundle_for_files(skill['name'], description, normalized)
-                await self.store.change(uow, 'skill_drafts', {'skill_id': skill_id, 'team_id': auth.team_id},
-                    {'description': description, 'files_json': canonical(normalized), 'updated_at': now})
-                if not await self.store.change(uow, 'skills', {'skill_id': skill_id, 'team_id': auth.team_id, 'revision': revision},
-                        {'revision': revision + 1, 'updated_at': now}):
+                await self.store.change(
+                    uow,
+                    'skill_drafts',
+                    {'skill_id': skill_id, 'team_id': auth.team_id},
+                    {
+                        'description': description,
+                        'files_json': canonical(normalized),
+                        'updated_at': now,
+                    },
+                )
+                if not await self.store.change(
+                    uow,
+                    'skills',
+                    {'skill_id': skill_id, 'team_id': auth.team_id, 'revision': revision},
+                    {'revision': revision + 1, 'updated_at': now},
+                ):
                     raise DomainError('REVISION_CONFLICT', 409)
                 return await self.detail(uow, auth, skill_id)
+
             payload = {'skill_id': skill_id, 'description': description, 'revision': revision}
-            if files is not None: payload['files'] = files
-            if content is not None: payload['content'] = content
-            return await self.idempotency.execute_team(uow, auth, 'shared-skill.save', key,
-                payload, operation, max_payload_bytes=MAX_DRAFT_PAYLOAD)
+            if files is not None:
+                payload['files'] = files
+            if content is not None:
+                payload['content'] = content
+            return await self.idempotency.execute_team(
+                uow,
+                auth,
+                'shared-skill.save',
+                key,
+                payload,
+                operation,
+                max_payload_bytes=MAX_DRAFT_PAYLOAD,
+            )
 
     async def publish(self, auth, skill_id, revision, key):
         payload = {'skill_id': skill_id, 'revision': revision}
         async with self.backend.create_uow().begin_read() as uow:
             await self.authorize(uow, auth, 'admin')
-            replay = await self.idempotency.lookup(uow, auth, None, 'shared-skill.publish', key, payload)
+            replay = await self.idempotency.lookup(
+                uow, auth, None, 'shared-skill.publish', key, payload
+            )
             if replay:
                 return replay
             skill = await self.skill(uow, auth, skill_id)
             if skill['revision'] != revision:
                 raise DomainError('REVISION_CONFLICT', 409)
-            draft = await self.store.one(uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id)
+            draft = await self.store.one(
+                uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id
+            )
             if not draft:
                 raise DomainError('SKILL_DRAFT_UNAVAILABLE', 409)
             draft = dict(draft)
@@ -167,32 +288,67 @@ class SharedSkillLibrary:
 
         async with self.backend.create_uow().begin_write() as uow:
             await self.authorize(uow, auth, 'admin')
+
             async def operation():
                 skill = await self.skill(uow, auth, skill_id)
                 if skill['revision'] != revision:
                     raise DomainError('REVISION_CONFLICT', 409)
-                draft = await self.store.one(uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id)
+                draft = await self.store.one(
+                    uow, 'skill_drafts', team_id=auth.team_id, skill_id=skill_id
+                )
                 if not draft:
                     raise DomainError('SKILL_DRAFT_UNAVAILABLE', 409)
                 versions = await self._versions(uow, auth, skill_id)
                 version = int(versions[0]['version']) + 1 if versions else 1
                 now, version_id = await self.backend.clock.now_ms(uow), str(uuid4())
-                await self.store.insert(uow, 'skill_versions', dict(team_id=auth.team_id, skill_id=skill_id,
-                    skill_version_id=version_id, version=version, hash=bundle.bundle_hash, bundle_ref=bundle_ref,
-                    status='published', created_at=now, updated_at=now))
-                if not await self.store.change(uow, 'skills', {'skill_id': skill_id, 'team_id': auth.team_id, 'revision': revision},
-                        {'revision': revision + 1, 'description': draft['description'], 'updated_at': now}):
+                await self.store.insert(
+                    uow,
+                    'skill_versions',
+                    dict(
+                        team_id=auth.team_id,
+                        skill_id=skill_id,
+                        skill_version_id=version_id,
+                        version=version,
+                        hash=bundle.bundle_hash,
+                        bundle_ref=bundle_ref,
+                        status='published',
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+                if not await self.store.change(
+                    uow,
+                    'skills',
+                    {'skill_id': skill_id, 'team_id': auth.team_id, 'revision': revision},
+                    {
+                        'revision': revision + 1,
+                        'description': draft['description'],
+                        'updated_at': now,
+                    },
+                ):
                     raise DomainError('REVISION_CONFLICT', 409)
-                return {'resource_id': version_id, 'version': str(version), 'content_hash': bundle.bundle_hash}
-            return await self.idempotency.execute_team(uow, auth, 'shared-skill.publish', key,
-                payload, operation, status=201)
+                return {
+                    'resource_id': version_id,
+                    'version': str(version),
+                    'content_hash': bundle.bundle_hash,
+                }
+
+            return await self.idempotency.execute_team(
+                uow, auth, 'shared-skill.publish', key, payload, operation, status=201
+            )
 
     async def version(self, auth, skill_id, version):
         async with self.backend.create_uow().begin_read() as uow:
             await self.authorize(uow, auth)
             skill = await self.skill(uow, auth, skill_id)
-            row = await self.store.one(uow, 'skill_versions', team_id=auth.team_id, skill_id=skill_id,
-                version=version, status='published')
+            row = await self.store.one(
+                uow,
+                'skill_versions',
+                team_id=auth.team_id,
+                skill_id=skill_id,
+                version=version,
+                status='published',
+            )
             if not row:
                 raise not_found()
             objects = self.objects() if callable(self.objects) else self.objects
@@ -201,11 +357,15 @@ class SharedSkillLibrary:
             try:
                 if row['bundle_ref'].startswith(PREFIX):
                     manifest = read_manifest(objects, row['bundle_ref'], skill['name'], row['hash'])
-                    resources = {path: read_resource(objects, manifest, path) for path in manifest['hashes']}
+                    resources = {
+                        path: read_resource(objects, manifest, path) for path in manifest['hashes']
+                    }
                     raw = resources['SKILL.md']
                     validate_skill_metadata(manifest, raw)
                 else:
-                    bundle = validate_bundle(objects.get(row['bundle_ref']), skill['name'], allow_binary=True)
+                    bundle = validate_bundle(
+                        objects.get(row['bundle_ref']), skill['name'], allow_binary=True
+                    )
                     if bundle.bundle_hash != row['hash']:
                         raise ValueError('hash mismatch')
                     resources = bundle.resources
@@ -213,5 +373,10 @@ class SharedSkillLibrary:
                 content = raw.decode('utf-8')
             except (OSError, ValueError, KeyError, UnicodeError):
                 raise DomainError('SKILL_VERSION_UNAVAILABLE', 409) from None
-            return {'resource_id': row['skill_version_id'], 'version': str(row['version']),
-                    'content_hash': row['hash'], 'content': content, 'files': encode_resources(resources)}
+            return {
+                'resource_id': row['skill_version_id'],
+                'version': str(row['version']),
+                'content_hash': row['hash'],
+                'content': content,
+                'files': encode_resources(resources),
+            }

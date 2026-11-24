@@ -56,10 +56,18 @@ def ref():
 @pytest.mark.asyncio
 async def test_collection_fetches_evidence_and_uses_configured_scope(tmp_path):
     requests = []
-    polls = [{'status': 'queued'}, {'status': 'partial', 'outcome': {
-        'evidence_refs': ['ev-1'],
-        'knowledge_answer': {'claims': [{'text': 'retry', 'citations': [{'evidence_ref': 'ev-1'}]}]},
-    }}]
+    polls = [
+        {'status': 'queued'},
+        {
+            'status': 'partial',
+            'outcome': {
+                'evidence_refs': ['ev-1'],
+                'knowledge_answer': {
+                    'claims': [{'text': 'retry', 'citations': [{'evidence_ref': 'ev-1'}]}]
+                },
+            },
+        },
+    ]
 
     async def handler(request):
         requests.append(request)
@@ -68,16 +76,23 @@ async def test_collection_fetches_evidence_and_uses_configured_scope(tmp_path):
             assert body['business_context']['query_scope'] == SCOPE
             return httpx.Response(202, json={'run_id': 'run-1'})
         if request.url.path == '/v1/runs/run-1/events':
-            data = json.dumps({'payload': {'versions': {
-                'graph_id': 'knowledge.citation_review',
-                'agent_profile': ref(),
-                'default_model': ref(),
-                'role_models': [],
-            }}})
-            return httpx.Response(200, content=(
-                'event: run.accepted\n'
-                f'data: {data}\n\n'
-            ).encode(), headers={'content-type': 'text/event-stream'})
+            data = json.dumps(
+                {
+                    'payload': {
+                        'versions': {
+                            'graph_id': 'knowledge.citation_review',
+                            'agent_profile': ref(),
+                            'default_model': ref(),
+                            'role_models': [],
+                        }
+                    }
+                }
+            )
+            return httpx.Response(
+                200,
+                content=(f'event: run.accepted\ndata: {data}\n\n').encode(),
+                headers={'content-type': 'text/event-stream'},
+            )
         if request.url.path == '/v1/runs/run-1':
             return httpx.Response(200, json=polls.pop(0))
         if request.url.path == '/v1/runs/run-1/evidence/ev-1':
@@ -87,7 +102,9 @@ async def test_collection_fetches_evidence_and_uses_configured_scope(tmp_path):
             return httpx.Response(200, json={'cost_pending': True})
         raise AssertionError((request.method, request.url.path))
 
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000')
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000'
+    )
     api = EvaluationAPI(client, token='secret-token')
     journal = Journal(tmp_path / 'journal.jsonl')
     row = await collect_case(
@@ -116,7 +133,9 @@ async def test_uncertain_create_does_not_resend(tmp_path):
         count += 1
         raise httpx.ReadTimeout('timeout', request=request)
 
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000')
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000'
+    )
     api = EvaluationAPI(client, token='secret-token')
     journal = Journal(tmp_path / 'journal.jsonl')
     kwargs = {
@@ -142,13 +161,22 @@ def test_review_prefill_does_not_invent_human_judgments():
         'cases': [case()],
     }
     request_key = make_run_key('exp-1', 'dataset', 'config', 'case-1', 0)
-    review = prepare_review(dataset, [{
-        'case_id': 'case-1',
-        'request_key': request_key,
-        'run_id': 'run-1',
-        'run_status': 'succeeded',
-        'outcome': {'knowledge_answer': {'claims': [{'text': 'retry', 'citations': [{'evidence_ref': 'ev'}]}]}},
-    }])
+    review = prepare_review(
+        dataset,
+        [
+            {
+                'case_id': 'case-1',
+                'request_key': request_key,
+                'run_id': 'run-1',
+                'run_status': 'succeeded',
+                'outcome': {
+                    'knowledge_answer': {
+                        'claims': [{'text': 'retry', 'citations': [{'evidence_ref': 'ev'}]}]
+                    }
+                },
+            }
+        ],
+    )
     result = review['cases'][0]['result_review']
     assert result['answer_usable'] is None
     assert result['unauthorized_access'] is None
@@ -161,14 +189,18 @@ def test_review_preserves_filled_judgment_for_same_output():
         'dataset_kind': 'business',
         'cases': [case()],
     }
-    rows = [{
-        'case_id': 'case-1',
-        'run_id': 'run-1',
-        'run_status': 'succeeded',
-        'outcome': {'knowledge_answer': {'claims': [
-            {'text': 'retry', 'citations': [{'evidence_ref': 'ev'}]}
-        ]}},
-    }]
+    rows = [
+        {
+            'case_id': 'case-1',
+            'run_id': 'run-1',
+            'run_status': 'succeeded',
+            'outcome': {
+                'knowledge_answer': {
+                    'claims': [{'text': 'retry', 'citations': [{'evidence_ref': 'ev'}]}]
+                }
+            },
+        }
+    ]
     first = prepare_review(dataset, rows)
     first['cases'][0]['result_review']['answer_usable'] = True
     first['cases'][0]['result_review']['reviewer'] = 'human'

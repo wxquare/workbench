@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
-ADMIN_JOB_KINDS = frozenset({"skill_import","repo_sync","model_probe","tool_probe","tool_discovery","artifact_upload"})
+ADMIN_JOB_KINDS = frozenset(
+    {'skill_import', 'repo_sync', 'model_probe', 'tool_probe', 'tool_discovery', 'artifact_upload'}
+)
+
 
 @dataclass(frozen=True)
 class AdminAuth:
@@ -8,6 +11,7 @@ class AdminAuth:
     agent_id: str
     subject: str
     can_manage: bool
+
 
 @dataclass(frozen=True)
 class AdminJob:
@@ -18,7 +22,9 @@ class AdminJob:
     status: str
     result_ref: str | None = None
 
+
 AdminJobView = AdminJob
+
 
 @dataclass(frozen=True)
 class ClaimedAdminJob:

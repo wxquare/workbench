@@ -1,4 +1,5 @@
 """Validate untrusted skill archives without extracting their paths to disk."""
+
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
@@ -16,8 +17,10 @@ MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_FILES = 256
 _NAME = re.compile(r'^[a-z0-9]+(?:-[a-z0-9]+)*$')
 
+
 class InvalidBundle(ValueError):
     pass
+
 
 @dataclass(frozen=True)
 class ValidatedBundle:
@@ -38,7 +41,9 @@ def validate_bundle_path(path: str) -> str:
     return candidate.as_posix()
 
 
-def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False, allow_scripts: bool = False) -> ValidatedBundle:
+def validate_bundle(
+    raw: bytes, name: str, *, allow_binary: bool = False, allow_scripts: bool = False
+) -> ValidatedBundle:
     if not _NAME.fullmatch(name) or len(raw) > MAX_ARCHIVE_BYTES:
         raise InvalidBundle('invalid skill bundle')
     resources = {}
@@ -60,7 +65,7 @@ def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False, allow_
                 mode = entry.external_attr >> 16
                 if stat.S_IFMT(mode) not in (0, stat.S_IFREG):
                     raise InvalidBundle('unsupported link or special file')
-                relative = path[len(name)+1:]
+                relative = path[len(name) + 1 :]
                 if relative in resources or entry.file_size > MAX_FILE_BYTES:
                     raise InvalidBundle('duplicate or oversized resource')
                 total += entry.file_size
@@ -71,13 +76,18 @@ def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False, allow_
                     raise InvalidBundle('resource length mismatch')
                 if '.claude' in relative.split('/'):
                     raise InvalidBundle('unsupported Claude resource')
-                if not allow_scripts and ('scripts' in relative.split('/') or
-                        relative.endswith(('.sh', '.py', '.bash', '.js')) or content.startswith(b'#!') or mode & 0o111):
+                if not allow_scripts and (
+                    'scripts' in relative.split('/')
+                    or relative.endswith(('.sh', '.py', '.bash', '.js'))
+                    or content.startswith(b'#!')
+                    or mode & 0o111
+                ):
                     raise InvalidBundle('unsupported executable or Claude resource')
                 if not allow_binary:
                     try:
                         decoded = content.decode('utf-8')
-                        if '\x00' in decoded: raise ValueError()
+                        if '\x00' in decoded:
+                            raise ValueError()
                     except (UnicodeError, ValueError) as exc:
                         raise InvalidBundle('unsupported binary resource') from exc
                 resources[relative] = content
@@ -89,7 +99,13 @@ def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False, allow_
             raise ValueError()
         front, body = text[4:].split('\n---\n', 1)
         metadata = yaml.safe_load(front)
-        if not isinstance(metadata, dict) or metadata.get('name') != name or not isinstance(metadata.get('description'), str) or not metadata['description'].strip() or not body.strip():
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get('name') != name
+            or not isinstance(metadata.get('description'), str)
+            or not metadata['description'].strip()
+            or not body.strip()
+        ):
             raise ValueError()
         # Claude-specific executable configuration is never interpreted implicitly.
         if set(metadata) - {'name', 'description'}:
@@ -102,4 +118,10 @@ def validate_bundle(raw: bytes, name: str, *, allow_binary: bool = False, allow_
         raise InvalidBundle('invalid SKILL.md') from exc
     hashes = {path: sha256(value).hexdigest() for path, value in sorted(resources.items())}
     encoded = json.dumps(hashes, sort_keys=True, separators=(',', ':')).encode()
-    return ValidatedBundle(name, metadata['description'], MappingProxyType(resources), MappingProxyType(hashes), sha256(encoded).hexdigest())
+    return ValidatedBundle(
+        name,
+        metadata['description'],
+        MappingProxyType(resources),
+        MappingProxyType(hashes),
+        sha256(encoded).hexdigest(),
+    )

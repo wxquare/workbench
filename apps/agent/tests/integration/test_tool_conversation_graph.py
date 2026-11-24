@@ -21,6 +21,7 @@ from workbench_agent.tools.registry import ToolRegistry
 
 async def setup_tool_run(platform, client, monkeypatch, model):
     from support.mcp import mcp_server_source
+
     monkeypatch.syspath_prepend(str(mcp_server_source()))
     from workbench_mcp_server.bootstrap import Runtime
     from workbench_mcp_server.infrastructure.config.settings import Settings
@@ -35,36 +36,48 @@ async def setup_tool_run(platform, client, monkeypatch, model):
         'service': 'checkout',
         'source_id': 'kb',
     }
-    settings = Settings.model_validate({
-        'server': {'allowed_hosts': ['localhost:*']},
-        'principals': [{
-            'id': 'agent',
-            'token_secret_ref': 'env://QA_TEST_AGENT',
-            'tools': ['knowledge_search'],
-            'scopes': [mcp_scope],
-        }],
-        'sources': [{
-            'id': 'kb',
-            'kind': 'knowledge',
-            'adapter': 'normalized-http-v1',
-            'endpoint': 'https://example.invalid/query',
-            'auth_secret_ref': 'env://QA_TEST_UPSTREAM',
-            'binding_id': 'fixture-kb',
-            'scopes': [mcp_scope],
-            'scope_enforced': True,
-        }],
-    })
+    settings = Settings.model_validate(
+        {
+            'server': {'allowed_hosts': ['localhost:*']},
+            'principals': [
+                {
+                    'id': 'agent',
+                    'token_secret_ref': 'env://QA_TEST_AGENT',
+                    'tools': ['knowledge_search'],
+                    'scopes': [mcp_scope],
+                }
+            ],
+            'sources': [
+                {
+                    'id': 'kb',
+                    'kind': 'knowledge',
+                    'adapter': 'normalized-http-v1',
+                    'endpoint': 'https://example.invalid/query',
+                    'auth_secret_ref': 'env://QA_TEST_UPSTREAM',
+                    'binding_id': 'fixture-kb',
+                    'scopes': [mcp_scope],
+                    'scope_enforced': True,
+                }
+            ],
+        }
+    )
     runtime = Runtime(settings)
     calls = []
+
     class Gateway:
         async def query(self, request):
             calls.append(request)
-            return {'matches': [{
-                'source_id': 'guide-1',
-                'title': 'Guide',
-                'content': 'Check the queue before retrying.',
-                'source_uri': None,
-            }]}
+            return {
+                'matches': [
+                    {
+                        'source_id': 'guide-1',
+                        'title': 'Guide',
+                        'content': 'Check the queue before retrying.',
+                        'source_uri': None,
+                    }
+                ]
+            }
+
     runtime.executor.gateways['kb'] = Gateway()
     app = create_http_app(runtime)
     schema = {
@@ -86,37 +99,68 @@ async def setup_tool_run(platform, client, monkeypatch, model):
         'required': ['query', 'scene', 'scope'],
     }
     policy = None
+
     class Adapter(MCPAdapter):
         def __init__(self):
             self.prepared = []
             super().__init__(None, None)
 
-        def prepare(self, connection_ref, credential_scope, tool_name, args, *, team_id,
-                    agent_id, query_scope, correlation=None):
+        def prepare(
+            self,
+            connection_ref,
+            credential_scope,
+            tool_name,
+            args,
+            *,
+            team_id,
+            agent_id,
+            query_scope,
+            correlation=None,
+        ):
             from workbench_agent.tools.mcp import build_dod_arguments
+
             bound = build_dod_arguments(
-                tool_name, args, query_scope, GRANT, correlation,
+                tool_name,
+                args,
+                query_scope,
+                GRANT,
+                correlation,
             )
-            self.prepared.append({
-                'connection_ref': connection_ref,
-                'credential_scope': credential_scope,
-                'team_id': team_id,
-                'agent_id': agent_id,
-                'query_scope': dict(query_scope),
-                'correlation': dict(correlation or {}),
-            })
+            self.prepared.append(
+                {
+                    'connection_ref': connection_ref,
+                    'credential_scope': credential_scope,
+                    'team_id': team_id,
+                    'agent_id': agent_id,
+                    'query_scope': dict(query_scope),
+                    'correlation': dict(correlation or {}),
+                }
+            )
             return bound
 
-        async def call(self, connection_ref, credential_scope, tool_name, args, *, team_id,
-                       agent_id, query_scope=None, correlation=None, **kwargs):
-            self.prepared.append({
-                'connection_ref': connection_ref,
-                'credential_scope': credential_scope,
-                'team_id': team_id,
-                'agent_id': agent_id,
-                'query_scope': dict(query_scope or {}),
-                'correlation': dict(correlation or {}),
-            })
+        async def call(
+            self,
+            connection_ref,
+            credential_scope,
+            tool_name,
+            args,
+            *,
+            team_id,
+            agent_id,
+            query_scope=None,
+            correlation=None,
+            **kwargs,
+        ):
+            self.prepared.append(
+                {
+                    'connection_ref': connection_ref,
+                    'credential_scope': credential_scope,
+                    'team_id': team_id,
+                    'agent_id': agent_id,
+                    'query_scope': dict(query_scope or {}),
+                    'correlation': dict(correlation or {}),
+                }
+            )
             scope = self.prepare(
                 connection_ref,
                 credential_scope,
@@ -133,28 +177,33 @@ async def setup_tool_run(platform, client, monkeypatch, model):
                     'schema_version': 'dod-tool-result-v1',
                     'status': 'ok',
                     'data': {
-                        'matches': [{
-                            'source_id': 'guide-1',
-                            'title': 'Guide',
-                            'content': 'Check the queue before retrying.',
-                            'source_uri': None,
-                        }],
+                        'matches': [
+                            {
+                                'source_id': 'guide-1',
+                                'title': 'Guide',
+                                'content': 'Check the queue before retrying.',
+                                'source_uri': None,
+                            }
+                        ],
                     },
                     'error': None,
                     'retryable': False,
-                    'evidence_refs': [{
-                        'scope': scope,
-                        'invocation_id': correlation['invocation_id'],
-                        'query_scope_ref': correlation['query_scope_ref'],
-                        'quality_status': 'valid',
-                        'source_locator': 'kb:guide-1@1#' + 'a' * 24,
-                        'source_type': 'knowledge',
-                        'time_window': None,
-                    }],
+                    'evidence_refs': [
+                        {
+                            'scope': scope,
+                            'invocation_id': correlation['invocation_id'],
+                            'query_scope_ref': correlation['query_scope_ref'],
+                            'quality_status': 'valid',
+                            'source_locator': 'kb:guide-1@1#' + 'a' * 24,
+                            'source_type': 'knowledge',
+                            'time_window': None,
+                        }
+                    ],
                     'meta': {'truncated': False},
                     'artifacts': [],
                 },
             )
+
     adapter = Adapter()
     binding = ToolBinding(
         alias='knowledge.search',
@@ -204,33 +253,36 @@ async def setup_tool_run(platform, client, monkeypatch, model):
     )
     assert response.status_code == 202, response.text
     run_id = response.json()['run_id']
+
     class Factory:
         def build(self, *args, **kwargs):
             return model
+
     backend = SQLiteBackend(
         platform.settings.storage.database_url.get_secret_value(),
         tool_permissions=permissions,
     )
     from workbench_agent.settings import MCPConnectionBinding
-    deployment = MCPConnectionBinding.model_validate({
-        'server': 'local',
-        'credential_scope': 'read',
-        'team_id': platform.auth.team_id,
-        'agent_id': platform.agent_id,
-        'endpoint': 'https://example.invalid/mcp',
-        'secret_ref': 'env://QA_TEST_MCP',
-        'read_tools': ['knowledge_search'],
-        'scope_grants': [GRANT],
-    })
+
+    deployment = MCPConnectionBinding.model_validate(
+        {
+            'server': 'local',
+            'credential_scope': 'read',
+            'team_id': platform.auth.team_id,
+            'agent_id': platform.agent_id,
+            'endpoint': 'https://example.invalid/mcp',
+            'secret_ref': 'env://QA_TEST_MCP',
+            'read_tools': ['knowledge_search'],
+            'scope_grants': [GRANT],
+        }
+    )
     backend._mcp_connections = (deployment,)
     backend._mcp_connection_policy = policy
     backend._diagnosis_factory = lambda execution: (
         ModelInvoker(backend, Factory(), object(), execution=execution),
         PolicyToolExecutor(backend, adapter, execution=execution, delays=(0, 0)),
     )
-    registry = foundation_worker_registry(
-        backend, supported_graph_ids=['conversation.tool_use']
-    )
+    registry = foundation_worker_registry(backend, supported_graph_ids=['conversation.tool_use'])
     worker = Worker(backend, 'tool-worker', registry)
     return runtime, app, backend, worker, calls, run_id
 
@@ -238,8 +290,10 @@ async def setup_tool_run(platform, client, monkeypatch, model):
 class ToolModel:
     def __init__(self):
         self.logical_call_ids = []
+
     def bind_tools(self, tools):
         return self
+
     async def ainvoke(self, messages, **kwargs):
         usage = {'input_tokens': 8, 'output_tokens': 3, 'total_tokens': 11}
         if any(isinstance(message, ToolMessage) for message in messages):
@@ -249,12 +303,14 @@ class ToolModel:
             )
         return AIMessage(
             content='',
-            tool_calls=[{
-                'name': 'knowledge_search',
-                'args': {'query': 'retry', 'scene': 'qa'},
-                'id': 'call-1',
-                'type': 'tool_call',
-            }],
+            tool_calls=[
+                {
+                    'name': 'knowledge_search',
+                    'args': {'query': 'retry', 'scene': 'qa'},
+                    'id': 'call-1',
+                    'type': 'tool_call',
+                }
+            ],
             usage_metadata=usage,
         )
 
@@ -262,19 +318,24 @@ class ToolModel:
 class LimitModel:
     def __init__(self):
         self.calls = 0
+
     def bind_tools(self, tools):
         return self
+
     async def ainvoke(self, messages, **kwargs):
         self.calls += 1
         if self.calls == 1:
             return AIMessage(
                 content='',
-                tool_calls=[{
-                    'name': 'knowledge_search',
-                    'args': {'query': f'retry-{index}', 'scene': 'qa'},
-                    'id': f'call-{index}',
-                    'type': 'tool_call',
-                } for index in range(6)],
+                tool_calls=[
+                    {
+                        'name': 'knowledge_search',
+                        'args': {'query': f'retry-{index}', 'scene': 'qa'},
+                        'id': f'call-{index}',
+                        'type': 'tool_call',
+                    }
+                    for index in range(6)
+                ],
                 usage_metadata={'input_tokens': 4, 'output_tokens': 2, 'total_tokens': 6},
             )
         return AIMessage(
@@ -334,23 +395,23 @@ async def test_tool_conversation_records_readable_evidence_from_scoped_adapter(
         result = (await client.get('/v1/runs/' + run_id)).json()
         assert result['status'] == 'succeeded'
         assert result['outcome']['completed'] is True
-        assert result['outcome']['summary'].startswith('以下回答基于所列工具返回的结果，未经独立校验')
+        assert result['outcome']['summary'].startswith(
+            '以下回答基于所列工具返回的结果，未经独立校验'
+        )
         assert len(result['outcome']['evidence_refs']) == 1
         evidence = await client.get(
-            f"/v1/runs/{run_id}/evidence/{result['outcome']['evidence_refs'][0]}"
+            f'/v1/runs/{run_id}/evidence/{result["outcome"]["evidence_refs"][0]}'
         )
         assert evidence.status_code == 200
         assert 'Check the queue before retrying.' in evidence.text
-        assert "knowledge.search / call-1 / ok" in result['outcome']['summary']
+        assert 'knowledge.search / call-1 / ok' in result['outcome']['summary']
     finally:
         await backend.close()
         await runtime.close()
 
 
 @pytest.mark.asyncio
-async def test_tool_conversation_never_executes_more_than_four_calls(
-    platform, client, monkeypatch
-):
+async def test_tool_conversation_never_executes_more_than_four_calls(platform, client, monkeypatch):
     model = LimitModel()
     runtime, app, backend, worker, calls, run_id = await setup_tool_run(
         platform, client, monkeypatch, model
@@ -369,6 +430,7 @@ async def test_tool_conversation_never_executes_more_than_four_calls(
 class NoToolModel:
     def bind_tools(self, tools):
         return self
+
     async def ainvoke(self, messages, **kwargs):
         return AIMessage(
             content='No tool was used.',
@@ -396,12 +458,14 @@ class HistoryModel:
             )
         return AIMessage(
             content='',
-            tool_calls=[{
-                'name': 'knowledge_search',
-                'args': {'query': 'retry', 'scene': 'qa'},
-                'id': 'history-call',
-                'type': 'tool_call',
-            }],
+            tool_calls=[
+                {
+                    'name': 'knowledge_search',
+                    'args': {'query': 'retry', 'scene': 'qa'},
+                    'id': 'history-call',
+                    'type': 'tool_call',
+                }
+            ],
             usage_metadata={
                 'input_tokens': 4,
                 'output_tokens': 2,
@@ -442,13 +506,15 @@ async def test_authorized_history_stops_at_scope_and_evidence_authority_changes(
         second = await create_tool_run(
             client, platform, key='same-scope', scope=dict(SCOPE), thread_id=thread_id
         )
-        platform.backend._tool_permissions = DeploymentToolPermissions(lambda: {
-            'users': {platform.auth.subject: ['knowledge.read']},
-            'teams': {platform.auth.team_id: ['knowledge.read']},
-            'agents': {platform.agent_id: ['knowledge.read']},
-            'skills': {'__none__': ['knowledge.read']},
-            'experts': {'knowledge': ['knowledge.read']},
-        })
+        platform.backend._tool_permissions = DeploymentToolPermissions(
+            lambda: {
+                'users': {platform.auth.subject: ['knowledge.read']},
+                'teams': {platform.auth.team_id: ['knowledge.read']},
+                'agents': {platform.agent_id: ['knowledge.read']},
+                'skills': {'__none__': ['knowledge.read']},
+                'experts': {'knowledge': ['knowledge.read']},
+            }
+        )
         assert await worker.run_once() == 'projected'
         second_view = (await client.get('/v1/runs/' + second['run_id'])).json()
         assert second_view['status'] == 'succeeded'
@@ -480,9 +546,7 @@ async def test_authorized_history_stops_at_scope_and_evidence_authority_changes(
             'skills': {'__none__': []},
             'experts': {'knowledge': []},
         }
-        platform.backend._tool_permissions = DeploymentToolPermissions(
-            lambda: denied_rules
-        )
+        platform.backend._tool_permissions = DeploymentToolPermissions(lambda: denied_rules)
         fourth = await create_tool_run(
             client,
             platform,
@@ -508,6 +572,7 @@ async def test_tool_conversation_refuses_a_digest_tampered_historical_turn(
     from sqlalchemy import update
 
     from workbench_agent.persistence import schema
+
     model = HistoryModel()
     runtime, app, backend, worker, calls, first_id = await setup_tool_run(
         platform, client, monkeypatch, model
@@ -533,8 +598,7 @@ async def test_tool_conversation_refuses_a_digest_tampered_historical_turn(
         )
         assert await worker.run_once() == 'projected'
         assert not any(
-            isinstance(message, AIMessage)
-            and message.content == 'Check the queue before retrying.'
+            isinstance(message, AIMessage) and message.content == 'Check the queue before retrying.'
             for message in model.seen[-2]
         )
         assert fifth['run_id']

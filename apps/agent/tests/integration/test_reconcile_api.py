@@ -7,9 +7,7 @@ async def test_reconcile_api_uses_lookup_and_never_resends(platform, client):
     from workbench_agent.delivery.dispatcher import Dispatcher
 
     service, action = await setup_action(platform)
-    await service.authorize(
-        platform.auth, action['approval_id'], 'approve', action['payload_hash']
-    )
+    await service.authorize(platform.auth, action['approval_id'], 'approve', action['payload_hash'])
 
     class Connector:
         sends = 0
@@ -26,7 +24,7 @@ async def test_reconcile_api_uses_lookup_and_never_resends(platform, client):
     connector = Connector()
     platform.backend._delivery_senders = {'ticket': connector}
     assert await Dispatcher(platform.backend, 'worker').dispatch_one() == 'unknown'
-    path = f"/v1/actions/{action['action_id']}/reconcile"
+    path = f'/v1/actions/{action["action_id"]}/reconcile'
     first = await client.post(path, headers={'Idempotency-Key': 'reconcile-1'})
     assert first.status_code == 202
     assert first.json()['state'] == 'succeeded'
@@ -39,17 +37,19 @@ async def test_reconcile_api_uses_lookup_and_never_resends(platform, client):
 @pytest.mark.asyncio
 async def test_reconcile_api_requires_idempotency_key(platform, client):
     from test_action_contract import setup_action
+
     _, action = await setup_action(platform)
-    response = await client.post(f"/v1/actions/{action['action_id']}/reconcile")
+    response = await client.post(f'/v1/actions/{action["action_id"]}/reconcile')
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_reconcile_api_rejects_non_unknown_action(platform, client):
     from test_action_contract import setup_action
+
     _, action = await setup_action(platform)
     response = await client.post(
-        f"/v1/actions/{action['action_id']}/reconcile",
+        f'/v1/actions/{action["action_id"]}/reconcile',
         headers={'Idempotency-Key': 'not-unknown'},
     )
     assert response.status_code == 409
@@ -62,9 +62,7 @@ async def test_reconcile_unknown_fact_remains_unknown(platform, client):
     from workbench_agent.delivery.dispatcher import Dispatcher
 
     service, action = await setup_action(platform)
-    await service.authorize(
-        platform.auth, action['approval_id'], 'approve', action['payload_hash']
-    )
+    await service.authorize(platform.auth, action['approval_id'], 'approve', action['payload_hash'])
 
     class Connector:
         sends = 0
@@ -80,7 +78,7 @@ async def test_reconcile_unknown_fact_remains_unknown(platform, client):
     platform.backend._delivery_senders = {'ticket': connector}
     assert await Dispatcher(platform.backend, 'worker').dispatch_one() == 'unknown'
     response = await client.post(
-        f"/v1/actions/{action['action_id']}/reconcile",
+        f'/v1/actions/{action["action_id"]}/reconcile',
         headers={'Idempotency-Key': 'unknown-result'},
     )
     assert response.status_code == 202
@@ -95,9 +93,7 @@ async def test_reconcile_revoked_authority_never_calls_lookup(platform, client):
     from workbench_agent.tools.permissions import DeploymentToolPermissions
 
     service, action = await setup_action(platform)
-    await service.authorize(
-        platform.auth, action['approval_id'], 'approve', action['payload_hash']
-    )
+    await service.authorize(platform.auth, action['approval_id'], 'approve', action['payload_hash'])
 
     class Connector:
         sends = 0
@@ -117,7 +113,7 @@ async def test_reconcile_revoked_authority_never_calls_lookup(platform, client):
     platform.backend._tool_permissions = DeploymentToolPermissions(lambda: {})
     await set_policy(platform, rules={})
     response = await client.post(
-        f"/v1/actions/{action['action_id']}/reconcile",
+        f'/v1/actions/{action["action_id"]}/reconcile',
         headers={'Idempotency-Key': 'revoked-reconcile'},
     )
     assert response.status_code in (403, 404)
@@ -130,9 +126,7 @@ async def test_reconcile_without_lookup_is_unavailable(platform, client):
     from workbench_agent.delivery.dispatcher import Dispatcher
 
     service, action = await setup_action(platform)
-    await service.authorize(
-        platform.auth, action['approval_id'], 'approve', action['payload_hash']
-    )
+    await service.authorize(platform.auth, action['approval_id'], 'approve', action['payload_hash'])
 
     class Connector:
         async def send(self, *args):
@@ -141,7 +135,7 @@ async def test_reconcile_without_lookup_is_unavailable(platform, client):
     platform.backend._delivery_senders = {'ticket': Connector()}
     assert await Dispatcher(platform.backend, 'worker').dispatch_one() == 'unknown'
     response = await client.post(
-        f"/v1/actions/{action['action_id']}/reconcile",
+        f'/v1/actions/{action["action_id"]}/reconcile',
         headers={'Idempotency-Key': 'missing-lookup'},
     )
     assert response.status_code == 503

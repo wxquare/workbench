@@ -49,9 +49,7 @@ async def knowledge_ref(platform):
 
 
 @pytest.mark.asyncio
-async def test_tool_conversation_admits_scoped_published_knowledge_search(
-    platform, client
-):
+async def test_tool_conversation_admits_scoped_published_knowledge_search(platform, client):
     ref = await knowledge_ref(platform)
     await publish_profile(platform, (ref,))
     payload = make_run_payload(platform.agent_id)
@@ -100,9 +98,7 @@ async def test_configured_mapped_tool_requires_its_current_policy(platform, clie
 
 
 @pytest.mark.asyncio
-async def test_tool_conversation_requires_scope_and_read_only_supported_binding(
-    platform, client
-):
+async def test_tool_conversation_requires_scope_and_read_only_supported_binding(platform, client):
     ref = await knowledge_ref(platform)
     await publish_profile(platform, (ref,))
     payload = make_run_payload(platform.agent_id)

@@ -1,4 +1,5 @@
 """Durably queue and fence repository snapshots for approved local repositories."""
+
 from dataclasses import asdict
 import asyncio
 from hashlib import sha256
@@ -29,12 +30,23 @@ class RepositoryService:
         request = {'repo_id': repo_id, 'commit': ref}
         async with self.backend.create_uow().begin_write() as uow:
             await self.profiles.agent(uow, auth, agent_id, 'admin')
+
             async def operation():
-                payload = {**request, 'subject': auth.subject, 'identity_kind': auth.identity_kind, 'agent_scope': auth.agent_scope}
+                payload = {
+                    **request,
+                    'subject': auth.subject,
+                    'identity_kind': auth.identity_kind,
+                    'agent_scope': auth.agent_scope,
+                }
                 principal = AdminAuth(auth.team_id, agent_id, auth.subject, True)
-                job = await self.backend.admin_jobs.submit(uow, principal, 'repo_sync', canonical(payload), digest(request), key)
+                job = await self.backend.admin_jobs.submit(
+                    uow, principal, 'repo_sync', canonical(payload), digest(request), key
+                )
                 return asdict(job)
-            result = await self.profiles.idempotency.execute(uow, auth, agent_id, 'repository.sync', key, request, operation, status=202)
+
+            result = await self.profiles.idempotency.execute(
+                uow, auth, agent_id, 'repository.sync', key, request, operation, status=202
+            )
             return AdminJob(**result.body)
 
 
@@ -48,7 +60,13 @@ class RepositorySyncWorker:
 
     async def execute(self, claim):
         payload = json.loads(claim.payload)
-        auth = AuthContext(team_id=claim.team_id, subject=payload['subject'], roles=(), identity_kind=payload['identity_kind'], agent_scope=payload['agent_scope'])
+        auth = AuthContext(
+            team_id=claim.team_id,
+            subject=payload['subject'],
+            roles=(),
+            identity_kind=payload['identity_kind'],
+            agent_scope=payload['agent_scope'],
+        )
         repository = self.repositories.get((claim.team_id, claim.agent_id, payload['repo_id']))
         if repository is None:
             raise ValueError('repository not approved')
@@ -62,7 +80,13 @@ class RepositorySyncWorker:
             object_ref = await asyncio.to_thread(self.objects.put, archive)
         async with self.backend.create_uow().begin_write() as uow:
             await self._check(uow, claim, auth)
-            scope = dict(team_id=claim.team_id, agent_id=claim.agent_id, repo_id=payload['repo_id'], commit_sha=payload['commit'], format_version='tar.v1')
+            scope = dict(
+                team_id=claim.team_id,
+                agent_id=claim.agent_id,
+                repo_id=payload['repo_id'],
+                commit_sha=payload['commit'],
+                format_version='tar.v1',
+            )
             existing = await self.backend.configuration.one(uow, 'repo_snapshots', **scope)
             if existing:
                 if existing['storage_ref'] != object_ref or existing['status'] != 'ready':
@@ -71,5 +95,18 @@ class RepositorySyncWorker:
             else:
                 snapshot_id = str(uuid4())
                 now = await self.backend.clock.now_ms(uow)
-                await self.backend.configuration.insert(uow, 'repo_snapshots', dict(**scope, snapshot_id=snapshot_id, storage_ref=object_ref, status='ready', created_at=now, updated_at=now))
-        return canonical({'snapshot_id': snapshot_id, 'commit': payload['commit'], 'sha256': checksum})
+                await self.backend.configuration.insert(
+                    uow,
+                    'repo_snapshots',
+                    dict(
+                        **scope,
+                        snapshot_id=snapshot_id,
+                        storage_ref=object_ref,
+                        status='ready',
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+        return canonical(
+            {'snapshot_id': snapshot_id, 'commit': payload['commit'], 'sha256': checksum}
+        )

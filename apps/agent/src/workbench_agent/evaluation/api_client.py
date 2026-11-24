@@ -82,9 +82,7 @@ class EvaluationAPI:
             headers={'Idempotency-Key': key},
         )
 
-    async def publish_kb_entry(
-        self, entry_id: str, revision: int, *, key: str
-    ) -> dict:
+    async def publish_kb_entry(self, entry_id: str, revision: int, *, key: str) -> dict:
         return await self._json(
             'POST',
             f'/v1/kb/entries/{entry_id}/publish',
@@ -94,9 +92,7 @@ class EvaluationAPI:
     async def get_kb_entry(self, entry_id: str) -> dict:
         return await self._json('GET', f'/v1/kb/entries/{entry_id}')
 
-    async def save_kb_entry(
-        self, entry_id: str, body: dict, revision: int, *, key: str
-    ) -> dict:
+    async def save_kb_entry(self, entry_id: str, body: dict, revision: int, *, key: str) -> dict:
         return await self._json(
             'PATCH',
             f'/v1/kb/entries/{entry_id}',
@@ -105,9 +101,7 @@ class EvaluationAPI:
         )
 
     async def get_kb_version(self, entry_id: str, version: int) -> dict:
-        return await self._json(
-            'GET', f'/v1/kb/entries/{entry_id}/versions/{version}'
-        )
+        return await self._json('GET', f'/v1/kb/entries/{entry_id}/versions/{version}')
 
     async def search_knowledge(self, query: str, scope: dict, *, limit: int = 3) -> dict:
         return await self._json(

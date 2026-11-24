@@ -26,20 +26,24 @@ def binding():
 
 
 def policy():
-    return ConnectionPolicy([
-        TrustedConnection(
-            'team',
-            'agent',
-            'web',
-            'read',
-            frozenset({'web_search'}),
-            ({
-                'result_limit': 5,
-                'domain_policy_id': 'public-docs-v1',
-                'allowed_result_hosts': ['docs.example.com'],
-            },),
-        )
-    ])
+    return ConnectionPolicy(
+        [
+            TrustedConnection(
+                'team',
+                'agent',
+                'web',
+                'read',
+                frozenset({'web_search'}),
+                (
+                    {
+                        'result_limit': 5,
+                        'domain_policy_id': 'public-docs-v1',
+                        'allowed_result_hosts': ['docs.example.com'],
+                    },
+                ),
+            )
+        ]
+    )
 
 
 def response(status='ok', results=None):
@@ -59,12 +63,18 @@ def response(status='ok', results=None):
 
 def test_empty_and_denied_statuses_are_preserved():
     empty = validate_web_search_response(
-        response('empty'), policy=policy(), team_id='team',
-        agent_id='agent', binding=binding(),
+        response('empty'),
+        policy=policy(),
+        team_id='team',
+        agent_id='agent',
+        binding=binding(),
     )
     denied = validate_web_search_response(
-        response('denied'), policy=policy(), team_id='team',
-        agent_id='agent', binding=binding(),
+        response('denied'),
+        policy=policy(),
+        team_id='team',
+        agent_id='agent',
+        binding=binding(),
     )
     assert empty['status'] == 'empty'
     assert denied['status'] == 'denied'
@@ -82,15 +92,22 @@ def test_missing_web_grant_is_rejected():
 
 
 def test_bad_url_cannot_be_reported_as_success():
-    result = response(results=[{
-        'title': 'Bad',
-        'url': 'https://docs.example.com.attacker.test/a',
-        'snippet': 'data',
-        'published_at': None,
-    }])
+    result = response(
+        results=[
+            {
+                'title': 'Bad',
+                'url': 'https://docs.example.com.attacker.test/a',
+                'snippet': 'data',
+                'published_at': None,
+            }
+        ]
+    )
     value = validate_web_search_response(
-        result, policy=policy(), team_id='team',
-        agent_id='agent', binding=binding(),
+        result,
+        policy=policy(),
+        team_id='team',
+        agent_id='agent',
+        binding=binding(),
     )
     assert value['status'] == 'denied'
 

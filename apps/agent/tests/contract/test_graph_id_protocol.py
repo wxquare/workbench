@@ -1,4 +1,5 @@
 """The wire protocol exposes graph IDs without accepting the old name."""
+
 from dataclasses import asdict
 import pytest
 from pydantic import ValidationError
@@ -22,12 +23,20 @@ def test_worker_capabilities_use_graph_ids(config_data):
     assert asdict(capability)['graph_ids'] == ('conversation.multi_turn',)
     assert 'graph_versions' not in asdict(capability)
     assert set(Settings.model_validate(config_data).worker.supported_graph_ids) == {
-        'conversation.single_turn', 'conversation.multi_turn'}
+        'conversation.single_turn',
+        'conversation.multi_turn',
+    }
 
 
 async def test_configured_worker_registry_exposes_only_enabled_graphs(platform):
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
-    registry = foundation_worker_registry(platform.backend, supported_graph_ids=platform.settings.worker.supported_graph_ids)
-    assert set(registry.capabilities().graph_ids) == {'conversation.single_turn', 'conversation.multi_turn'}
+
+    registry = foundation_worker_registry(
+        platform.backend, supported_graph_ids=platform.settings.worker.supported_graph_ids
+    )
+    assert set(registry.capabilities().graph_ids) == {
+        'conversation.single_turn',
+        'conversation.multi_turn',
+    }
     with pytest.raises(ValueError):
         foundation_worker_registry(platform.backend, supported_graph_ids=['retired.graph'])

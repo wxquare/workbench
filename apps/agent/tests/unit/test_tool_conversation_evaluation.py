@@ -45,10 +45,7 @@ def row(summary, *, status='succeeded', evidence=('ev-1',), error=None):
             'evidence_refs': list(evidence),
             'unresolved_items': [] if status == 'succeeded' else ['reason'],
         },
-        'evidence': [
-            {'evidence_id': ref, 'content': {'status': 'ok'}}
-            for ref in evidence
-        ],
+        'evidence': [{'evidence_id': ref, 'content': {'status': 'ok'}} for ref in evidence],
         'usage': {'tool_calls': 1},
         'error_code': error,
     }
@@ -56,13 +53,9 @@ def row(summary, *, status='succeeded', evidence=('ev-1',), error=None):
 
 def summary(*calls):
     lines = '\n'.join(
-        f'- {alias} / call-{index} / {status}'
-        for index, (alias, status) in enumerate(calls, 1)
+        f'- {alias} / call-{index} / {status}' for index, (alias, status) in enumerate(calls, 1)
     )
-    return (
-        '以下回答基于所列工具返回的结果，未经独立校验\n\n'
-        f'answer\n\n工具依据：\n{lines}'
-    )
+    return f'以下回答基于所列工具返回的结果，未经独立校验\n\nanswer\n\n工具依据：\n{lines}'
 
 
 def test_example_template_covers_every_offline_scenario():
@@ -165,15 +158,13 @@ def test_completed_answer_requires_readable_evidence():
         ),
     ],
 )
-def test_failure_outcomes_require_visible_partial_result(
-    expected, status, line, evidence, reason
-):
+def test_failure_outcomes_require_visible_partial_result(expected, status, line, evidence, reason):
     calls = (line,) if line else ()
     result = score_tool_result(
         case(
             'case',
             expected,
-                sequence=('knowledge.search',),
+            sequence=('knowledge.search',),
         ),
         row(
             summary(*calls),

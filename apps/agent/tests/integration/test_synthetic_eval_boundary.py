@@ -15,25 +15,24 @@ def _synthetic():
     value['schema_version'] = 'knowledge-eval-v1'
     value.pop('description', None)
     for index, case in enumerate(value['cases']):
-        case['question'] = f"{case['question']} #{index + 1}"
+        case['question'] = f'{case["question"]} #{index + 1}'
     return value
 
 
 def test_synthetic_dataset_requires_engineering_purpose():
     with pytest.raises(ValueError, match='business'):
         validate_dataset(_synthetic(), require_complete=True)
-    assert validate_dataset(
-        _synthetic(), require_complete=True, purpose='engineering'
-    )['dataset_kind'] == 'synthetic'
+    assert (
+        validate_dataset(_synthetic(), require_complete=True, purpose='engineering')['dataset_kind']
+        == 'synthetic'
+    )
 
 
 def test_synthetic_holdout_is_not_accepted_for_engineering_regression():
     dataset = _synthetic()
     dataset['cases'][0]['split'] = 'holdout'
     with pytest.raises(ValueError, match='dev'):
-        validate_dataset(
-            dataset, require_complete=True, purpose='engineering'
-        )
+        validate_dataset(dataset, require_complete=True, purpose='engineering')
 
 
 def test_synthetic_report_cannot_pass_release():
@@ -55,9 +54,7 @@ def test_synthetic_report_cannot_pass_release():
 def test_business_dataset_keeps_existing_quality_semantics():
     dataset = _synthetic()
     dataset['dataset_kind'] = 'business'
-    assert validate_dataset(
-        dataset, require_complete=True, purpose='business'
-    ) is dataset
+    assert validate_dataset(dataset, require_complete=True, purpose='business') is dataset
     report = {'quality_status': 'passed', 'release_passed': True}
     assert apply_dataset_boundary(report, dataset_kind='business') == {
         **report,

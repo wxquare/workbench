@@ -1,4 +1,5 @@
 """Raw historical fixtures keep immutable migrations independent of current runtime."""
+
 from pathlib import Path
 import sqlite3
 
@@ -36,14 +37,20 @@ def seed_historical_run(path, *, status='queued', epoch=0):
     with sqlite3.connect(path) as db:
         db.execute('PRAGMA foreign_keys=ON')
         db.execute("INSERT INTO teams(team_id,name,status) VALUES ('team','Legacy','active')")
-        db.execute("INSERT INTO workspaces(team_id,workspace_id,name) VALUES ('team','workspace','Legacy')")
+        db.execute(
+            "INSERT INTO workspaces(team_id,workspace_id,name) VALUES ('team','workspace','Legacy')"
+        )
         db.execute("""INSERT INTO runtime_profiles(team_id,profile_id,workspace_id,version,graph_version,
             profile_json,hash,status) VALUES ('team','profile','workspace',1,'dod.v1','{}','hash','published')""")
-        db.execute("INSERT INTO threads(team_id,thread_id,workspace_id) VALUES ('team','thread','workspace')")
-        db.execute("""INSERT INTO runs(team_id,run_id,thread_id,workspace_id,status,runtime_profile_id,
+        db.execute(
+            "INSERT INTO threads(team_id,thread_id,workspace_id) VALUES ('team','thread','workspace')"
+        )
+        db.execute(
+            """INSERT INTO runs(team_id,run_id,thread_id,workspace_id,status,runtime_profile_id,
             versions,budgets,run_epoch,wall_deadline_at,created_at,updated_at)
             VALUES ('team','run','thread','workspace',?,'profile','{}','{}',?,172801000,1000,1000)""",
-                   (status, epoch))
+            (status, epoch),
+        )
 
 
 def snapshot(path):
@@ -51,8 +58,16 @@ def snapshot(path):
         return '\n'.join(db.iterdump())
 
 
-@pytest.mark.parametrize('revision', ['0001_core', '0002_team_receipts', '0005_resume_protocol',
-                                     '0012_schedule_manual_fires', 'head'])
+@pytest.mark.parametrize(
+    'revision',
+    [
+        '0001_core',
+        '0002_team_receipts',
+        '0005_resume_protocol',
+        '0012_schedule_manual_fires',
+        'head',
+    ],
+)
 @pytest.mark.parametrize('populated', [False, True])
 def test_every_legacy_baseline_is_rejected_untouched(tmp_path, revision, populated):
     path = tmp_path / 'legacy.db'

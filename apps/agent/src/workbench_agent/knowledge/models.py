@@ -1,4 +1,5 @@
 """Bounded, immutable knowledge content contracts."""
+
 from datetime import date
 from hashlib import sha256
 from typing import Literal
@@ -40,17 +41,27 @@ class KBDraft(KnowledgeValue):
     @field_validator('service', 'environment', 'region')
     @classmethod
     def validate_scope(cls, value):
-        if value is not None and (not value.strip() or value != value.strip()
-                                  or value.casefold() == 'all' or ',' in value or '*' in value
-                                  or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+        if value is not None and (
+            not value.strip()
+            or value != value.strip()
+            or value.casefold() == 'all'
+            or ',' in value
+            or '*' in value
+            or any(ord(c) < 32 or ord(c) == 127 for c in value)
+        ):
             raise ValueError('invalid scope')
         return value
 
     @field_validator('tags', 'aliases')
     @classmethod
     def validate_names(cls, values):
-        if any(not v.strip() or v != v.strip() or len(v) > 64
-               or any(ord(c) < 32 or ord(c) == 127 for c in v) for v in values):
+        if any(
+            not v.strip()
+            or v != v.strip()
+            or len(v) > 64
+            or any(ord(c) < 32 or ord(c) == 127 for c in v)
+            for v in values
+        ):
             raise ValueError('invalid tag or alias')
         return values
 

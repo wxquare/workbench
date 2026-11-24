@@ -1,4 +1,5 @@
 """Deterministic structured reducers; expert input never replaces evidence silently."""
+
 from copy import deepcopy
 
 

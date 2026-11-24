@@ -24,18 +24,12 @@ def append_holdout_access(ledger: str | Path, event: dict) -> None:
         raise ValueError('holdout event requires release and dataset')
     existing = []
     if path.exists():
-        existing = [
-            json.loads(line)
-            for line in path.read_text().splitlines()
-            if line
-        ]
-    if not any(
-        (item.get('release_id'), item.get('dataset_hash')) == key
-        for item in existing
-    ):
+        existing = [json.loads(line) for line in path.read_text().splitlines() if line]
+    if not any((item.get('release_id'), item.get('dataset_hash')) == key for item in existing):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('a') as handle:
             handle.write(json.dumps(event, sort_keys=True) + '\n')
             handle.flush()
             import os
+
             os.fsync(handle.fileno())

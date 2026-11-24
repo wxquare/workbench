@@ -26,9 +26,7 @@ def case_upper_bound(limits: dict, pricing: dict) -> int:
     return (calls * tokens * max(input_price, output_price) + 999_999) // 1_000_000
 
 
-def reserve_case_budget(
-    manifest: dict, usage: dict, upper_bound: dict
-) -> dict:
+def reserve_case_budget(manifest: dict, usage: dict, upper_bound: dict) -> dict:
     budget = upper_bound.get('amount_micros')
     currency = upper_bound.get('currency')
     spent = usage.get('known_costs') or {}

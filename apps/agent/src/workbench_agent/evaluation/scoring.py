@@ -59,11 +59,7 @@ def score_result(case: dict, row: dict) -> dict:
     evidence = _evidence_by_id(row)
     text = ''
     if isinstance(outcome, dict):
-        text = ' '.join(
-            str(value.get('text', ''))
-            for value in claims
-            if isinstance(value, dict)
-        )
+        text = ' '.join(str(value.get('text', '')) for value in claims if isinstance(value, dict))
     if not text:
         summary = outcome.get('summary') if isinstance(outcome, dict) else ''
         text = summary if isinstance(summary, str) else ''
@@ -104,7 +100,9 @@ def score_result(case: dict, row: dict) -> dict:
             if isinstance(citation, dict)
         }
         covered = expected <= cited
-        checks.append({'kind': 'expected_sources', 'passed': covered, 'missing': sorted(expected - cited)})
+        checks.append(
+            {'kind': 'expected_sources', 'passed': covered, 'missing': sorted(expected - cited)}
+        )
         if not covered:
             reasons.append('expected_source_missing')
         for phrase in case.get('must_include') or []:
@@ -142,7 +140,9 @@ def score_result(case: dict, row: dict) -> dict:
                     and source is not None
                     and quote in _source_content(source)
                 )
-                checks.append({'kind': 'citation_quote', 'evidence_ref': evidence_id, 'passed': passed})
+                checks.append(
+                    {'kind': 'citation_quote', 'evidence_ref': evidence_id, 'passed': passed}
+                )
                 if not passed:
                     reasons.append('citation_quote_mismatch')
 

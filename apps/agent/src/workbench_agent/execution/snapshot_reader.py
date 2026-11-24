@@ -3,6 +3,7 @@
 No archive member is extracted to the host filesystem. All members are
 validated before selecting a path so links and ambiguous entries fail closed.
 """
+
 from dataclasses import dataclass
 from hashlib import sha256
 from io import BytesIO
@@ -33,7 +34,13 @@ def _path(name):
 
 def read_snapshot_lines(archive: bytes, path: str, start: int, end: int) -> SnapshotLines:
     path = _path(path)
-    if type(start) is not int or type(end) is not int or start < 1 or end < start or end - start + 1 > MAX_LINES:
+    if (
+        type(start) is not int
+        or type(end) is not int
+        or start < 1
+        or end < start
+        or end - start + 1 > MAX_LINES
+    ):
         raise ValueError('invalid line range')
     if not isinstance(archive, bytes) or len(archive) > MAX_ARCHIVE_BYTES:
         raise ValueError('invalid snapshot size')
@@ -78,7 +85,10 @@ def read_snapshot_lines(archive: bytes, path: str, start: int, end: int) -> Snap
         lines = []
     if start > len(lines) or end > len(lines):
         raise ValueError('line range outside file')
-    selected_lines = lines[start - 1:end]
+    selected_lines = lines[start - 1 : end]
     if any(len(line.encode('utf-8')) > MAX_LINE_BYTES for line in selected_lines):
         raise ValueError('snapshot line too large')
-    return SnapshotLines(tuple((number, line) for number, line in enumerate(selected_lines, start)), sha256(selected).hexdigest())
+    return SnapshotLines(
+        tuple((number, line) for number, line in enumerate(selected_lines, start)),
+        sha256(selected).hexdigest(),
+    )

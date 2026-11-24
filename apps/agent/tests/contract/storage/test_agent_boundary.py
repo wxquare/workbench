@@ -1,4 +1,5 @@
 """Agent storage has a distinct, non-destructive database boundary."""
+
 import sqlite3
 from contextlib import closing
 
@@ -12,7 +13,9 @@ from workbench_agent.persistence.schema_agent_v3 import metadata as agent_v3
 
 
 @pytest.mark.parametrize('legacy', [False, True])
-def test_migration_cli_reports_safe_initialization_guidance(config_data, tmp_path, monkeypatch, capsys, legacy):
+def test_migration_cli_reports_safe_initialization_guidance(
+    config_data, tmp_path, monkeypatch, capsys, legacy
+):
     import json
     import sys
     import yaml
@@ -26,8 +29,10 @@ def test_migration_cli_reports_safe_initialization_guidance(config_data, tmp_pat
             db.execute('CREATE TABLE workspaces(value TEXT)')
         before = path.read_bytes()
     else:
+
         def unavailable(*args):
             raise RuntimeError('private-database-path-and-credential')
+
         monkeypatch.setattr('workbench_agent.cli.db.migrate', unavailable)
     config = tmp_path / 'migration.yaml'
     config.write_text(yaml.safe_dump(config_data))
@@ -51,25 +56,53 @@ def test_agent_metadata_preserves_historical_structure():
     def mapped(name):
         return name.replace('workspaces', 'agents').replace('workspace_id', 'agent_id')
 
-    assert set(agent_v3.tables) == {mapped(name) for name in historical.tables} | {'skill_drafts', 'run_trace_contexts'}
+    assert set(agent_v3.tables) == {mapped(name) for name in historical.tables} | {
+        'skill_drafts',
+        'run_trace_contexts',
+    }
     assert set(schema.metadata.tables) == set(agent_v3.tables) | {'kb_entries', 'kb_entry_versions'}
     for old in historical.tables.values():
         new = agent_v3.tables[mapped(old.name)]
-        assert [(c.name, str(c.type), c.nullable, c.primary_key,
-                 str(c.server_default.arg) if c.server_default is not None else None)
-                for c in new.columns] == [
-                    (mapped(c.name), str(c.type), c.nullable, c.primary_key,
-                     str(c.server_default.arg) if c.server_default is not None else None)
-                    for c in old.columns]
+        assert [
+            (
+                c.name,
+                str(c.type),
+                c.nullable,
+                c.primary_key,
+                str(c.server_default.arg) if c.server_default is not None else None,
+            )
+            for c in new.columns
+        ] == [
+            (
+                mapped(c.name),
+                str(c.type),
+                c.nullable,
+                c.primary_key,
+                str(c.server_default.arg) if c.server_default is not None else None,
+            )
+            for c in old.columns
+        ]
+
         def constraints(table, rename):
-            return {(type(c).__name__, rename(c.name) if c.name else None,
-                     tuple(rename(col.name) for col in c.columns),
-                     tuple(rename(e.target_fullname) for e in c.elements) if hasattr(c, 'elements') else (),
-                     getattr(c, 'ondelete', None), str(c.sqltext) if hasattr(c, 'sqltext') else None)
-                    for c in table.constraints}
+            return {
+                (
+                    type(c).__name__,
+                    rename(c.name) if c.name else None,
+                    tuple(rename(col.name) for col in c.columns),
+                    tuple(rename(e.target_fullname) for e in c.elements)
+                    if hasattr(c, 'elements')
+                    else (),
+                    getattr(c, 'ondelete', None),
+                    str(c.sqltext) if hasattr(c, 'sqltext') else None,
+                )
+                for c in table.constraints
+            }
+
         assert constraints(new, str) == constraints(old, mapped)
         assert {(i.name, i.unique, tuple(c.name for c in i.columns)) for i in new.indexes} == {
-            (mapped(i.name), i.unique, tuple(mapped(c.name) for c in i.columns)) for i in old.indexes}
+            (mapped(i.name), i.unique, tuple(mapped(c.name) for c in i.columns))
+            for i in old.indexes
+        }
     assert 'workspace_id' in historical.tables['runs'].c
 
 
@@ -79,8 +112,11 @@ def test_fresh_and_repeated_agent_initialization(tmp_path):
     migrate(url)
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT * FROM dod_storage_metadata').fetchall() == [
-            ('dod-storage-agent-v1', 'dod-checkpoint-v1')]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_review_indexes',)]
+            ('dod-storage-agent-v1', 'dod-checkpoint-v1')
+        ]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [
+            ('0007_review_indexes',)
+        ]
         assert not validate_required_schema(db)
         db.execute("INSERT INTO teams(team_id,name,status) VALUES ('a','a','active')")
         db.execute("INSERT INTO agents(team_id,agent_id,name) VALUES ('a','agent','Agent')")
@@ -98,19 +134,27 @@ def test_upgrade_existing_agent_database_preserves_agents_and_private_skills(tmp
     with engine.begin() as db:
         db.exec_driver_sql('PRAGMA journal_mode=WAL')
         metadata.create_all(db)
-        db.exec_driver_sql('CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)')
+        db.exec_driver_sql(
+            'CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)'
+        )
         db.exec_driver_sql("INSERT INTO alembic_version VALUES ('0001_agent_domain')")
-        db.exec_driver_sql("INSERT INTO dod_storage_metadata VALUES ('dod-storage-agent-v1','dod-checkpoint-v1')")
+        db.exec_driver_sql(
+            "INSERT INTO dod_storage_metadata VALUES ('dod-storage-agent-v1','dod-checkpoint-v1')"
+        )
         db.exec_driver_sql("INSERT INTO teams(team_id,name,status) VALUES ('t','team','active')")
         db.exec_driver_sql("INSERT INTO agents(team_id,agent_id,name) VALUES ('t','a','Agent')")
-        db.exec_driver_sql("INSERT INTO skills(team_id,skill_id,agent_id,name,status) VALUES ('t','s','a','private','active')")
+        db.exec_driver_sql(
+            "INSERT INTO skills(team_id,skill_id,agent_id,name,status) VALUES ('t','s','a','private','active')"
+        )
     engine.dispose()
     migrate(f'sqlite+aiosqlite:///{path}')
     with closing(sqlite3.connect(path)) as db:
         assert not validate_required_schema(db)
         assert db.execute('SELECT agent_id FROM agents').fetchall() == [('a',)]
         assert db.execute('SELECT agent_id,name FROM skills').fetchall() == [('a', 'private')]
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_review_indexes',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [
+            ('0007_review_indexes',)
+        ]
 
 
 def test_upgrade_shared_skills_database_keeps_drafts(tmp_path):
@@ -122,17 +166,29 @@ def test_upgrade_shared_skills_database_keeps_drafts(tmp_path):
     with engine.begin() as db:
         db.exec_driver_sql('PRAGMA journal_mode=WAL')
         metadata.create_all(db)
-        db.exec_driver_sql('CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)')
+        db.exec_driver_sql(
+            'CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)'
+        )
         db.exec_driver_sql("INSERT INTO alembic_version VALUES ('0002_shared_skills')")
-        db.exec_driver_sql("INSERT INTO dod_storage_metadata VALUES ('dod-storage-agent-v1','dod-checkpoint-v1')")
+        db.exec_driver_sql(
+            "INSERT INTO dod_storage_metadata VALUES ('dod-storage-agent-v1','dod-checkpoint-v1')"
+        )
         db.exec_driver_sql("INSERT INTO teams(team_id,name,status) VALUES ('t','team','active')")
-        db.exec_driver_sql("INSERT INTO skills(team_id,skill_id,name,status) VALUES ('t','s','shared','active')")
-        db.exec_driver_sql("INSERT INTO skill_drafts VALUES ('s','t','shared','description','keep me',1,1)")
+        db.exec_driver_sql(
+            "INSERT INTO skills(team_id,skill_id,name,status) VALUES ('t','s','shared','active')"
+        )
+        db.exec_driver_sql(
+            "INSERT INTO skill_drafts VALUES ('s','t','shared','description','keep me',1,1)"
+        )
     engine.dispose()
     migrate(f'sqlite+aiosqlite:///{path}')
     with closing(sqlite3.connect(path)) as db:
-        assert __import__('json').loads(db.execute('SELECT files_json FROM skill_drafts').fetchone()[0]) == {'SKILL.md': {'encoding': 'utf-8', 'content': 'keep me'}}
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_review_indexes',)]
+        assert __import__('json').loads(
+            db.execute('SELECT files_json FROM skill_drafts').fetchone()[0]
+        ) == {'SKILL.md': {'encoding': 'utf-8', 'content': 'keep me'}}
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [
+            ('0007_review_indexes',)
+        ]
         assert not validate_required_schema(db)
 
 
@@ -145,8 +201,12 @@ def test_legacy_database_rejected_without_mutation(tmp_path, populated, stamped)
         if populated:
             db.execute("INSERT INTO workspaces VALUES ('keep-me')")
         if stamped:
-            db.execute('CREATE TABLE dod_storage_metadata(schema_version TEXT, checkpoint_codec_version TEXT)')
-            db.execute("INSERT INTO dod_storage_metadata VALUES ('dod-storage-v1','dod-checkpoint-v1')")
+            db.execute(
+                'CREATE TABLE dod_storage_metadata(schema_version TEXT, checkpoint_codec_version TEXT)'
+            )
+            db.execute(
+                "INSERT INTO dod_storage_metadata VALUES ('dod-storage-v1','dod-checkpoint-v1')"
+            )
     before = path.read_bytes()
     with pytest.raises(RuntimeError, match='fresh.*database'):
         migrate(f'sqlite+aiosqlite:///{path}')
@@ -214,12 +274,15 @@ def test_unknown_database_is_rejected_without_mutation(tmp_path, table):
     assert path.read_bytes() == before
 
 
-@pytest.mark.parametrize('replacement', [
-    None,
-    'active_executions >= -100',
-    "'CHECK (active_executions >= 0)' IS NOT NULL",
-    'active_executions >= -100 /* CHECK (active_executions >= 0) */',
-])
+@pytest.mark.parametrize(
+    'replacement',
+    [
+        None,
+        'active_executions >= -100',
+        "'CHECK (active_executions >= 0)' IS NOT NULL",
+        'active_executions >= -100 /* CHECK (active_executions >= 0) */',
+    ],
+)
 async def test_missing_or_weakened_check_is_unready_and_migration_rejects(tmp_path, replacement):
     from sqlalchemy import CheckConstraint, MetaData, create_engine
     from workbench_agent.persistence.backends.sqlite import SQLiteBackend
@@ -242,11 +305,17 @@ async def test_missing_or_weakened_check_is_unready_and_migration_rejects(tmp_pa
         with engine.begin() as db:
             db.exec_driver_sql('PRAGMA journal_mode=WAL')
             altered.create_all(db)
-            db.exec_driver_sql('CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)')
+            db.exec_driver_sql(
+                'CREATE TABLE alembic_version(version_num VARCHAR(32) NOT NULL PRIMARY KEY)'
+            )
             db.exec_driver_sql('INSERT INTO alembic_version VALUES (?)', (MIGRATION_HEAD,))
-            db.exec_driver_sql('INSERT INTO dod_storage_metadata VALUES (?,?)',
-                               (SCHEMA_VERSION, CHECKPOINT_CODEC_VERSION))
-            db.exec_driver_sql("INSERT INTO teams(team_id,name,status,active_executions) VALUES ('t','t','active',-1)")
+            db.exec_driver_sql(
+                'INSERT INTO dod_storage_metadata VALUES (?,?)',
+                (SCHEMA_VERSION, CHECKPOINT_CODEC_VERSION),
+            )
+            db.exec_driver_sql(
+                "INSERT INTO teams(team_id,name,status,active_executions) VALUES ('t','t','active',-1)"
+            )
     finally:
         engine.dispose()
     with closing(sqlite3.connect(path)) as db:

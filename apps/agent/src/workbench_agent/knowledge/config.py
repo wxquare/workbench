@@ -1,4 +1,5 @@
 """Deployment-only knowledge retrieval configuration."""
+
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -45,6 +46,13 @@ class KnowledgeSettings(KnowledgeConfig):
             raise ValueError('duplicate knowledge grant')
         if self.public_base_url is not None:
             url = urlsplit(self.public_base_url)
-            if url.scheme not in {'http', 'https'} or not url.netloc or url.username or url.password or url.query or url.fragment:
+            if (
+                url.scheme not in {'http', 'https'}
+                or not url.netloc
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+            ):
                 raise ValueError('invalid knowledge public base URL')
         return self

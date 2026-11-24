@@ -10,9 +10,9 @@ import pytest
 
 @pytest.mark.parametrize('mode', ['knowledge', 'direct'])
 def test_browser_harness_serves_http_and_runs_separate_worker(mode, tmp_path):
-    frontend = tmp_path / "web"
+    frontend = tmp_path / 'web'
     frontend.mkdir()
-    (frontend / "index.html").write_text("<!doctype html><title>Fixture</title>")
+    (frontend / 'index.html').write_text('<!doctype html><title>Fixture</title>')
     with socket.socket() as sock:
         try:
             sock.bind(('127.0.0.1', 0))
@@ -22,8 +22,20 @@ def test_browser_harness_serves_http_and_runs_separate_worker(mode, tmp_path):
     script = Path(__file__).resolve().parents[1] / 'support' / 'qa_browser_harness.py'
     error_log = tmp_path / 'harness-stderr.log'
     stderr = error_log.open('w')
-    process = subprocess.Popen([sys.executable, str(script), '--port', str(port), '--mode', mode, '--frontend-dist', str(frontend)],
-        stdout=subprocess.DEVNULL, stderr=stderr)
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(script),
+            '--port',
+            str(port),
+            '--mode',
+            mode,
+            '--frontend-dist',
+            str(frontend),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=stderr,
+    )
     base = f'http://127.0.0.1:{port}'
     try:
         with httpx.Client(timeout=2, trust_env=False) as client:
@@ -35,14 +47,25 @@ def test_browser_harness_serves_http_and_runs_separate_worker(mode, tmp_path):
                     break
                 except (httpx.TransportError, ValueError):
                     assert time.monotonic() < deadline
-                    time.sleep(.1)
+                    time.sleep(0.1)
             assert client.get(base + '/docs').status_code == 200
             assert client.get(base + '/app', headers={'Accept': 'text/html'}).status_code == 200
-            headers = {'Authorization': 'Bearer ' + fixture['token'], 'Idempotency-Key': 'browser-test'}
-            response = client.post(base + '/v1/runs', headers=headers, json={
-                'agent_id': fixture['agent_id'], 'mode': 'qa',
-                'input': {'text': 'What should I do before retrying?'},
-                'business_context': {'query_scope': fixture['query_scope']} if mode == 'knowledge' else {}})
+            headers = {
+                'Authorization': 'Bearer ' + fixture['token'],
+                'Idempotency-Key': 'browser-test',
+            }
+            response = client.post(
+                base + '/v1/runs',
+                headers=headers,
+                json={
+                    'agent_id': fixture['agent_id'],
+                    'mode': 'qa',
+                    'input': {'text': 'What should I do before retrying?'},
+                    'business_context': {'query_scope': fixture['query_scope']}
+                    if mode == 'knowledge'
+                    else {},
+                },
+            )
             assert response.status_code == 202
             run_id = response.json()['run_id']
             while True:
@@ -50,10 +73,13 @@ def test_browser_harness_serves_http_and_runs_separate_worker(mode, tmp_path):
                 if result['status'] in ('partial', 'succeeded', 'failed'):
                     break
                 assert time.monotonic() < deadline
-                time.sleep(.1)
+                time.sleep(0.1)
             if mode == 'knowledge':
                 assert result['status'] == 'partial'
-                assert result['outcome']['findings'][0]['summary'] == 'Source excerpt: Check the queue before retrying.'
+                assert (
+                    result['outcome']['findings'][0]['summary']
+                    == 'Source excerpt: Check the queue before retrying.'
+                )
             else:
                 assert result['status'] == 'succeeded'
                 assert 'Fixture direct answer.' in result['outcome']['summary']

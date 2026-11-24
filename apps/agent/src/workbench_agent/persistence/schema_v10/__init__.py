@@ -1,11 +1,23 @@
 """Immutable SOP definitions; earlier schema snapshots remain unchanged."""
-from sqlalchemy import MetaData, Table, Column, String, Text, BigInteger, ForeignKeyConstraint, UniqueConstraint
+
+from sqlalchemy import (
+    MetaData,
+    Table,
+    Column,
+    String,
+    Text,
+    BigInteger,
+    ForeignKeyConstraint,
+    UniqueConstraint,
+)
 from workbench_agent.persistence.schema_v9 import metadata as previous
 
 metadata = MetaData(naming_convention=dict(previous.naming_convention))
 for table in previous.tables.values():
     table.to_metadata(metadata)
-workflow_versions = Table('workflow_versions', metadata,
+workflow_versions = Table(
+    'workflow_versions',
+    metadata,
     Column('team_id', String(36), nullable=False),
     Column('workflow_version_id', String(36), primary_key=True),
     Column('workspace_id', String(36), nullable=False),
@@ -17,4 +29,9 @@ workflow_versions = Table('workflow_versions', metadata,
     Column('updated_at', BigInteger, nullable=False),
     UniqueConstraint('team_id', 'workflow_version_id'),
     UniqueConstraint('team_id', 'workspace_id', 'name', 'version'),
-    ForeignKeyConstraint(['team_id', 'workspace_id'], ['workspaces.team_id', 'workspaces.workspace_id'], ondelete='RESTRICT'))
+    ForeignKeyConstraint(
+        ['team_id', 'workspace_id'],
+        ['workspaces.team_id', 'workspaces.workspace_id'],
+        ondelete='RESTRICT',
+    ),
+)

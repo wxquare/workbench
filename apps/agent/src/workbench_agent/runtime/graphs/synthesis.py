@@ -1,4 +1,5 @@
 """Validate extractive selections; source text is data, never an instruction."""
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -19,8 +20,12 @@ def validate_selection(selection, sources):
     seen, accepted = set(), []
     for item in selection.excerpts:
         pair = (item.evidence_ref, item.quote)
-        if (not item.quote.strip() or pair in seen or item.evidence_ref not in sources
-                or not any(item.quote in text for text in sources[item.evidence_ref])):
+        if (
+            not item.quote.strip()
+            or pair in seen
+            or item.evidence_ref not in sources
+            or not any(item.quote in text for text in sources[item.evidence_ref])
+        ):
             return None
         seen.add(pair)
         accepted.append(pair)
@@ -38,7 +43,9 @@ def source_texts(payload):
             for item in data['matches'][:10]:
                 if isinstance(item, dict) and isinstance(item.get('content'), str):
                     texts.append(item['content'][:4096])
-    elif all(key in payload for key in ('commit', 'path', 'sha256', 'lines')) and isinstance(payload['lines'], list):
+    elif all(key in payload for key in ('commit', 'path', 'sha256', 'lines')) and isinstance(
+        payload['lines'], list
+    ):
         for line in payload['lines'][:100]:
             if isinstance(line, dict) and isinstance(line.get('text'), str):
                 texts.append(line['text'][:4096])

@@ -79,9 +79,7 @@ def preflight(config: dict, *, environ=None, settings=None) -> dict:
                 mcp_port = None
             checks.append(
                 _check(
-                    _numeric_loopback(endpoint)
-                    and mcp_port == 8001
-                    and mcp[0].allow_loopback_http,
+                    _numeric_loopback(endpoint) and mcp_port == 8001 and mcp[0].allow_loopback_http,
                     'MCP_PORT',
                     'MCP must use explicitly enabled numeric loopback port 8001',
                 )
@@ -121,8 +119,7 @@ def preflight(config: dict, *, environ=None, settings=None) -> dict:
             agent_binding = mcp[0] if mcp else None
             checks.append(
                 _check(
-                    agent_binding is not None
-                    and str(grant.team_id) == agent_binding.team_id,
+                    agent_binding is not None and str(grant.team_id) == agent_binding.team_id,
                     'TEAM_SCOPE',
                     'knowledge grant and MCP binding teams must match',
                 )
@@ -152,13 +149,9 @@ def preflight(config: dict, *, environ=None, settings=None) -> dict:
     secret_names = {config.get('token_env')}
     if settings is not None:
         secret_names.update(
-            grant.token_secret_ref.removeprefix('env://')
-            for grant in settings.knowledge.grants
+            grant.token_secret_ref.removeprefix('env://') for grant in settings.knowledge.grants
         )
-    secret_values = [
-        item for key, item in environ.items()
-        if key in secret_names and item
-    ]
+    secret_values = [item for key, item in environ.items() if key in secret_names and item]
     text = str(result)
     if any(secret in text for secret in secret_values):
         return {

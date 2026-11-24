@@ -144,15 +144,26 @@ async def test_recover_existing_run_never_posts_again(tmp_path):
             post_case_ids.append(body['input']['text'])
             return httpx.Response(500)
         if request.url.path == '/v1/runs/run-1/events':
-            return httpx.Response(200, content=(
-                'event: run.accepted\n'
-                'data: ' + json.dumps({'payload': {'versions': {
-                    'graph_id': 'knowledge.citation_review',
-                    'agent_profile': ref(),
-                    'default_model': ref(),
-                    'role_models': [],
-                }}}) + '\n\n'
-            ).encode())
+            return httpx.Response(
+                200,
+                content=(
+                    'event: run.accepted\n'
+                    'data: '
+                    + json.dumps(
+                        {
+                            'payload': {
+                                'versions': {
+                                    'graph_id': 'knowledge.citation_review',
+                                    'agent_profile': ref(),
+                                    'default_model': ref(),
+                                    'role_models': [],
+                                }
+                            }
+                        }
+                    )
+                    + '\n\n'
+                ).encode(),
+            )
         if request.url.path == '/v1/runs/run-1':
             polls += 1
             return httpx.Response(200, json={'status': 'succeeded', 'outcome': {}})
@@ -163,25 +174,29 @@ async def test_recover_existing_run_never_posts_again(tmp_path):
     directory = tmp_path / 'exp'
     journal = Journal(directory / 'journal.jsonl')
     expected_manifest = manifest(data, config(tmp_path))
-    journal.append({
-        'event': 'case_result',
-        'case_id': 'a',
-        'repeat': 0,
-        'row': {
+    journal.append(
+        {
+            'event': 'case_result',
             'case_id': 'a',
             'repeat': 0,
-            'request_key': make_run_key(
-                expected_manifest['experiment_id'],
-                expected_manifest['dataset_hash'],
-                expected_manifest['config_hash'],
-                'a',
-                0,
-            ),
-            'run_id': 'run-1',
-            'transport_status': 'accepted',
-        },
-    })
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000')
+            'row': {
+                'case_id': 'a',
+                'repeat': 0,
+                'request_key': make_run_key(
+                    expected_manifest['experiment_id'],
+                    expected_manifest['dataset_hash'],
+                    expected_manifest['config_hash'],
+                    'a',
+                    0,
+                ),
+                'run_id': 'run-1',
+                'transport_status': 'accepted',
+            },
+        }
+    )
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url='http://127.0.0.1:8000'
+    )
     result = await run_experiment(
         data,
         config(tmp_path),
@@ -222,9 +237,7 @@ async def test_missing_dataset_identity_cannot_resume(tmp_path):
     mutated = dataset()
     mutated['cases'][0]['must_include'] = ['changed']
     client = httpx.AsyncClient(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(500)
-        ),
+        transport=httpx.MockTransport(lambda request: httpx.Response(500)),
         base_url='http://127.0.0.1:8000',
     )
     with pytest.raises(ValueError, match='dataset'):
@@ -255,15 +268,26 @@ async def test_missing_result_row_remains_missing_after_resume(tmp_path):
         if request.url.path == '/v1/runs':
             return httpx.Response(202, json={'run_id': 'run-1'})
         if request.url.path == '/v1/runs/run-1/events':
-            return httpx.Response(200, content=(
-                'event: run.accepted\n'
-                'data: ' + json.dumps({'payload': {'versions': {
-                    'graph_id': 'knowledge.citation_review',
-                    'agent_profile': ref(),
-                    'default_model': ref(),
-                    'role_models': [],
-                }}}) + '\n\n'
-            ).encode())
+            return httpx.Response(
+                200,
+                content=(
+                    'event: run.accepted\n'
+                    'data: '
+                    + json.dumps(
+                        {
+                            'payload': {
+                                'versions': {
+                                    'graph_id': 'knowledge.citation_review',
+                                    'agent_profile': ref(),
+                                    'default_model': ref(),
+                                    'role_models': [],
+                                }
+                            }
+                        }
+                    )
+                    + '\n\n'
+                ).encode(),
+            )
         if request.url.path == '/v1/runs/run-1':
             return httpx.Response(503)
         if request.url.path == '/v1/usage':

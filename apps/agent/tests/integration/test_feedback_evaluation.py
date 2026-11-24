@@ -1,4 +1,5 @@
 """Feedback is durable, idempotent, and protected by the run's tenant boundary."""
+
 import pytest
 
 
@@ -24,10 +25,14 @@ async def test_feedback_is_persisted_and_idempotent(client, platform):
 async def test_feedback_rejects_cross_tenant_and_bad_rating(client, platform):
     run = await platform.create_run()
     path = f'/v1/runs/{run.run_id}/feedback'
-    other = {'Authorization': f'Bearer development:{platform.other_auth.team_id}:{platform.other_auth.subject}',
-             'Idempotency-Key': 'feedback-other'}
+    other = {
+        'Authorization': f'Bearer development:{platform.other_auth.team_id}:{platform.other_auth.subject}',
+        'Idempotency-Key': 'feedback-other',
+    }
     assert (await client.post(path, headers=other, json={'rating': 1})).status_code == 404
-    assert (await client.post(path, headers={'Idempotency-Key': 'bad'}, json={'rating': 3})).status_code == 422
+    assert (
+        await client.post(path, headers={'Idempotency-Key': 'bad'}, json={'rating': 3})
+    ).status_code == 422
     assert await platform.count_rows('feedback') == 0
 
 
@@ -36,8 +41,11 @@ async def test_feedback_list_is_agent_scoped_and_uses_pagination(client, platfor
     run = await platform.create_run()
     path = f'/v1/runs/{run.run_id}/feedback'
     for index in range(2):
-        result = await client.post(path, headers={'Idempotency-Key': f'feedback-{index}'},
-                                   json={'rating': 1 if index == 0 else -1, 'comment': f'comment-{index}'})
+        result = await client.post(
+            path,
+            headers={'Idempotency-Key': f'feedback-{index}'},
+            json={'rating': 1 if index == 0 else -1, 'comment': f'comment-{index}'},
+        )
         assert result.status_code == 201
     first = await client.get(path, params={'limit': 1})
     assert first.status_code == 200
@@ -46,7 +54,9 @@ async def test_feedback_list_is_agent_scoped_and_uses_pagination(client, platfor
     second = await client.get(path, params={'limit': 1, 'after': first.json()['next_cursor']})
     assert len(second.json()['items']) == 1
     assert first.json()['items'][0]['feedback_id'] != second.json()['items'][0]['feedback_id']
-    other = {'Authorization': f'Bearer development:{platform.other_auth.team_id}:{platform.other_auth.subject}'}
+    other = {
+        'Authorization': f'Bearer development:{platform.other_auth.team_id}:{platform.other_auth.subject}'
+    }
     assert (await client.get(path, headers=other)).status_code == 404
 
 
@@ -56,8 +66,10 @@ async def test_negative_knowledge_feedback_creates_one_gap_atomically(client, pl
     from contract.test_dod_mcp_mapping import SCOPE
     from workbench_agent.persistence import schema
     from sqlalchemy import select, update
+
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     from workbench_agent.domain.profiles import ProfileDraft
+
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(
         platform.auth,
@@ -87,9 +99,7 @@ async def test_negative_knowledge_feedback_creates_one_gap_atomically(client, pl
     run_id = run.json()['run_id']
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(
-            update(schema.runs)
-            .where(schema.runs.c.run_id == run_id)
-            .values(status='partial')
+            update(schema.runs).where(schema.runs.c.run_id == run_id).values(status='partial')
         )
     path = f'/v1/runs/{run_id}/feedback'
     first = await client.post(
@@ -129,15 +139,15 @@ async def test_positive_feedback_cannot_include_reason(client, platform):
 
 
 @pytest.mark.asyncio
-async def test_gap_insert_failure_rolls_back_feedback_and_receipt(
-    client, platform, monkeypatch
-):
+async def test_gap_insert_failure_rolls_back_feedback_and_receipt(client, platform, monkeypatch):
     from integration.test_public_knowledge_qa import publish_qa
     from contract.test_dod_mcp_mapping import SCOPE
     from workbench_agent.persistence import schema
     from sqlalchemy import update
+
     context = await platform.contexts.resolve(platform.auth, platform.agent_id)
     from workbench_agent.domain.profiles import ProfileDraft
+
     agent = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     draft = await platform.profiles.save_draft(
         platform.auth,
@@ -164,12 +174,12 @@ async def test_gap_insert_failure_rolls_back_feedback_and_receipt(
     run_id = run.json()['run_id']
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(
-            update(schema.runs)
-            .where(schema.runs.c.run_id == run_id)
-            .values(status='partial')
+            update(schema.runs).where(schema.runs.c.run_id == run_id).values(status='partial')
         )
+
     async def fail(*args, **kwargs):
         raise RuntimeError('gap insert failed')
+
     monkeypatch.setattr(platform.backend.knowledge, 'insert_gap', fail)
     with pytest.raises(RuntimeError, match='gap insert failed'):
         await client.post(

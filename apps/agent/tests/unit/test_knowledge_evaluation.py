@@ -6,16 +6,32 @@ from workbench_agent.evaluation.knowledge_report import evaluate_knowledge_datas
 
 
 def case(index, answerable=True):
-    return {'id': str(index), 'question': f'What is the limit for example {index}?',
-            'query_scope': {'service': 'example', 'environment': 'test', 'region': 'sg',
-                            'start_at': '2026-11-18T00:00:00Z', 'end_at': '2026-11-18T01:00:00Z'},
-            'expected_source_ids': ['doc-1'], 'must_include': ['limit is 3'],
-            'answerable': answerable, 'scenario': 'answerable' if answerable else 'no_answer',
-            'review_status': 'reviewed', 'reviewer': 'business reviewer',
-            'result_review': {'reviewer': 'business reviewer', 'output_present': True,
-                              'output_ref': f'run-{index}', 'claims': [{'citation_correct': True}] if answerable else [],
-                              'answer_usable': answerable, 'unauthorized_access': False,
-                              'degradation_reason': None if answerable else 'no_answer'}}
+    return {
+        'id': str(index),
+        'question': f'What is the limit for example {index}?',
+        'query_scope': {
+            'service': 'example',
+            'environment': 'test',
+            'region': 'sg',
+            'start_at': '2026-11-18T00:00:00Z',
+            'end_at': '2026-11-18T01:00:00Z',
+        },
+        'expected_source_ids': ['doc-1'],
+        'must_include': ['limit is 3'],
+        'answerable': answerable,
+        'scenario': 'answerable' if answerable else 'no_answer',
+        'review_status': 'reviewed',
+        'reviewer': 'business reviewer',
+        'result_review': {
+            'reviewer': 'business reviewer',
+            'output_present': True,
+            'output_ref': f'run-{index}',
+            'claims': [{'citation_correct': True}] if answerable else [],
+            'answer_usable': answerable,
+            'unauthorized_access': False,
+            'degradation_reason': None if answerable else 'no_answer',
+        },
+    }
 
 
 def dataset():
@@ -59,7 +75,9 @@ def test_duplicate_id_rejected():
         evaluate_knowledge_dataset(data)
 
 
-@pytest.mark.parametrize('mutation', ['no_unanswerable', 'no_citations', 'incorrect', 'unsafe', 'false_answer', 'few'])
+@pytest.mark.parametrize(
+    'mutation', ['no_unanswerable', 'no_citations', 'incorrect', 'unsafe', 'false_answer', 'few']
+)
 def test_missing_categories_and_failed_gates(mutation):
     data = dataset()
     if mutation == 'no_unanswerable':
@@ -81,6 +99,7 @@ def test_missing_categories_and_failed_gates(mutation):
 
 def test_cli_dispatch_and_nonzero_for_unreviewed(tmp_path):
     from workbench_agent.cli.evaluate import run_evaluate
+
     path, output = tmp_path / 'in.json', tmp_path / 'out.json'
     data = dataset()
     del data['cases'][0]['result_review']
@@ -123,11 +142,14 @@ def test_answerable_case_requires_nonempty_labels(field):
     assert not report['release_passed']
 
 
-@pytest.mark.parametrize('start,end', [
-    ('not-a-time', '2026-11-18T01:00:00Z'),
-    ('2026-11-18T00:00:00', '2026-11-18T01:00:00Z'),
-    ('2026-11-18T02:00:00Z', '2026-11-18T01:00:00Z'),
-])
+@pytest.mark.parametrize(
+    'start,end',
+    [
+        ('not-a-time', '2026-11-18T01:00:00Z'),
+        ('2026-11-18T00:00:00', '2026-11-18T01:00:00Z'),
+        ('2026-11-18T02:00:00Z', '2026-11-18T01:00:00Z'),
+    ],
+)
 def test_invalid_scope_blocks_acceptance(start, end):
     data = dataset()
     data['cases'][0]['query_scope'].update(start_at=start, end_at=end)
@@ -165,7 +187,9 @@ def test_usable_answer_without_cited_claim_blocks_acceptance():
 
 def test_duplicate_output_reference_blocks_acceptance():
     data = dataset()
-    data['cases'][1]['result_review']['output_ref'] = data['cases'][0]['result_review']['output_ref']
+    data['cases'][1]['result_review']['output_ref'] = data['cases'][0]['result_review'][
+        'output_ref'
+    ]
     report = evaluate_knowledge_dataset(data).to_dict()
     assert not report['release_passed']
 
@@ -187,7 +211,9 @@ def test_usable_answer_with_only_uncited_claim_blocks_acceptance():
 def test_duplicate_question_scope_normalizes_timezone_and_whitespace():
     data = dataset()
     data['cases'][1]['question'] = '  WHAT IS THE LIMIT FOR EXAMPLE 0?  '
-    data['cases'][1]['query_scope'].update(start_at='2026-11-18T08:00:00+08:00', end_at='2026-11-18T09:00:00+08:00')
+    data['cases'][1]['query_scope'].update(
+        start_at='2026-11-18T08:00:00+08:00', end_at='2026-11-18T09:00:00+08:00'
+    )
     assert 'duplicate_question_scope' in evaluate_knowledge_dataset(data).failure_reasons
 
 
@@ -201,7 +227,9 @@ def test_business_acceptance_requires_conflict_and_stale_scenarios():
     assert 'missing_required_scenarios' in report['failure_reasons']
 
 
-@pytest.mark.parametrize('scenario,answerable', [('answerable', False), ('no_answer', True), ('unknown', True)])
+@pytest.mark.parametrize(
+    'scenario,answerable', [('answerable', False), ('no_answer', True), ('unknown', True)]
+)
 def test_scenario_must_be_supported_and_consistent_with_label(scenario, answerable):
     data = dataset()
     data['cases'][0].update(scenario=scenario, answerable=answerable)

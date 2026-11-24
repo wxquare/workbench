@@ -1,4 +1,5 @@
 """Serve the built SPA from the configured asset root; never fall back API paths."""
+
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -22,7 +23,11 @@ async def frontend(path: str = '', *, request: Request):
         return FileResponse(candidate)
     graph_detail = path.startswith('graphs/') and path[7:] in ALL_GRAPH_IDS
     # Graph IDs contain dots; every other file-looking request stays outside the SPA fallback.
-    if path and (path.startswith('assets/') or (Path(path).suffix and not graph_detail) or 'text/html' not in request.headers.get('accept', '')):
+    if path and (
+        path.startswith('assets/')
+        or (Path(path).suffix and not graph_detail)
+        or 'text/html' not in request.headers.get('accept', '')
+    ):
         raise HTTPException(status_code=404)
     if not index.is_relative_to(root) or not index.is_file():
         raise HTTPException(status_code=503, detail='Frontend build unavailable')

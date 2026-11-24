@@ -22,7 +22,8 @@ class ToolManagement:
 
     def _connections(self, auth, agent_id):
         return [
-            item for item in self.deployments
+            item
+            for item in self.deployments
             if item.team_id == auth.team_id and item.agent_id == agent_id
         ]
 
@@ -36,9 +37,7 @@ class ToolManagement:
                     'credential_scope': item.credential_scope,
                     'read_tools': list(item.read_tools),
                     'status': 'configured',
-                    'tool_conversation_tools': list(
-                        item.tool_conversation_allowed_tools
-                    ),
+                    'tool_conversation_tools': list(item.tool_conversation_allowed_tools),
                     'mapping_policies': [
                         {
                             key: value
@@ -57,12 +56,13 @@ class ToolManagement:
         async with self.backend.create_uow().begin_write() as uow:
             await self._admin(uow, auth, agent_id)
             matches = [
-                item for item in self._connections(auth, agent_id)
-                if item.server == server
-                and item.credential_scope == credential_scope
+                item
+                for item in self._connections(auth, agent_id)
+                if item.server == server and item.credential_scope == credential_scope
             ]
             if len(matches) != 1:
                 raise not_found()
+
             async def operation():
                 payload = {
                     'server': server,
@@ -71,9 +71,7 @@ class ToolManagement:
                     'identity_kind': auth.identity_kind,
                     'agent_scope': auth.agent_scope,
                 }
-                principal = AdminAuth(
-                    auth.team_id, agent_id, auth.subject, True
-                )
+                principal = AdminAuth(auth.team_id, agent_id, auth.subject, True)
                 job = await self.backend.admin_jobs.submit(
                     uow,
                     principal,
@@ -90,6 +88,7 @@ class ToolManagement:
                     'status': job.status,
                     'result_ref': job.result_ref,
                 }
+
             result = await Idempotency(self.backend).execute(
                 uow,
                 auth,
@@ -122,7 +121,7 @@ class ToolManagement:
             aliases = sorted({row['alias'] for row in (*drafts, *versions)})
             if after:
                 aliases = [alias for alias in aliases if alias > after]
-            page = aliases[:limit + 1]
+            page = aliases[: limit + 1]
             items = []
             for alias in page[:limit]:
                 matching = sorted(
@@ -130,30 +129,25 @@ class ToolManagement:
                     key=lambda row: row['version'],
                     reverse=True,
                 )
-                draft = next(
-                    (row for row in drafts if row['alias'] == alias), None
-                )
+                draft = next((row for row in drafts if row['alias'] == alias), None)
                 items.append(
                     {
                         'alias': alias,
                         'draft_revision': draft['revision'] if draft else None,
                         'tool_name': (
                             json.loads(matching[0]['schema']).get('tool_name')
-                            if matching else (
-                                json.loads(draft['payload']).get('tool_name')
-                                if draft else None
-                            )
+                            if matching
+                            else (json.loads(draft['payload']).get('tool_name') if draft else None)
                         ),
                         'read_only': (
                             json.loads(matching[0]['schema']).get('read_only')
-                            if matching else (
-                                json.loads(draft['payload']).get('read_only')
-                                if draft else None
-                            )
+                            if matching
+                            else (json.loads(draft['payload']).get('read_only') if draft else None)
                         ),
                         'tool_conversation_compatible': (
                             self._binding_compatible(matching[0], auth, agent_id)
-                            if matching else False
+                            if matching
+                            else False
                         ),
                         'latest_ref': (
                             {
@@ -161,7 +155,8 @@ class ToolManagement:
                                 'version': str(matching[0]['version']),
                                 'content_hash': matching[0]['hash'],
                             }
-                            if matching else None
+                            if matching
+                            else None
                         ),
                     }
                 )
@@ -172,15 +167,12 @@ class ToolManagement:
 
     def _binding_compatible(self, row, auth, agent_id):
         data = json.loads(row['schema'])
-        return (
-            data.get('tool_name') == 'knowledge_search'
-            or any(
-                data.get('tool_name') in item.tool_conversation_allowed_tools
-                and item.mapping_policy_for(data.get('tool_name')) is not None
-                for item in self._connections(auth, agent_id)
-                if item.server == data.get('server')
-                and item.credential_scope == data.get('credential_scope')
-            )
+        return data.get('tool_name') == 'knowledge_search' or any(
+            data.get('tool_name') in item.tool_conversation_allowed_tools
+            and item.mapping_policy_for(data.get('tool_name')) is not None
+            for item in self._connections(auth, agent_id)
+            if item.server == data.get('server')
+            and item.credential_scope == data.get('credential_scope')
         )
 
     async def get_binding(self, auth, agent_id, alias):
@@ -255,9 +247,11 @@ class ToolDiscovery:
         import asyncio
 
         from workbench_agent.domain.identity import AuthContext
+
         payload = json.loads(claim.payload)
         matches = [
-            item for item in self.deployments
+            item
+            for item in self.deployments
             if item.team_id == claim.team_id
             and item.agent_id == claim.agent_id
             and item.server == payload['server']
@@ -314,9 +308,7 @@ class ToolDiscovery:
         tools = []
         total = 0
         allowed = set(deployment.read_tools)
-        conversation_allowed = set(
-            getattr(deployment, 'tool_conversation_allowed_tools', ())
-        )
+        conversation_allowed = set(getattr(deployment, 'tool_conversation_allowed_tools', ()))
         for raw in catalog.tools:
             item = raw if isinstance(raw, dict) else raw.model_dump()
             name = item.get('name')

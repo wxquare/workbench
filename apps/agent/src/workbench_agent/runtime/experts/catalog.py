@@ -6,7 +6,11 @@ class ExpertRegistry:
         self._experts = {}
 
     def register(self, name, version, expert):
-        if name not in {'knowledge', 'diagnosis', 'code'} or not isinstance(version, str) or not version:
+        if (
+            name not in {'knowledge', 'diagnosis', 'code'}
+            or not isinstance(version, str)
+            or not version
+        ):
             raise ValueError('invalid expert identity')
         if (name, version) in self._experts:
             raise ValueError('expert version already registered')
@@ -31,7 +35,11 @@ _ROUTES = {
 def select_experts(mode, published, *, classifier_choice=None, published_modes=frozenset()):
     """Explicit mode wins; automatic routing can only select a published mode."""
     if mode == 'auto':
-        mode = classifier_choice if classifier_choice in _ROUTES and classifier_choice in published_modes else None
+        mode = (
+            classifier_choice
+            if classifier_choice in _ROUTES and classifier_choice in published_modes
+            else None
+        )
     if mode not in _ROUTES:
         return ()
     route = _ROUTES[mode]

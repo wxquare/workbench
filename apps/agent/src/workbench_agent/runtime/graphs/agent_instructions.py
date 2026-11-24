@@ -1,7 +1,9 @@
 """Build the system instruction from the run's immutable profile snapshot."""
 
-SYSTEM = ('Answer the user directly. Do not claim that you consulted external sources '
-          'or verified facts unless provided in the question.')
+SYSTEM = (
+    'Answer the user directly. Do not claim that you consulted external sources '
+    'or verified facts unless provided in the question.'
+)
 
 
 def system_instruction(context):

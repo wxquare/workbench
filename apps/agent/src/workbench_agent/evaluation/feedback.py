@@ -1,4 +1,5 @@
 """Record user feedback independently of evaluation and external observability."""
+
 import json
 from uuid import uuid4
 from workbench_agent.application.authorization import Authorization
@@ -39,26 +40,51 @@ class FeedbackService:
                     'rating': rating,
                     'comment': comment,
                 }
+
             async def append():
                 now = await self.backend.clock.now_ms(uow)
                 feedback_id = str(uuid4())
-                await self.backend.feedback.append(uow, {
-                    'feedback_id': feedback_id, 'team_id': auth.team_id, 'run_id': run_id,
-                    'source_trace': canonical({'run_id': run_id}), 'problem_type': 'user_feedback',
-                    'review_status': 'pending', 'payload': canonical(detail),
-                    'created_at': now, 'updated_at': now,
-                })
+                await self.backend.feedback.append(
+                    uow,
+                    {
+                        'feedback_id': feedback_id,
+                        'team_id': auth.team_id,
+                        'run_id': run_id,
+                        'source_trace': canonical({'run_id': run_id}),
+                        'problem_type': 'user_feedback',
+                        'review_status': 'pending',
+                        'payload': canonical(detail),
+                        'created_at': now,
+                        'updated_at': now,
+                    },
+                )
                 gap_id = None
                 if rating == -1:
                     from workbench_agent.knowledge.gaps import KnowledgeGaps
+
                     gap_id = await KnowledgeGaps(self.backend).record_feedback_in(
                         uow, auth, run, feedback_id=feedback_id
                     )
-                return {'feedback_id': feedback_id, 'run_id': run_id, 'rating': rating,
-                        'comment': comment, 'reason': reason,
-                        'knowledge_gap_id': gap_id, 'review_status': 'pending'}
-            return await self.receipts.execute(uow, auth, run['agent_id'],
-                f'/v1/runs/{run_id}/feedback', key, payload, append, status=201)
+                return {
+                    'feedback_id': feedback_id,
+                    'run_id': run_id,
+                    'rating': rating,
+                    'comment': comment,
+                    'reason': reason,
+                    'knowledge_gap_id': gap_id,
+                    'review_status': 'pending',
+                }
+
+            return await self.receipts.execute(
+                uow,
+                auth,
+                run['agent_id'],
+                f'/v1/runs/{run_id}/feedback',
+                key,
+                payload,
+                append,
+                status=201,
+            )
 
     async def list(self, auth, run_id, limit, after):
         async with self.backend.create_uow().begin_read() as uow:
@@ -72,8 +98,17 @@ class FeedbackService:
             items = []
             for row in rows[:limit]:
                 payload = json.loads(row['payload'])
-                items.append({'feedback_id': row['feedback_id'], 'run_id': run_id,
-                    'rating': payload.get('rating'), 'comment': payload.get('comment'),
-                    'reason': payload.get('reason'),
-                    'review_status': row['review_status']})
-            return {'items': items, 'next_cursor': items[-1]['feedback_id'] if len(rows) > limit else None}
+                items.append(
+                    {
+                        'feedback_id': row['feedback_id'],
+                        'run_id': run_id,
+                        'rating': payload.get('rating'),
+                        'comment': payload.get('comment'),
+                        'reason': payload.get('reason'),
+                        'review_status': row['review_status'],
+                    }
+                )
+            return {
+                'items': items,
+                'next_cursor': items[-1]['feedback_id'] if len(rows) > limit else None,
+            }

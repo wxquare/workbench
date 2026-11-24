@@ -13,5 +13,8 @@ def revision(if_match: str | None = Header(default=None)) -> int:
 
 
 def response(result):
-    return JSONResponse(result.body, status_code=result.status,
-        headers={'Idempotency-Replayed': 'true'} if result.replayed else {})
+    return JSONResponse(
+        result.body,
+        status_code=result.status,
+        headers={'Idempotency-Replayed': 'true'} if result.replayed else {},
+    )

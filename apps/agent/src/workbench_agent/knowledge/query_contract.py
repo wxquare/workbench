@@ -1,4 +1,5 @@
 """Strict normalized-query-v1 boundary and KnowledgeData response."""
+
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -38,7 +39,12 @@ def normalize_query(raw):
         query = Query.model_validate(raw)
     except ValidationError:
         raise DomainError('KB_INVALID_CONTENT', 422) from None
-    return query.scope.model_dump(), query.parameters.query, query.parameters.scene, query.parameters.limit
+    return (
+        query.scope.model_dump(),
+        query.parameters.query,
+        query.parameters.scene,
+        query.parameters.limit,
+    )
 
 
 def knowledge_data(hits, *, public_base_url=None, limit=None):
@@ -48,10 +54,26 @@ def knowledge_data(hits, *, public_base_url=None, limit=None):
         chunk = hit.chunk
         uri = None
         if public_base_url:
-            uri = (public_base_url.rstrip('/') + '/app/knowledge/' + quote(hit.entry_id, safe='')
-                   + '/versions/' + str(hit.version) + '#' + quote(chunk.chunk_id, safe=''))
+            uri = (
+                public_base_url.rstrip('/')
+                + '/app/knowledge/'
+                + quote(hit.entry_id, safe='')
+                + '/versions/'
+                + str(hit.version)
+                + '#'
+                + quote(chunk.chunk_id, safe='')
+            )
         locator = ' / '.join(chunk.heading_path) or '正文'
-        matches.append({'source_id': hit.source_id, 'title': hit.title, 'content': chunk.content,
-            'source_uri': uri, 'source_locator': f'{locator} · 行 {chunk.line_start}–{chunk.line_end}',
-            'updated_at': datetime.fromtimestamp(hit.updated_at / 1000, timezone.utc).isoformat()})
+        matches.append(
+            {
+                'source_id': hit.source_id,
+                'title': hit.title,
+                'content': chunk.content,
+                'source_uri': uri,
+                'source_locator': f'{locator} · 行 {chunk.line_start}–{chunk.line_end}',
+                'updated_at': datetime.fromtimestamp(
+                    hit.updated_at / 1000, timezone.utc
+                ).isoformat(),
+            }
+        )
     return {'matches': matches, 'truncated': truncated}

@@ -36,7 +36,9 @@ def make_run_key(
         isinstance(value, str) and value and value == value.strip()
         for value in (experiment_id, dataset_hash, config_hash, case_id)
     ):
-        raise ValueError('run identity fields must be nonempty strings without surrounding whitespace')
+        raise ValueError(
+            'run identity fields must be nonempty strings without surrounding whitespace'
+        )
     if type(repeat) is not int or repeat < 0:
         raise ValueError('repeat must be a nonnegative integer')
     return hash_json(
@@ -161,6 +163,7 @@ def validate_experiment_config(value: dict) -> dict:
         if not isinstance(value[field], str) or not value[field].strip():
             raise ValueError(f'{field} is required')
     import re
+
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value['token_env']):
         raise ValueError('token_env must name an environment variable')
     for field in ('agent_config_path', 'mcp_config_path', 'dataset_path', 'seed_manifest_path'):
@@ -176,9 +179,7 @@ def validate_experiment_config(value: dict) -> dict:
         if type(number) not in (int, float) or not minimum < number <= maximum:
             raise ValueError(f'invalid {field}')
     budget = value['experiment_budget_micros']
-    if budget is not None and (
-        type(budget) is not int or not 0 < budget <= 10**18
-    ):
+    if budget is not None and (type(budget) is not int or not 0 < budget <= 10**18):
         raise ValueError('invalid experiment_budget_micros')
     limits = value['limits']
     if not isinstance(limits, dict) or set(limits) != {
@@ -238,5 +239,6 @@ async def request_with_retry(operation, *, attempts: int = 3, delays=(0, 1, 2)):
             if not error.retryable or index + 1 == attempts:
                 raise
             import asyncio
+
             await asyncio.sleep(delays[min(index, len(delays) - 1)])
     raise RuntimeError('retry loop unexpectedly exhausted')

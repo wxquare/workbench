@@ -1,4 +1,5 @@
 """Agent schema with a canonical multi-resource draft JSON column."""
+
 from sqlalchemy import Column, MetaData, Text
 from workbench_agent.persistence.schema_agent_v5 import metadata as baseline
 

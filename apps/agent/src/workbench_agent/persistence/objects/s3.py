@@ -1,4 +1,5 @@
 """Bounded S3-compatible content-addressed objects with read-back verification."""
+
 import asyncio
 import base64
 import hashlib
@@ -30,8 +31,14 @@ class S3Objects:
         if actual.hex() != sha256:
             raise ValueError('digest mismatch')
         try:
-            await asyncio.to_thread(self.client.put_object, Bucket=self.bucket, Key=key, Body=data,
-                IfNoneMatch='*', ChecksumSHA256=base64.b64encode(actual).decode('ascii'))
+            await asyncio.to_thread(
+                self.client.put_object,
+                Bucket=self.bucket,
+                Key=key,
+                Body=data,
+                IfNoneMatch='*',
+                ChecksumSHA256=base64.b64encode(actual).decode('ascii'),
+            )
         except ClientError as error:
             if error.response.get('ResponseMetadata', {}).get('HTTPStatusCode') != 412:
                 raise
@@ -40,8 +47,14 @@ class S3Objects:
         return key
 
     async def read_verified(self, key, sha256, size):
-        if key != self._key(sha256) or not isinstance(size, int) or size < 0 or size > MAX_OBJECT_BYTES:
+        if (
+            key != self._key(sha256)
+            or not isinstance(size, int)
+            or size < 0
+            or size > MAX_OBJECT_BYTES
+        ):
             raise ValueError('invalid object identity or size')
+
         def fetch():
             response = self.client.get_object(Bucket=self.bucket, Key=key)
             body = response['Body']
@@ -54,12 +67,23 @@ class S3Objects:
                 return data
             finally:
                 body.close()
+
         return await asyncio.to_thread(fetch)
 
     async def sign(self, key, *, sha256, size, expires_in):
-        if key != self._key(sha256) or not isinstance(size, int) or not 0 <= size <= MAX_OBJECT_BYTES or not 1 <= expires_in <= 60:
+        if (
+            key != self._key(sha256)
+            or not isinstance(size, int)
+            or not 0 <= size <= MAX_OBJECT_BYTES
+            or not 1 <= expires_in <= 60
+        ):
             raise ValueError('invalid object authorization')
-        return await asyncio.to_thread(self.client.generate_presigned_url, 'get_object', Params={'Bucket': self.bucket, 'Key': key}, ExpiresIn=expires_in)
+        return await asyncio.to_thread(
+            self.client.generate_presigned_url,
+            'get_object',
+            Params={'Bucket': self.bucket, 'Key': key},
+            ExpiresIn=expires_in,
+        )
 
 
 def configured_s3(settings, *, environment):
@@ -68,23 +92,42 @@ def configured_s3(settings, *, environment):
     import boto3
     from botocore.config import Config
     from workbench_agent.connectors.secrets import SecretProvider
+
     secrets = SecretProvider()
     endpoint = secrets.resolve(settings.endpoint_ref)
     parsed = urlsplit(endpoint)
-    if (parsed.scheme not in ('https','http') or not parsed.hostname or parsed.username or parsed.password
-        or parsed.query or parsed.fragment or parsed.path not in ('','/')):
+    if (
+        parsed.scheme not in ('https', 'http')
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in ('', '/')
+    ):
         raise ValueError('invalid S3 endpoint')
     if parsed.scheme == 'http':
         from ipaddress import ip_address
+
         try:
-            numeric_loopback='%' not in parsed.hostname and ip_address(parsed.hostname).is_loopback
+            numeric_loopback = (
+                '%' not in parsed.hostname and ip_address(parsed.hostname).is_loopback
+            )
         except ValueError:
-            numeric_loopback=False
+            numeric_loopback = False
         if environment != 'development' or not settings.allow_http or not numeric_loopback:
             raise ValueError('invalid S3 endpoint')
-    client = boto3.client('s3', endpoint_url=endpoint, region_name=settings.region,
+    client = boto3.client(
+        's3',
+        endpoint_url=endpoint,
+        region_name=settings.region,
         aws_access_key_id=secrets.resolve(settings.access_key_ref),
         aws_secret_access_key=secrets.resolve(settings.secret_key_ref),
-        config=Config(retries={'max_attempts':0},connect_timeout=5,read_timeout=30,
-            proxies={} if parsed.scheme=='http' else None))
-    return S3Objects(client,settings.bucket)
+        config=Config(
+            retries={'max_attempts': 0},
+            connect_timeout=5,
+            read_timeout=30,
+            proxies={} if parsed.scheme == 'http' else None,
+        ),
+    )
+    return S3Objects(client, settings.bucket)

@@ -88,22 +88,26 @@ def policy():
 def adapter():
     return MCPAdapter(
         lambda *_: None,
-        ConnectionPolicy([
-            TrustedConnection(
-                '11111111-1111-1111-1111-111111111111',
-                '22222222-2222-2222-2222-222222222222',
-                'web',
-                'read',
-                frozenset({'web_search'}),
-                ({
-                    'result_limit': 5,
-                    'domain_policy_id': 'public-docs-v1',
-                    'allowed_result_hosts': ['docs.example.com'],
-                },),
-                (policy(),),
-                frozenset({'web_search'}),
-            )
-        ]),
+        ConnectionPolicy(
+            [
+                TrustedConnection(
+                    '11111111-1111-1111-1111-111111111111',
+                    '22222222-2222-2222-2222-222222222222',
+                    'web',
+                    'read',
+                    frozenset({'web_search'}),
+                    (
+                        {
+                            'result_limit': 5,
+                            'domain_policy_id': 'public-docs-v1',
+                            'allowed_result_hosts': ['docs.example.com'],
+                        },
+                    ),
+                    (policy(),),
+                    frozenset({'web_search'}),
+                )
+            ]
+        ),
     )
 
 
@@ -151,20 +155,14 @@ def test_web_search_model_cannot_override_protected_fields():
 
 
 def test_declaration_files_pin_the_same_contract():
-    binding = json.loads(
-        (ROOT / 'config/examples/web-search-binding.json').read_text()
-    )
-    deployment = (
-        ROOT / 'config/examples/web-search-deployment.yaml'
-    ).read_text()
+    binding = json.loads((ROOT / 'config/examples/web-search-binding.json').read_text())
+    deployment = (ROOT / 'config/examples/web-search-deployment.yaml').read_text()
     contract = json.loads(
         (ROOT / 'evaluation/tool-conversation/web-search-contract.json').read_text()
     )
     assert binding['argument_mapping'] == mapping().model_dump(mode='json')
     assert binding['input_schema'] == FULL_SCHEMA
     assert contract['input_schema'] == FULL_SCHEMA
-    assert contract['mapping_fingerprint'] == mapping_fingerprint(
-        mapping(), FULL_SCHEMA
-    )
+    assert contract['mapping_fingerprint'] == mapping_fingerprint(mapping(), FULL_SCHEMA)
     assert 'web_search' in deployment
     assert 'web.read' in deployment

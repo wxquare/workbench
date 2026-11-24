@@ -35,7 +35,9 @@ def test_scope_cannot_be_ambiguous(scope):
 
 
 def test_fenced_headings_and_long_lines_have_stable_original_locations():
-    body = '# Root\n```md\n# Not a heading\n```\n## Repeated\n' + 'x' * 1501 + '\n## Repeated\nend\n'
+    body = (
+        '# Root\n```md\n# Not a heading\n```\n## Repeated\n' + 'x' * 1501 + '\n## Repeated\nend\n'
+    )
     chunks = chunk_markdown(body)
     assert len(chunks) >= 3
     assert all(chunk.content in body and len(chunk.content) <= 1500 for chunk in chunks)

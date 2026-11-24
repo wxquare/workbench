@@ -24,11 +24,7 @@ INTERRUPTED = {'waiting_input', 'waiting_approval'}
 
 
 def _event_rows(journal, request_key: str) -> list[dict]:
-    return [
-        event
-        for event in journal.events()
-        if event.get('request_key') == request_key
-    ]
+    return [event for event in journal.events() if event.get('request_key') == request_key]
 
 
 def _validated_version_ref(value: Any) -> bool:
@@ -82,6 +78,7 @@ def _empty_row(case: dict, experiment: dict, repeat: int, request_key: str) -> d
 
 def read_rows(path: Path) -> list[dict]:
     import json
+
     if not path.exists():
         return []
     rows = []
@@ -104,6 +101,7 @@ def write_rows(path: Path, rows: list[dict]) -> None:
         handle.write(content)
         handle.flush()
         import os
+
         os.fsync(handle.fileno())
     os.replace(temporary, path)
     fsync_directory(path.parent)
@@ -131,10 +129,7 @@ async def collect_case(
         event
         for event in journal.events()
         if event.get('request_key') == request_key
-        or (
-            event.get('case_id') == case['id']
-            and event.get('repeat') == repeat
-        )
+        or (event.get('case_id') == case['id'] and event.get('repeat') == repeat)
     ]
     recovered = None
     request_events = _event_rows(journal, request_key)
@@ -144,28 +139,20 @@ async def collect_case(
             recovered = latest_event['row']
     if recovered is None:
         recovered = next(
-            (
-                event['row']
-                for event in reversed(events)
-                if isinstance(event.get('row'), dict)
-            ),
+            (event['row'] for event in reversed(events) if isinstance(event.get('row'), dict)),
             None,
         )
     recovered_map = experiment.get('recovered_rows', {})
     if isinstance(recovered_map, dict):
         mapped = recovered_map.get((case['id'], repeat))
         if mapped is None:
-            mapped = recovered_map.get(f"{case['id']}:{repeat}")
+            mapped = recovered_map.get(f'{case["id"]}:{repeat}')
         if mapped is not None:
             recovered = mapped
     if isinstance(recovered, dict):
         events.append({'row': recovered})
     row = next(
-        (
-            event['row']
-            for event in reversed(events)
-            if isinstance(event.get('row'), dict)
-        ),
+        (event['row'] for event in reversed(events) if isinstance(event.get('row'), dict)),
         _empty_row(case, experiment, repeat, request_key),
     )
     run_id = row.get('run_id')
@@ -292,10 +279,7 @@ async def collect_case(
     try:
         provenance = await api.provenance(run_id)
         verify_provenance(provenance, config)
-        if (
-            experiment.get('provenance') is not None
-            and experiment['provenance'] != provenance
-        ):
+        if experiment.get('provenance') is not None and experiment['provenance'] != provenance:
             raise ValueError('provenance changed within experiment')
         experiment['provenance'] = provenance
     except (APIError, ValueError) as error:
@@ -471,9 +455,7 @@ async def collect_case(
     return row
 
 
-def prepare_review(
-    dataset: dict, rows: list[dict], *, previous: dict | None = None
-) -> dict:
+def prepare_review(dataset: dict, rows: list[dict], *, previous: dict | None = None) -> dict:
     """Copy labels and prefill only mechanical output fields."""
     validate_dataset(dataset)
     by_id: dict[str, list[dict]] = {}
