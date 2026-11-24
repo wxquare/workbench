@@ -3,7 +3,7 @@ import time
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import insert, text
+from sqlalchemy import event, insert, text
 
 from workbench_agent.persistence import schema
 
@@ -199,14 +199,25 @@ async def test_review_candidates_handle_ten_thousand_and_use_indexes(platform):
         }])
 
     started = time.monotonic()
-    result = await ReviewService(platform.backend).list(
-        platform.auth, state='pending', limit=20
-    )
+    checkpoint_queries = []
+    def count_checkpoint_queries(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith('SELECT') and 'graph_checkpoints' in statement:
+            checkpoint_queries.append(statement)
+
+    event.listen(platform.backend.engine.sync_engine, 'before_cursor_execute', count_checkpoint_queries)
+    try:
+        result = await ReviewService(platform.backend).list(
+            platform.auth, state='pending', limit=20
+        )
+    finally:
+        event.remove(platform.backend.engine.sync_engine, 'before_cursor_execute', count_checkpoint_queries)
     elapsed = time.monotonic() - started
 
     # One fixture carries a real checkpoint; the remaining rows still prove
     # candidate query, capacity protection and index planning.
     assert len(result['items']) == 1
+    assert result['items'][0]['run_id'] == 'run-00000'
+    assert len(checkpoint_queries) < 100
     assert elapsed < 5
 
     async with platform.backend.create_uow().begin_read() as uow:
@@ -229,3 +240,18 @@ async def test_review_candidates_handle_ten_thousand_and_use_indexes(platform):
         'ix_review_runs_team_agent_status_waiting' in details
         or 'ix_review_interrupts_team_status_actor' in details
     ), details
+
+    # Missing checkpoints must still count toward the candidate limit.
+    from workbench_agent.application.errors import DomainError
+    async with platform.backend.create_uow().begin_write() as uow:
+        await uow.execute(insert(schema.runs), {
+            **runs[-1], 'run_id': 'run-over-limit',
+        })
+        await uow.execute(insert(schema.interrupts), {
+            **interrupts[-1], 'run_id': 'run-over-limit',
+            'interrupt_id': 'interrupt-over-limit',
+            'graph_interrupt_id': 'graph-over-limit',
+        })
+    with pytest.raises(DomainError) as error:
+        await ReviewService(platform.backend).list(platform.auth, state='pending', limit=20)
+    assert error.value.code == 'REVIEWS_CAPACITY_EXCEEDED'

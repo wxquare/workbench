@@ -43,6 +43,15 @@ class SQLiteReviewStore:
                 )
             )).mappings()
         }
+        checkpoint_run_ids = set()
+        if runs:
+            checkpoint_run_ids = set((await uow.execute(
+                select(schema.graph_checkpoints.c.run_id).where(
+                    schema.graph_checkpoints.c.team_id == auth.team_id,
+                    schema.graph_checkpoints.c.namespace == '',
+                    schema.graph_checkpoints.c.run_id.in_([row['run_id'] for row in runs]),
+                ).distinct()
+            )).scalars())
         page = (await uow.execute(
             select(schema.actions).join(
                 schema.approvals,
@@ -100,6 +109,7 @@ class SQLiteReviewStore:
         return {
             'runs': runs,
             'interrupts': interrupts,
+            'checkpoint_run_ids': checkpoint_run_ids,
             'actions': actions,
             'approvals': approvals,
             'outboxes': outboxes,

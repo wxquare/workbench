@@ -90,7 +90,7 @@ class ReviewService:
             result = []
             for run in source['runs']:
                 interrupt = source['interrupts'].get(run['run_id'])
-                if interrupt is None:
+                if interrupt is None or run['run_id'] not in source['checkpoint_run_ids']:
                     continue
                 checkpoint = await self.backend.runs.checkpoint(
                     uow, auth.team_id, run['run_id']
