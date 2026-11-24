@@ -222,3 +222,14 @@ async def test_review_approval_for_a_different_human_is_not_visible(client, plat
     )
     assert other.status_code == 200
     assert other.json()['items'] == []
+    summary = await client.get(
+        '/v1/reviews/summary',
+        headers={
+            'Authorization': (
+                f'Bearer development:{platform.auth.team_id}:second-operator'
+            )
+        },
+    )
+    assert summary.status_code == 200
+    assert summary.json()['total'] == 0
+    assert summary.json()['by_type']['action_approval'] == 0

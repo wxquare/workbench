@@ -57,6 +57,7 @@ async def kb_chain(client, platform, tmp_path, monkeypatch, request):
         'allowed_scopes': [{'service': 'stock', 'environment': 'test', 'region': 'sg'}]}]})
     app = create_app(platform.settings.model_copy(update={'knowledge': knowledge}), backend=platform.backend)
     sock = socket.socket()
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(('127.0.0.1', 0))
     agent_port = sock.getsockname()[1]
     server = uvicorn.Server(uvicorn.Config(app, log_level='error', lifespan='on'))

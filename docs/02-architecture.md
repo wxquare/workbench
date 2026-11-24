@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: 008f681
+verified_commit: 44b29b3
 ---
 
 # 架构设计
@@ -353,7 +353,7 @@ legacy 白名单时，部署必须同时授权 read tool、工具对话 allowlis
 
 ### 4.6 直接问答的请求与响应边界
 
-- v17：单轮直接 LLM 调用，不传历史消息、QueryScope 或工具列表。
+- `conversation.single_turn`：单轮直接 LLM 调用，不传历史消息、QueryScope 或工具列表。
 - 多轮对话读取同 Agent 同 Thread 内已完成的单轮或多轮对话成功结果作为历史；最多 8 轮、正文上限 16000 字节。
 - 系统提示由：平台基础约束 → Agent 系统提示词 → 回复偏好 → 固定 Skill 指令（多轮对话）组成。
 - 模型返回后追加"以下内容由模型生成，未经外部知识源验证。"提示。

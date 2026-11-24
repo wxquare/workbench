@@ -2,7 +2,9 @@ from datetime import datetime, timezone
 
 
 def scope_data(source="kb"):
-    return dict(team="ExampleTeam", environment="test", region="id", service="checkout", source_id=source)
+    return dict(
+        team="ExampleTeam", environment="test", region="id", service="checkout", source_id=source
+    )
 
 
 def request_data(tool="knowledge_search", source="kb", **params):

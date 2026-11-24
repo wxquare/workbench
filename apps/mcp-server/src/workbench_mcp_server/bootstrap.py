@@ -35,11 +35,7 @@ class Runtime:
         for source in settings.sources:
             client = httpx.AsyncClient(trust_env=False, follow_redirects=False)
             self._clients.append(client)
-            cls = (
-                KnowledgeV2Gateway
-                if source.adapter == "knowledge-v2"
-                else NormalizedHttpGateway
-            )
+            cls = KnowledgeV2Gateway if source.adapter == "knowledge-v2" else NormalizedHttpGateway
             gateways[source.id] = cls(
                 source, client, tokens[source.id], settings.limits.upstream_bytes
             )

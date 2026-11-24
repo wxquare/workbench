@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 008f681
+verified_commit: 44b29b3
 ---
 
 # 开发指南
@@ -413,9 +413,9 @@ sequenceDiagram
 | 5 | `client_message_id`：命中且未过期的 `source_events` 回放原结果，不同请求体则冲突 | `SOURCE_CONFLICT`（409） |
 | 6 | `expected_revision` 与 Thread 当前 revision 比较 | `REVISION_CONFLICT`（409） |
 | 7 | 读取已发布 Profile；`business_context.conversation=true` 要求图为 `conversation.multi_turn` | `CONVERSATION_WORKFLOW_REQUIRED`（409） |
-| 8 | v18 要求 `mode=qa` 且无 `query_scope`；会话中不得有未结束 Run；历史成功 Run 必须来自 v17/v18 | `WORKFLOW_UNAVAILABLE`、`THREAD_BUSY`、`CONVERSATION_HISTORY_INCOMPATIBLE`（409） |
+| 8 | `conversation.multi_turn` 要求 `mode=qa` 且无 `query_scope`；会话中不得有未结束 Run；历史成功 Run 必须来自 `conversation.single_turn` 或 `conversation.multi_turn` | `WORKFLOW_UNAVAILABLE`、`THREAD_BUSY`、`CONVERSATION_HISTORY_INCOMPATIBLE`（409） |
 | 9 | v13–v15 仅允许合成告警受信通道调用 | `WORKFLOW_UNAVAILABLE`（409） |
-| 10 | v16：仅 `qa`，`validate_qa_scope` 校验 `query_scope`；v17：仅 `qa` 且不得带 `query_scope` | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`（409） |
+| 10 | `knowledge.scoped_excerpt`：仅 `qa`，`validate_qa_scope` 校验 `query_scope`；`conversation.single_turn`：仅 `qa` 且不得带 `query_scope` | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`（409） |
 | 11 | `request.mode` 必须在 Profile 的 `allowed_modes` 中 | `MODE_NOT_ALLOWED`（422） |
 | 12 | `sop`/`inspection` 必须使用 v11/v12 且提供 `workflow_version_id`；其他模式不得提供 | `WORKFLOW_UNAVAILABLE`（409） |
 | 13 | 不接受非空 `input.artifact_ids` | `ARTIFACT_UNAVAILABLE`（409） |
@@ -537,7 +537,7 @@ flowchart TD
 
 执行器与投影器由 `runtime/graphs/registry.py::foundation_worker_registry` 注册，按 `RunContext.graph_id` 选择：
 
-- `FoundationExecutor.execute`：以 `run_id` 为 LangGraph `thread_id`，`recursion_limit=128`；首次执行从 `messages` 表读取受理时的输入构造初始状态，已有检查点则以 `ainvoke(None, ...)` 继续；检查点上有未消费中断时不自行编造回复，直接返回。v10–v15、v17、v18 使用 `durability='sync'`。
+- `FoundationExecutor.execute`：以 `run_id` 为 LangGraph `thread_id`，`recursion_limit=128`；首次执行从 `messages` 表读取受理时的输入构造初始状态，已有检查点则以 `ainvoke(None, ...)` 继续；检查点上有未消费中断时不自行编造回复，直接返回。v10–v15、`conversation.single_turn`、`conversation.multi_turn` 使用 `durability='sync'`。
 - `InterruptExecutor(FoundationExecutor)`：用于 v2、v3、v9、v10、v13–v15。先 `apply_resume`（见 §3.5），再继续执行。
 - 投影器：`runtime/results.py::ResultProjector` 包装一个"等待态投影器"（`FoundationProgressProjector` 或 `InterruptProgressProjector`）。`ResultProjector.project` 先读检查点，`saved_outcome` 有 Outcome 则经 `application/results.py::ResultService.finalize_in` 在同一事务保存 `succeeded/partial`；否则交给等待态投影器（把中断写成 `interrupts` 行、事件 `input.required/approval.required`，并 `jobs.release(..., status='waiting_input'|'waiting_approval')`）。
 
@@ -947,7 +947,7 @@ SQLite 知识检索在存在内容关键词时，会从查询分词中移除与�
 
 `tests/integration/test_kb_mcp_chain.py` 覆盖真实 MCP 协议链路，相关迁移、检索、缺口、恢复、问答和 UI 测试分别位于 `test_kb_*` 与 `apps/web/tests/knowledge-*`。测试使用受控数据和模型替身，不能据此宣称真实模型表现或业务质量已验证。
 
-## 知识问答 v19 离线评估
+## 知识问答离线评估（`knowledge.citation_review`）
 
 `knowledge.citation_review` 需要在目标 Worker 的 `supported_graph_ids` 中显式加入，且发布的 Agent profile 必须显式设置正整数 `knowledge_max_age_seconds`；该值在 Run 受理时冻结。无阈值或来源时间无法判断时不得完成。真实知识源和范围隔离尚待确认，不应仅根据合成测试启用。切回知识摘录图应发布新的 profile，只影响新 Run。
 
