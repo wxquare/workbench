@@ -31,6 +31,12 @@
 - 改变开发路径、运维步骤、HTTP/API、表结构或配置时分别核对 `docs/03-development.md`、`docs/04-operations.md` 和 `docs/06-reference/`。修改 `docs/` 中的 Markdown 时按 `docs/README.md` 更新 `verified_commit` 并运行文档检查。
 - 密钥只以环境变量或受信引用注入；不提交 `config/local/`、真实业务数据、模型输出、含凭据 URL 或本机数据库。示例数据必须标明合成属性，不能伪装成真实验收资料。
 
+## 临时文件与 Superpowers 产物
+
+- 临时计划、草稿、调试输出、测试日志、截图和 Superpowers 技能生成的设计或执行文件统一放在仓库根目录 `.agents/` 下；Superpowers 可按 `.agents/superpowers/specs/`、`.agents/superpowers/plans/` 分类。技能给出的 `docs/superpowers/` 默认路径在本项目中由此规则替代。
+- `.agents/` 是本地工作目录，整个目录被 Git 忽略；其中任何文件都不得暂存、提交或推送。需要长期保存的结论应整理进现行 `docs/01-product.md` 至 `docs/05-decisions.md` 或相应源码，而不是把临时原稿转成仓库文档。
+- 用户明确要求交付某个临时文件时，仍先在 `.agents/` 完成；只有用户明确指定正式入库的目标路径，才将整理后的正式产物写到该路径并纳入提交。
+
 ## 验证与交付
 
 - 先运行改动对应的最小有意义测试，再按影响范围运行 Agent、MCP、Web、scripts 或文档检查。跨层协议、迁移、恢复与权限变更应覆盖相应合同、集成和故障用例。不要用仅重复实现细节的测试替代行为断言。
