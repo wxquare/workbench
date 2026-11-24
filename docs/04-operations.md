@@ -1,7 +1,7 @@
 ---
 title: 运维手册
 status: stable
-verified_commit: 590a15e
+verified_commit: 008f681
 ---
 
 # 运维手册
@@ -533,7 +533,7 @@ Redis 连接失败不会阻断受理、Job 发现与恢复：数据库轮询是�
 
 ## 内置知识库升级与索引维护
 
-升级已有受支持的 Agent SQLite 库前，停止 API、Worker、Scheduler 等写入进程并备份；确认运行时 SQLite 支持 FTS5 trigram。使用目标版本执行 `uv run workbench db migrate --config "$WORKBENCH_ROOT/config/local/agent.yaml"`，将 Agent 链从 `0003_run_trace_contexts` 升至 `0004_knowledge_base`；再运行 `uv run workbench doctor --config "$WORKBENCH_ROOT/config/local/agent.yaml"`，检查 revision、完整性和外键后启动进程。迁移失败时保留原库并检查原因；降级需恢复已审阅的兼容备份，不能手工 stamp revision。旧 Workspace 库仍不能沿 Agent 链升级。
+升级已有受支持的 Agent SQLite 库前，停止 API、Worker、Scheduler 等写入进程并备份；确认运行时 SQLite 支持 FTS5 trigram。使用目标版本执行 `uv run workbench db migrate --config "$WORKBENCH_ROOT/config/local/agent.yaml"`，把库迁移到[数据字典](06-reference/02-data-dictionary.md)所列当前 head；`0003_run_trace_contexts` → `0004_knowledge_base` 只是最初的知识库迁移，不是当前升级终点。再运行 `uv run workbench doctor --config "$WORKBENCH_ROOT/config/local/agent.yaml"`，检查 revision、完整性和外键后启动进程。迁移失败时保留原库并检查原因；降级需恢复已审阅的兼容备份，不能手工 stamp revision。旧 Workspace 库仍不能沿 Agent 链升级。
 
 索引检查只读，修复需明确指定条目和当前 revision：
 
@@ -543,3 +543,25 @@ uv run workbench kb rebuild-index --config "$WORKBENCH_ROOT/config/local/agent.y
 ```
 
 核对检查输出后再决定是否重建；普通查询不会静默修复索引。内部查询默认禁用，启用前配置服务身份、令牌和具体范围，并配套 MCP Server 数据源及独立出站凭据，参见[配置参考](06-reference/03-configuration.md)。
+
+## 专项上线与真实验收
+
+### 知识库与多文件 Skill
+
+知识库升级后核对发布版本、FTS 当前行、引用版本和缺口关联；备份恢复验收应覆盖多个版本、归档、回滚及缺口，确认版本 hash 和索引一致。索引缺失、孤立、旧版本或 hash 不符时先只读检查，再用带 team、entry 和 expected revision 的显式维护命令修复；不得在普通查询或 doctor 中自动修复。服务凭据要绑定具体团队、source 和服务/环境/区域范围；无匹配与上游不可用要分别呈现。只有真实 MCP 链路、授权和范围检查通过后，部署配置才能声明上游已强制隔离。
+
+多文件 Skill 使用 `0006_multifile_skill_drafts` 迁移；升级前同时备份 SQLite 数据库及 `storage.skill_object_root` 本地对象目录，升级后检查旧草稿主文件、附件、历史版本与 Agent 冻结引用。API 和 Worker 必须看到同一对象目录；`storage.s3` 不会自动迁移 Skill 对象。脚本附件的保存和发布不会执行脚本。已有运行数据的 v5 → v6 升级应走显式迁移，不要求清库；旧版本回退须恢复相配的数据库与对象目录备份。
+
+### 评测采集与夜间比较
+
+真实 A4 前在隔离本机配置中确认 API/MCP、模型密钥引用、实际价格与币种、总预算、知识来源与团队授权。先用 1–3 条独立冒烟核对版本片段、证据页面、费用和范围，再采集至少 30 条 dev 业务题并组织逐题人工评审；至少 12 条 holdout 独立保管。合成数据只能用于 engineering/dev，不能改名为 business；缺评审时业务质量为 unavailable，不能显示通过。未知计费显示待确认，多币种不直接合并。
+
+夜间采集默认关闭。只有采集机可读取经批准的资料并持有模型/知识凭据；CI 仅下载脱敏白名单摘要，不持有在线运行 token。首次手动运行时检查制品中没有问题、答案、证据、完整 URL 查询、评审正文、密钥或内部路径；核对来源 workflow、仓库、分支、成功状态、新鲜度与 checksum 后，才启用定时。连续三个调度日要产生不同 candidate ID 和实际运行数，并验证一次缺候选路径；未满足前不写“nightly 已验收”。停止方式为关闭采集调度与 CI 开关；预算耗尽时保留实验 journal，核对后以同一 experiment ID 恢复，不能自动创建无限新实验。更换基线须记录数据/模型/工具指纹和评审依据。
+
+### 审核中心、网页搜索与部署边界
+
+审核中心验收需在真实浏览器中逐一走通输入、Run 审批、Action 审批、重审和对账；检查 viewer/operator/maintainer、撤权、等待过期和两名操作员竞争。摘要自动刷新不代表待办可以由页面自行判定；提交前由后端按当前权限和状态再次校验。`unknown` 投递只做只读 lookup，无法确认时继续保留 unknown，绝不据此自动重发。
+
+`web_search` 上线前由部署方提供兼容 MCP、凭据、服务端强制域名策略和只允许公开资料的 Agent。用 `knowledge_search` 与 `web_search` 双工具验证公开问题、权限收窄、空/失败/截断/超时、恶意网页文本和来源 URL 展示。网页摘要不是全文或已证实引用；不得给含内部知识或内部问题的 Agent 授权 `web.read`。离线合同和 UI 测试不构成真实上游签收。
+
+目标部署还需记录 R2 在实际库上的查询计划和耗时，检查 10,000 来源行容量；核对 Docker/Compose、TLS/代理、当前授权撤销、备份恢复、真实 Jira/SeaTalk/DoD 回执和生产 Runner 隔离。之前离线测试在限制沙箱内的 localhost/子环境错误曾于沙箱外复跑通过，但 CI 仍应在能监听 localhost 的 runner 上取得自己的结果。工作树 `.venv` 与主工作区 Python/SQLite、桌面 Node 与系统 Node 的差异只属于测试环境说明，不可作为产品能力或真实验收结论。
