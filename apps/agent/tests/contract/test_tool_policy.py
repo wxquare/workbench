@@ -360,7 +360,8 @@ async def test_deployment_denial_does_not_retry(platform):
 
 @pytest.mark.asyncio
 async def test_transport_timeout_never_exceeds_run_budget(platform):
-    import asyncio, time
+    import asyncio
+    import time
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
@@ -713,7 +714,8 @@ async def test_probe_api_enqueues_without_resolving_secret_or_network(platform, 
 
 @pytest.mark.asyncio
 async def test_tool_probe_worker_uses_frozen_draft_and_local_mcp(platform):
-    import httpx, json
+    import httpx
+    import json
     from mcp.server.fastmcp import FastMCP
     from workbench_agent.tools.mcp import (
         MCPAdapter,
@@ -784,7 +786,8 @@ async def test_tool_probe_worker_uses_frozen_draft_and_local_mcp(platform):
 
 @pytest.mark.asyncio
 async def test_probe_worker_only_invokes_explicit_deployment_owned_fixed_request(platform):
-    import httpx, json
+    import httpx
+    import json
     from mcp.server.fastmcp import FastMCP
     from workbench_agent.tools.mcp import (
         MCPAdapter,
@@ -1097,7 +1100,8 @@ def test_historical_small_output_limit_fails_closed_without_validation_exception
 
 @pytest.mark.asyncio
 async def test_production_probe_uses_trusted_business_scope_and_real_mcp_schema(platform):
-    import httpx, json
+    import httpx
+    import json
     from mcp.server.fastmcp import FastMCP
     from workbench_agent.tools.mcp import configured_adapter
     from workbench_agent.tools.probe import ToolProbe

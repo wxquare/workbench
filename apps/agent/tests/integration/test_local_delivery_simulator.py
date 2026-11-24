@@ -143,7 +143,8 @@ async def test_simulated_temporary_failure_retries_and_revocation_stops_send(pla
 async def test_verified_receipt_links_same_run_incident_atomically(
     platform, tmp_path, monkeypatch, delivery
 ):
-    import json, time
+    import json
+    import time
     from datetime import datetime, timezone, timedelta
     from sqlalchemy import select, insert, update
     from uuid import uuid4
@@ -404,7 +405,8 @@ async def test_verified_receipt_links_same_run_incident_atomically(
 @pytest.mark.asyncio
 @pytest.mark.parametrize('graph_id', ['rca.proposal', 'rca.batch_proposal'])
 async def test_pending_unfinished_v14_does_not_starve_another_team(platform, tmp_path, graph_id):
-    import asyncio, json
+    import asyncio
+    import json
     from dataclasses import replace
     from sqlalchemy import select, update, insert
     from uuid import uuid4
@@ -506,7 +508,8 @@ async def test_pending_unfinished_v14_does_not_starve_another_team(platform, tmp
 @pytest.mark.asyncio
 @pytest.mark.parametrize('graph_id', ['rca.proposal', 'rca.batch_proposal'])
 async def test_terminal_v14_without_incident_is_audited_and_dead(platform, tmp_path, graph_id):
-    import asyncio, json
+    import asyncio
+    import json
     from sqlalchemy import select, update
     from test_action_contract import setup_action
     from workbench_agent.delivery.local_simulator import LocalSimulator

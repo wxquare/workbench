@@ -139,7 +139,7 @@ async def test_worker_renewal_failure_cancels_attempt_without_finalizing(platfor
     worker = Worker(platform.backend, 'a', registry, renew_interval=0.01)
     task = asyncio.create_task(worker.run_once())
     await asyncio.wait_for(started.wait(), 2)
-    owned = await row(platform, s.execution_leases, thread_id=run.thread_id)
+    _owned = await row(platform, s.execution_leases, thread_id=run.thread_id)
     async with platform.backend.create_uow().begin_write() as uow:
         await uow.execute(
             update(s.execution_leases)

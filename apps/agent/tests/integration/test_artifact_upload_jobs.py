@@ -116,7 +116,7 @@ async def test_staging_reaps_orphans_and_completed_but_preserves_queued(platform
     )
     stage = UploadStaging(tmp_path / 'stage')
     queue = ArtifactUploadQueue(platform.backend, stage)
-    job = await queue.submit(platform.auth, item['artifact_id'], data, key='reap')
+    _job = await queue.submit(platform.auth, item['artifact_id'], data, key='reap')
     orphan = stage.write(b'orphan')
     await queue.reap()
     assert not (stage.root / orphan).exists()
@@ -321,7 +321,7 @@ async def test_staging_owner_marker_survives_interrupted_publication(
     import pytest
 
     stage = UploadStaging(tmp_path / 'stage')
-    link = os.link
+    _link = os.link
 
     def fail(*args, **kwargs):
         raise OSError('simulated interruption')

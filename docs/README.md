@@ -1,7 +1,7 @@
 ---
 title: 文档入口
 status: stable
-verified_commit: 008f681
+verified_commit: bffb189
 ---
 
 # Workbench 文档
@@ -37,7 +37,7 @@ $EDITOR config/local/agent.yaml
 运行测试：
 
 ```bash
-(cd apps/agent && uv sync --frozen && uv run python -m pytest -q -ra --durations=25)
+(cd apps/agent && uv sync --frozen && uv run ruff check src tests && uv run ruff format --check src tests && uv run python -m pytest -q -ra --durations=25)
 (cd apps/mcp-server && uv sync --frozen && uv run ruff check src tests && uv run ruff format --check src tests && uv run python -m pytest -q -ra)
 (cd apps/web && npm ci && npm run typecheck && npm test && npm run build)
 python3 -m unittest discover -s scripts/tests -v

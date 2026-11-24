@@ -271,7 +271,7 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(
             original = PolicyToolExecutor.execute
 
             async def crash_after(self, *args, **kwargs):
-                result = await original(self, *args, **kwargs)
+                _result = await original(self, *args, **kwargs)
                 if scenario == 'legacy_receipt':
                     import json
                     from sqlalchemy import update

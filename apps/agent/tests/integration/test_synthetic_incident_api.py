@@ -204,7 +204,10 @@ async def test_signed_alert_http_to_incident_with_current_access(platform, monke
 
 @pytest.mark.asyncio
 async def test_same_subject_connectors_require_the_exact_source_identity(platform, monkeypatch):
-    import hashlib, hmac, json, time
+    import hashlib
+    import hmac
+    import json
+    import time
     from uuid import uuid4
     from workbench_agent.ingress.alerts import mac_message
 

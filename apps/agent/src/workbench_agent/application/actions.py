@@ -40,7 +40,7 @@ class ActionService:
         if not isinstance(action_key, str) or not 1 <= len(action_key) <= 128:
             raise DomainError('INVALID_REQUEST', 422)
         await execution.check_operation()
-        guard = execution.guard
+        _guard = execution.guard
         async with self.backend.create_uow().begin_write() as uow:
             return await self._propose_in(
                 uow, execution, action_key, binding_ref, scope_id, args, _synthetic_rule

@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 44b29b3
+verified_commit: bffb189
 ---
 
 # 开发指南
@@ -820,7 +820,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 `.github/workflows/ci.yml` 在 PR 和推送到 main 时运行五个独立检查：`agent`、`mcp-server`、`web`、`scripts` 和 `docs`，`ci-ok` 要求全部成功。完整本地命令见[文档入口的测试步骤](README.md#快速开始)。脚本测试调用 agent 虚拟环境中的 Python，因此先执行 agent 的 `uv sync --frozen`。
 
-Agent 检查使用 uv 管理的 Python 3.12，输出并断言 SQLite ≥ 3.51.3，再运行离线测试（不启用 `--run-live`）。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22。`docs` 检查链接、图、元信息和代码关联文档；代码关联文档缺同步仅警告，文档拆分按主题、职责与阅读成本判断，不设机械行数阈值。纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
+Agent 检查使用 uv 管理的 Python 3.12，先运行 `uv run ruff check src tests` 和 `uv run ruff format --check src tests`，再输出并断言 SQLite ≥ 3.51.3，运行离线测试（不启用 `--run-live`）。Ruff 固定为 0.17.5，使用 100 字符行宽、单引号；历史迁移目录不检查或格式化。当前启用 E4、E7、E9、F 规则，暂不启用 F401（现有导入包括兼容导出和带副作用的导入），旧 schema 的星号导入与少数延迟导入按文件豁免；后续应逐项审查这些存量例外。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22；GitHub Actions 的运行时使用 Node 24，与 Web 的构建 Node 版本独立。`docs` 检查链接、图、元信息和代码关联文档；代码关联文档缺同步仅警告，文档拆分按主题、职责与阅读成本判断，不设机械行数阈值。纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
 
 ## 10 开发指引
 

@@ -547,7 +547,8 @@ async def test_summary_is_budgeted_and_extractive(platform, tmp_path, scenario, 
         await runtime.close()
         return
     if scenario in ('http_revoke', 'http_scope', 'http_legacy', 'http_reader'):
-        import httpx, json
+        import httpx
+        import json
         from workbench_agent.api.app import create_app
 
         app_client = create_app(platform.settings, backend=platform.backend)

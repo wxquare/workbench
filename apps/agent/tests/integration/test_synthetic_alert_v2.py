@@ -763,7 +763,8 @@ async def test_other_backend_policy_revocation_blocks_worker_and_deadline(platfo
         ._executors['rca.synthetic']
         .execute(Execution(platform.backend, owned, policy))
     )
-    import subprocess, sys
+    import subprocess
+    import sys
 
     script = """import asyncio,sys
 from workbench_agent.persistence.backends.sqlite import SQLiteBackend

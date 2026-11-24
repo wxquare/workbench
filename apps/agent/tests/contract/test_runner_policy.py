@@ -68,7 +68,10 @@ def test_verified_script_checks_full_snapshot_manifest(tmp_path):
     script.write_text('print("ok")')
     source = tmp_path / 'code.py'
     source.write_text('value=1')
-    digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+
+    def digest(p):
+        return hashlib.sha256(p.read_bytes()).hexdigest()
+
     manifest = {'check.py': digest(script), 'code.py': digest(source)}
     argv = verified_script_argv(
         'python3', str(script), digest(script), root=str(tmp_path), manifest=manifest

@@ -47,7 +47,8 @@ def test_existing_corrupt_object_not_overwritten(tmp_path):
 
 
 def test_binary_resource_rejected_at_import():
-    import io, zipfile
+    import io
+    import zipfile
 
     data = io.BytesIO()
     with zipfile.ZipFile(data, 'w') as archive:
@@ -118,7 +119,9 @@ async def test_loader_rejects_cross_tenant_and_inactive_worker(platform, tmp_pat
 
 
 async def test_legacy_binary_bundle_keeps_text_and_binary_resources_loadable(platform, tmp_path):
-    import io, json, zipfile
+    import io
+    import json
+    import zipfile
     from uuid import uuid4
     from workbench_agent.domain.profiles import VersionRef
     from support.skills import pinned_execution

@@ -1,6 +1,9 @@
 """Two approvals and two local-only receipts from one synthetic run."""
 
-import hashlib, hmac, json, time
+import hashlib
+import hmac
+import json
+import time
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 import pytest

@@ -146,7 +146,8 @@ async def test_cleanup_timeout_is_reported_and_both_removals_attempted(tmp_path,
         + ' == "volume" and sys.argv[1:3] == ["volume", "rm"]: time.sleep(60)\n'
     )
     cli.chmod(0o755)
-    task = asyncio.create_task(ContainerRunner(str(cli), cleanup_timeout=0.1).execute(request()))
+    # Allow the fake CLI to start under load; the selected removal still sleeps 60s.
+    task = asyncio.create_task(ContainerRunner(str(cli), cleanup_timeout=1).execute(request()))
     for _ in range(200):
         if log.exists() and 'start' in log.read_text():
             break

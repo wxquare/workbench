@@ -100,7 +100,7 @@ class RunEventStore:
 
     @staticmethod
     def _project(event, run, permitted):
-        context = RunContext.model_validate_json(run['versions'])
+        _context = RunContext.model_validate_json(run['versions'])
         if permitted:
             return event
         if event.type == 'assistant.delta':

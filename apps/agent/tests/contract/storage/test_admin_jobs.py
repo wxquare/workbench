@@ -1,7 +1,7 @@
 from dataclasses import replace
 import pytest
 from sqlalchemy import text
-from test_uow import backend
+from test_uow import backend as backend
 
 
 async def setup_auth(backend):

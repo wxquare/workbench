@@ -82,7 +82,9 @@ async def test_cleanup_obligation_survives_lost_guard_and_recovery_retries(platf
 
 
 async def test_real_worker_lease_loss_keeps_failed_cleanup_recoverable(platform, tmp_path):
-    import asyncio, hashlib, subprocess
+    import asyncio
+    import hashlib
+    import subprocess
     from sqlalchemy import select, update
     from workbench_agent.persistence import schema as s
     from workbench_agent.domain.profiles import ProfileDraft, VersionRef

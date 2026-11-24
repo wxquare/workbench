@@ -1131,7 +1131,10 @@ async def test_proposal_rechecks_running_status_in_write_transaction(platform, m
 
 @pytest.mark.asyncio
 async def test_action_policy_cli_sync_is_explicit_and_idempotent(platform, config_data, tmp_path):
-    import json, subprocess, sys, yaml
+    import json
+    import subprocess
+    import sys
+    import yaml
     from uuid import uuid4
 
     grant = {
@@ -1176,7 +1179,11 @@ async def test_action_policy_cli_sync_is_explicit_and_idempotent(platform, confi
 async def test_process_policy_revoke_blocks_separate_worker_with_stale_config(
     platform, config_data, tmp_path
 ):
-    import asyncio, json, subprocess, sys, yaml
+    import asyncio
+    import json
+    import subprocess
+    import sys
+    import yaml
     from workbench_agent.delivery.dispatcher import Dispatcher
     from workbench_agent.persistence.backends.sqlite import SQLiteBackend
 
@@ -1258,7 +1265,11 @@ async def test_stale_maintenance_policy_sync_cannot_undo_revocation(platform):
 
 @pytest.mark.asyncio
 async def test_policy_cli_status_and_stale_sync_are_explicit(platform, config_data, tmp_path):
-    import asyncio, json, subprocess, sys, yaml
+    import asyncio
+    import json
+    import subprocess
+    import sys
+    import yaml
 
     path = tmp_path / 'policy-status.yaml'
     path.write_text(yaml.safe_dump(config_data))

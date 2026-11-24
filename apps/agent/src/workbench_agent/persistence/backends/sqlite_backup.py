@@ -116,7 +116,10 @@ class RestoreReport:
 def validate(path, *, deadline=None):
     deadline = deadline if deadline is not None else _Deadline.start()
     with _connection(path, deadline, readonly=True) as db:
-        query = lambda sql: _query(db, deadline, sql)
+
+        def query(sql):
+            return _query(db, deadline, sql)
+
         if query('PRAGMA integrity_check') != [('ok',)] or query('PRAGMA foreign_key_check'):
             raise ValueError('restore integrity/foreign key validation failed')
         if validate_required_schema(db, lambda: deadline.constrain(db)):

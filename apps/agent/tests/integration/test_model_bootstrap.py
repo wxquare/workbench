@@ -127,7 +127,6 @@ async def test_published_model_and_agent_versions_have_database_timestamps(platf
 
 
 # M2 model invocation coverage
-import pytest
 
 
 @pytest.mark.asyncio

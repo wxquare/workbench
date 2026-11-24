@@ -1,6 +1,7 @@
 """CAS authority for at most four independently approved local mock actions."""
 
-import json, re
+import json
+import re
 from sqlalchemy import select, insert, update
 from workbench_agent.application.errors import DomainError
 from workbench_agent.application.idempotency import canonical, digest

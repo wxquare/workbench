@@ -167,7 +167,9 @@ async def test_slow_client_buffer_overflow_closes_transport_without_cancelling_r
 async def test_configured_redis_connection_failure_falls_back_within_one_second(
     platform, monkeypatch
 ):
-    import asyncio, time, socket
+    import asyncio
+    import time
+    import socket
     from workbench_agent.runtime.streaming import RedisHints
 
     p = EventPlatform(platform)

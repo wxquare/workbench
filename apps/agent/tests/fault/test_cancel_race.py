@@ -58,7 +58,7 @@ async def test_public_cancel_and_resume_race_never_reopens_terminal_run(platform
 
     p = InterruptPlatform(platform)
     run, w = await p.waiting_run()
-    results = await asyncio.gather(
+    _results = await asyncio.gather(
         p.resume(run, w, key='answer'),
         p.service.cancel(platform.auth, run.run_id, 'cancel'),
         return_exceptions=True,

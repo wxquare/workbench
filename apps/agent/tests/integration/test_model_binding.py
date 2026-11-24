@@ -151,7 +151,6 @@ async def test_default_agent_lookup_is_not_limited_to_first_inventory_page(platf
 
 
 # M2 model invocation coverage
-import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, StrictStr
 from support.jobs import claim
@@ -371,7 +370,8 @@ async def test_large_tool_schema_is_counted_before_sending(platform):
 
 @pytest.mark.asyncio
 async def test_network_timeout_does_not_exceed_run_wall_budget(platform):
-    import asyncio, time
+    import asyncio
+    import time
     from workbench_agent.runtime.models.invoker import ModelInvoker
     from workbench_agent.application.errors import DomainError
 
@@ -423,7 +423,7 @@ async def test_revoked_member_receipt_is_quarantined(platform):
     from workbench_agent.runtime.models.invoker import ModelInvoker
     from workbench_agent.application.errors import DomainError
 
-    run = await platform.create_run(summary_token_reserve=8000)
+    _run = await platform.create_run(summary_token_reserve=8000)
     guard = (await claim(platform)).guard
     current = await platform.teams.get_member(platform.auth, platform.auth.subject)
 

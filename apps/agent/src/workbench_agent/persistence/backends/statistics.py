@@ -103,7 +103,7 @@ class SQLiteStatisticsStore:
             payload = json.loads(row['payload'])
             key = (row['run_id'], payload.get('subject'))
             latest_feedback[key] = payload
-        statuses = Counter(row['status'] for row in runs)
+        _statuses = Counter(row['status'] for row in runs)
         terminal = [row for row in runs if row['status'] in TERMINAL]
         succeeded = [
             row

@@ -28,7 +28,7 @@ async def test_active_budget_pauses_wait_survives_resume_and_takeover(platform):
     await expire_lease(platform, resumed.guard)
     first = (await platform.get_run(run.run_id)).active_elapsed_ms
     assert first == 170000
-    recovered = await claim(platform, 'takeover')
+    _recovered = await claim(platform, 'takeover')
     again = await row(platform, s.runs, run_id=run.run_id)
     assert again['active_elapsed_ms'] == 170000
     assert again['started_at'] == original['started_at']

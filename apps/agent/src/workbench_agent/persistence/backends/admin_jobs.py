@@ -184,7 +184,8 @@ class SQLiteAdminJobStore:
                 )
             )
         ).scalars()
-        import json, re
+        import json
+        import re
 
         values = set()
         for value in rows:

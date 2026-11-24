@@ -64,7 +64,7 @@ async def test_team_library_rejects_viewer_and_agent_scoped_identity(client, pla
         platform.auth, 'reader', 'viewer', 'active', expected_revision=0, key='reader'
     )
     viewer = {'Authorization': f'Bearer development:{platform.auth.team_id}:reader'}
-    scoped = {
+    _scoped = {
         'Authorization': f'Bearer development:{platform.auth.team_id}:{platform.auth.subject}'
     }
     app = create_app(platform.settings, backend=platform.backend)

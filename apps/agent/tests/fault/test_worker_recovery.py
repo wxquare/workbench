@@ -127,7 +127,8 @@ async def test_cancel_requested_dead_owner_is_fenced_and_cleaned(platform):
     'hook', ['after_interrupt_checkpoint', 'after_input_application', 'after_final_checkpoint']
 )
 async def test_real_sigkill_named_checkpoint_boundaries(platform, tmp_path, hook):
-    import asyncio, time
+    import asyncio
+    import time
     from support.processes import ProcessFault, ledger_count
     from support.rca_recovery import RcaRecovery
     from workbench_agent.jobs.scheduler import Scheduler

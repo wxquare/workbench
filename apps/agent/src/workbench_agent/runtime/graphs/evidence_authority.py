@@ -76,7 +76,7 @@ async def authorized_sources(
                 if not binding or not binding.read_only or row['source'] != binding.alias:
                     continue
                 if binding.argument_mapping is not None:
-                    current_scope = json.loads(scope['scope_json'])
+                    _current_scope = json.loads(scope['scope_json'])
                     policy = getattr(backend, '_mcp_connection_policy', None)
                     if not isinstance(policy, ConnectionPolicy):
                         continue
