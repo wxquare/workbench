@@ -1,4 +1,3 @@
-import os
 import pytest
 
 from workbench_agent.tools.execution_files import open_execution_file

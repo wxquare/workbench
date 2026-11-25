@@ -2,7 +2,7 @@
 
 import json
 from uuid import uuid4
-from workbench_agent.application.errors import DomainError, not_found
+from workbench_agent.application.errors import DomainError
 from workbench_agent.application.profiles import ProfileService
 from workbench_agent.domain.admin_jobs import AdminAuth
 from workbench_agent.domain.profiles import VersionRef

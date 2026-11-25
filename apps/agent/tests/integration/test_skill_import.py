@@ -1,7 +1,6 @@
 from uuid import uuid4
 import pytest
 from workbench_agent.application.errors import DomainError
-from workbench_agent.domain.admin_jobs import AdminAuth
 from workbench_agent.domain.profiles import ProfileDraft
 from workbench_agent.jobs.worker import CapabilityBlocked, ExecutorRegistry, Worker
 from workbench_agent.skill_management.importer import SkillImporter, SkillImportWorker

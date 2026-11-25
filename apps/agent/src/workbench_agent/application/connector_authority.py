@@ -1,10 +1,8 @@
 """Revalidate the exact connector identity bound to a synthetic Run."""
 
 from workbench_agent.runtime.graphs.ids import GraphId
-from sqlalchemy import select
 from workbench_agent.application.errors import DomainError
 from workbench_agent.jobs.worker import CapabilityBlocked, DeploymentConnectorPolicy
-from workbench_agent.persistence import schema
 
 
 async def require_connector_authority(uow, context, run_id, identities):

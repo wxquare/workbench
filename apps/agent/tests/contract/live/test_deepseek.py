@@ -1,6 +1,5 @@
 """Explicit opt-in probes; never print prompts, credentials, or provider errors."""
 
-import asyncio
 import os
 import pytest
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -124,7 +123,7 @@ async def test_versioned_probe_live(platform):
     from workbench_agent.runtime.models.factory import ModelFactory, ModelCredentialPolicy
     from workbench_agent.connectors.secrets import SecretProvider
 
-    version = await platform.profiles.get_active_model(platform.auth)
+    version = await platform.active_model(platform.auth)
     report = await ModelProbe(
         platform.backend,
         ModelFactory(

@@ -6,7 +6,7 @@ import json
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 
 from workbench_agent.persistence import schema
 

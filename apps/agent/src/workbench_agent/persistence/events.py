@@ -215,28 +215,6 @@ class RunEventStore:
         await self._hint(run_id)
         return value
 
-    async def append_delivery(self, action_guard, type, payload):
-        if type not in {'action.updated', 'delivery.updated'}:
-            raise ValueError('unsupported delivery event')
-        async with self.backend.create_uow().begin_write() as uow:
-            await self.backend.execution_events.require_delivery(uow, action_guard)
-            seq = await self.backend.execution_events.append_control(
-                uow,
-                action_guard.team_id,
-                action_guard.run_id,
-                type,
-                dict(payload, action_id=action_guard.action_id, outbox_id=action_guard.outbox_id),
-            )
-            value = envelope(
-                (
-                    await self.backend.execution_events.rows(
-                        uow, action_guard.team_id, action_guard.run_id, seq - 1, 1
-                    )
-                )[0]
-            )
-        await self._hint(action_guard.run_id)
-        return value
-
     async def prune(self, auth, run_id):
         async with self.backend.create_uow().begin_write() as uow:
             await self._authorized(uow, auth, run_id, 'maintainer')

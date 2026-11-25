@@ -1,7 +1,6 @@
 """Same-UoW result, final event, message and guarded terminal release."""
 
 from workbench_agent.runtime.graphs.ids import GraphId
-import json
 from uuid import UUID, uuid5
 from workbench_agent.domain.context import RunContext
 from workbench_agent.domain.guards import ExecutionGuard, TERMINAL_RUN_STATUSES
@@ -11,7 +10,6 @@ from workbench_agent.application.context import ContextResolver
 from workbench_agent.application.errors import DomainError, not_found
 from workbench_agent.application.idempotency import canonical
 from workbench_agent.application.runs import RunService
-from workbench_agent.persistence.errors import StaleExecution
 
 
 class ResultService:

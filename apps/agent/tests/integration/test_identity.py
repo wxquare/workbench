@@ -1,11 +1,9 @@
 import time
-from uuid import uuid4
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from workbench_agent.api.auth import OIDCVerifier, IdentityResolver
 from workbench_agent.application.errors import DomainError
-from workbench_agent.domain.identity import AuthContext
 
 
 @pytest.fixture

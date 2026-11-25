@@ -92,13 +92,6 @@ class KBChunk(KnowledgeValue):
     chunker_version: str
 
 
-class PublishedVersion(KnowledgeValue):
-    entry_id: str
-    version: int
-    content_hash: str
-    created_at: int
-
-
 class SearchHit(KnowledgeValue):
     entry_id: str
     version: int

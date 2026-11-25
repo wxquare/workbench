@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from workbench_agent.settings import MIN_SQLITE_VERSION, Settings
 
 from workbench_agent.persistence.sqlite_diagnostics import (
-    METADATA_TABLE,
     EXPECTED_PRAGMAS,
     open_readonly_connection,
     validate_required_schema,

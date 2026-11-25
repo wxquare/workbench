@@ -3,7 +3,6 @@ from hashlib import sha256
 from uuid import uuid4
 import zipfile
 import pytest
-from workbench_agent.application.context import ContextResolver
 from workbench_agent.domain.profiles import VersionRef
 from workbench_agent.jobs.worker import CapabilityBlocked
 from workbench_agent.skill_management.loader import SkillLoader

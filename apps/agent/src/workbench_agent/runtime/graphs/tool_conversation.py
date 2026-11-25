@@ -42,6 +42,18 @@ class ToolConversationState(TypedDict, total=False):
 MAX_HISTORY_BYTES = 16_000
 
 
+def _bounded_history(turns, limit):
+    selected = []
+    total = 0
+    for turn in reversed(turns):
+        size = sum(len(message.content.encode('utf-8')) for message in turn)
+        if len(selected) >= limit or total + size > MAX_HISTORY_BYTES:
+            break
+        selected.insert(0, turn)
+        total += size
+    return selected
+
+
 async def _authorized_history(execution, *, limit: int):
     import json
 
@@ -156,15 +168,7 @@ async def _authorized_history(execution, *, limit: int):
                 )
             except (ValueError, TypeError, KeyError, AttributeError):
                 continue
-        selected = []
-        total = 0
-        for turn in reversed(turns):
-            size = sum(len(message.content.encode('utf-8')) for message in turn)
-            if len(selected) >= limit or total + size > MAX_HISTORY_BYTES:
-                break
-            selected.insert(0, turn)
-            total += size
-        return selected
+        return _bounded_history(turns, limit)
 
 
 def _conversation_tool_allowed(backend, context, binding):
@@ -294,276 +298,290 @@ async def _model(execution, messages, *, phase, bindings):
     )
 
 
-def build_tool_conversation(saver):
-    async def prepare(state, config, runtime: Runtime):
-        execution = runtime.context
-        await execution.check_operation()
-        if state['run_id'] != config['configurable']['thread_id'] or state.get('mode') != 'qa':
-            raise ValueError('invalid tool conversation input')
-        bindings = await _load_bindings(execution)
-        history = await _authorized_history(
-            execution, limit=execution.claim.context.conversation_history_turns
-        )
-        history_messages = [message for pair in history for message in pair]
-        return {
-            'phase': 'prepare',
-            'bindings': [
-                {
-                    'ref': item['ref'],
-                    'alias': item['alias'],
-                    'tool_name': item['tool_name'],
-                    'schema': item['schema'],
-                }
-                for item in bindings
-            ],
-            'tool_calls_used': 0,
-            'messages': [
-                SystemMessage(content=system_instruction(execution.claim.context)),
-                *history_messages,
-                HumanMessage(content=state['input_text']),
-            ],
-        }
-
-    async def model(state, runtime: Runtime):
-        execution = runtime.context
-        await execution.check_operation()
-        try:
-            bindings = await _load_bindings(execution)
-            result = await _model(
-                execution,
-                state['messages'],
-                phase='model',
-                bindings=bindings,
-            )
-        except DomainError as exc:
-            if exc.code in {
-                'BUDGET_EXCEEDED',
-                'SUMMARY_RESERVE_REQUIRED',
-                'MAX_CONTEXT_EXCEEDED',
-                'MODEL_PROFILE_UNAVAILABLE',
-                'MODEL_CREDENTIAL_UNAVAILABLE',
-                'INVOCATION_ALREADY_SENT',
-                'RESERVATION_CONFLICT',
-            }:
-                return {'phase': 'model', 'last_error': exc.code}
-            raise
-        if result.status != 'ok' or not isinstance(result.message, AIMessage):
-            return {
-                'phase': 'model',
-                'last_error': result.error_code or 'MODEL_OUTPUT_UNAVAILABLE',
+async def prepare(state, config, runtime: Runtime):
+    execution = runtime.context
+    await execution.check_operation()
+    if state['run_id'] != config['configurable']['thread_id'] or state.get('mode') != 'qa':
+        raise ValueError('invalid tool conversation input')
+    bindings = await _load_bindings(execution)
+    history = await _authorized_history(
+        execution, limit=execution.claim.context.conversation_history_turns
+    )
+    history_messages = [message for pair in history for message in pair]
+    return {
+        'phase': 'prepare',
+        'bindings': [
+            {
+                'ref': item['ref'],
+                'alias': item['alias'],
+                'tool_name': item['tool_name'],
+                'schema': item['schema'],
             }
+            for item in bindings
+        ],
+        'tool_calls_used': 0,
+        'messages': [
+            SystemMessage(content=system_instruction(execution.claim.context)),
+            *history_messages,
+            HumanMessage(content=state['input_text']),
+        ],
+    }
+
+
+async def model(state, runtime: Runtime):
+    execution = runtime.context
+    await execution.check_operation()
+    try:
+        bindings = await _load_bindings(execution)
+        result = await _model(
+            execution,
+            state['messages'],
+            phase='model',
+            bindings=bindings,
+        )
+    except DomainError as exc:
+        if exc.code in {
+            'BUDGET_EXCEEDED',
+            'SUMMARY_RESERVE_REQUIRED',
+            'MAX_CONTEXT_EXCEEDED',
+            'MODEL_PROFILE_UNAVAILABLE',
+            'MODEL_CREDENTIAL_UNAVAILABLE',
+            'INVOCATION_ALREADY_SENT',
+            'RESERVATION_CONFLICT',
+        }:
+            return {'phase': 'model', 'last_error': exc.code}
+        raise
+    if result.status != 'ok' or not isinstance(result.message, AIMessage):
         return {
             'phase': 'model',
-            'messages': [*state['messages'], result.message],
-            'last_error': '',
+            'last_error': result.error_code or 'MODEL_OUTPUT_UNAVAILABLE',
         }
+    return {
+        'phase': 'model',
+        'messages': [*state['messages'], result.message],
+        'last_error': '',
+    }
 
-    async def tools(state, runtime: Runtime):
-        execution = runtime.context
-        await execution.check_operation()
-        message = state['messages'][-1] if state.get('messages') else None
-        calls = getattr(message, 'tool_calls', ()) if message is not None else ()
-        remaining = MAX_TOOL_CALLS - state.get('tool_calls_used', 0)
-        if len(calls) > remaining:
-            from langchain_core.messages import ToolMessage
 
-            limited = [
-                ToolMessage(
-                    content=json.dumps(
-                        {
-                            'status': 'denied',
-                            'error': {'code': 'TOOL_CALL_LIMIT'},
-                        }
-                    ),
-                    name=call.get('name'),
-                    tool_call_id=call.get('id'),
-                )
-                for call in calls[remaining:]
-            ]
-            results = list(state.get('call_results', []))
-            limited_calls = calls[remaining:]
-            for call in limited_calls:
-                results.append(
-                    {
-                        'tool_call_id': call.get('id'),
-                        'alias': call.get('name'),
-                        'status': 'denied',
-                        'payload': {
-                            'status': 'denied',
-                            'error': {'code': 'TOOL_CALL_LIMIT'},
-                        },
-                    }
-                )
-            return {
-                'phase': 'tools',
-                'last_error': 'TOOL_CALL_LIMIT',
-                'call_results': results,
-                'messages': [
-                    *state['messages'],
-                    *limited,
-                ],
-            }
-        bindings = {item['alias'].replace('.', '_'): item for item in state['bindings']}
-        factory = getattr(execution.backend, '_diagnosis_factory', None)
-        if factory is None:
-            return {'phase': 'tools', 'last_error': 'TOOL_CAPABILITY_UNAVAILABLE'}
-        _, executor = factory(execution)
-        scope = None
-        async with execution.backend.create_uow().begin_read() as uow:
-            scope = await execution.backend.runs.current_scope(
-                uow, execution.guard.team_id, state['run_id']
-            )
-        if not scope:
-            return {'phase': 'tools', 'last_error': 'QUERY_SCOPE_REQUIRED'}
+async def tools(state, runtime: Runtime):
+    execution = runtime.context
+    await execution.check_operation()
+    message = state['messages'][-1] if state.get('messages') else None
+    calls = getattr(message, 'tool_calls', ()) if message is not None else ()
+    remaining = MAX_TOOL_CALLS - state.get('tool_calls_used', 0)
+    if len(calls) > remaining:
         from langchain_core.messages import ToolMessage
 
-        messages = list(state['messages'])
+        limited = [
+            ToolMessage(
+                content=json.dumps(
+                    {
+                        'status': 'denied',
+                        'error': {'code': 'TOOL_CALL_LIMIT'},
+                    }
+                ),
+                name=call.get('name'),
+                tool_call_id=call.get('id'),
+            )
+            for call in calls[remaining:]
+        ]
         results = list(state.get('call_results', []))
-        used = state.get('tool_calls_used', 0)
-        for call in calls[:remaining]:
-            binding = bindings.get(call.get('name'))
-            if binding is None:
-                payload = {'status': 'denied', 'error': {'code': 'UNKNOWN_TOOL'}}
-            else:
-                ref = binding['ref']
-                from workbench_agent.domain.profiles import VersionRef
-
-                invocation = str(
-                    uuid5(
-                        UUID(state['run_id']),
-                        f'{GraphId.CONVERSATION_TOOL_USE}:tool:{call.get("id")}',
-                    )
-                )
-                try:
-                    output = await executor.execute(
-                        execution.claim.context,
-                        execution.guard,
-                        invocation,
-                        VersionRef.model_validate(ref),
-                        call.get('args') or {},
-                        expected_tool=binding['tool_name'],
-                        max_logical_calls=MAX_TOOL_CALLS,
-                        expected_scope_id=scope['scope_id'],
-                    )
-                    payload = output.model_dump(mode='json')
-                except DomainError as exc:
-                    payload = {'status': 'denied', 'error': {'code': exc.code}}
+        limited_calls = calls[remaining:]
+        for call in limited_calls:
             results.append(
                 {
                     'tool_call_id': call.get('id'),
-                    'alias': binding['alias'] if binding else call.get('name'),
-                    'status': payload.get('status', 'unknown'),
-                    'payload': payload,
+                    'alias': call.get('name'),
+                    'status': 'denied',
+                    'payload': {
+                        'status': 'denied',
+                        'error': {'code': 'TOOL_CALL_LIMIT'},
+                    },
                 }
             )
-            messages.append(
-                ToolMessage(
-                    content=json.dumps(payload, sort_keys=True),
-                    name=call.get('name'),
-                    tool_call_id=call.get('id'),
-                )
-            )
-            used += 1
         return {
             'phase': 'tools',
-            'messages': messages,
+            'last_error': 'TOOL_CALL_LIMIT',
             'call_results': results,
-            'tool_calls_used': used,
+            'messages': [
+                *state['messages'],
+                *limited,
+            ],
         }
+    bindings = {item['alias'].replace('.', '_'): item for item in state['bindings']}
+    factory = getattr(execution.backend, '_diagnosis_factory', None)
+    if factory is None:
+        return {'phase': 'tools', 'last_error': 'TOOL_CAPABILITY_UNAVAILABLE'}
+    _, executor = factory(execution)
+    scope = None
+    async with execution.backend.create_uow().begin_read() as uow:
+        scope = await execution.backend.runs.current_scope(
+            uow, execution.guard.team_id, state['run_id']
+        )
+    if not scope:
+        return {'phase': 'tools', 'last_error': 'QUERY_SCOPE_REQUIRED'}
+    from langchain_core.messages import ToolMessage
 
-    async def compose(state, runtime: Runtime):
-        execution = runtime.context
-        await execution.check_operation()
-        context = execution.claim.context
-        auth = AuthContext(
-            team_id=context.team_id,
-            subject=context.subject,
-            roles=context.roles,
-            identity_kind=context.identity_kind,
-            agent_scope=context.agent_scope,
-        )
-        outcome = (
-            await BudgetService(execution.backend).partial_outcome(auth, state['run_id'])
-        ).model_dump(mode='json')
-        results = state.get('call_results', [])
-        evidence = [
-            item['payload']['evidence_ref']
-            for item in results
-            if item.get('payload', {}).get('status') == 'ok' and item['payload'].get('evidence_ref')
-        ]
-        web_sources = []
-        for item in results:
-            payload = item.get('payload') or {}
-            data = payload.get('data') or {}
-            if (
-                item.get('alias') == 'web.search'
-                and payload.get('status') == 'ok'
-                and isinstance(data, dict)
-                and data.get('content_kind') == 'search_snippet'
-                and isinstance(data.get('results'), list)
-            ):
-                for result in data['results']:
-                    if isinstance(result, dict):
-                        web_sources.append(
-                            {
-                                **result,
-                                'retrieved_at': data.get('retrieved_at'),
-                            }
-                        )
-        if not results:
-            return {
-                'phase': 'compose',
-                'outcome': {
-                    **outcome,
-                    'completed': False,
-                    'summary': '本轮未调用工具，缺少工具依据。',
-                    'unresolved_items': ['本轮未调用工具，缺少工具依据。'],
-                    'evidence_refs': [],
-                },
+    messages = list(state['messages'])
+    results = list(state.get('call_results', []))
+    used = state.get('tool_calls_used', 0)
+    for call in calls[:remaining]:
+        binding = bindings.get(call.get('name'))
+        if binding is None:
+            payload = {'status': 'denied', 'error': {'code': 'UNKNOWN_TOOL'}}
+        else:
+            ref = binding['ref']
+            from workbench_agent.domain.profiles import VersionRef
+
+            invocation = str(
+                uuid5(
+                    UUID(state['run_id']),
+                    f'{GraphId.CONVERSATION_TOOL_USE}:tool:{call.get("id")}',
+                )
+            )
+            try:
+                output = await executor.execute(
+                    execution.claim.context,
+                    execution.guard,
+                    invocation,
+                    VersionRef.model_validate(ref),
+                    call.get('args') or {},
+                    expected_tool=binding['tool_name'],
+                    max_logical_calls=MAX_TOOL_CALLS,
+                    expected_scope_id=scope['scope_id'],
+                )
+                payload = output.model_dump(mode='json')
+            except DomainError as exc:
+                payload = {'status': 'denied', 'error': {'code': exc.code}}
+        results.append(
+            {
+                'tool_call_id': call.get('id'),
+                'alias': binding['alias'] if binding else call.get('name'),
+                'status': payload.get('status', 'unknown'),
+                'payload': payload,
             }
-        model_message = next(
-            (
-                message
-                for message in reversed(state.get('messages', []))
-                if isinstance(message, AIMessage)
-                and isinstance(message.content, str)
-                and message.content.strip()
-            ),
-            None,
         )
-        if model_message is None:
-            return {
-                'phase': 'compose',
-                'outcome': {
-                    **outcome,
-                    'completed': False,
-                    'summary': '工具对话未完成。',
-                    'unresolved_items': [state.get('last_error') or 'MODEL_OUTPUT_UNAVAILABLE'],
-                    'evidence_refs': evidence,
-                },
-            }
-        unresolved = []
-        for item in results:
-            if item['status'] != 'ok':
-                unresolved.append(f'{item["alias"]}: {item["status"]}')
-        if not evidence:
-            unresolved.append('没有当前可访问的工具证据。')
-        basis = '\n'.join(
-            f'- {item["alias"]} / {item["tool_call_id"]} / {item["status"]}' for item in results
+        messages.append(
+            ToolMessage(
+                content=json.dumps(payload, sort_keys=True),
+                name=call.get('name'),
+                tool_call_id=call.get('id'),
+            )
         )
-        summary = NOTICE + model_message.content + '\n\n工具依据：\n' + basis
+        used += 1
+    return {
+        'phase': 'tools',
+        'messages': messages,
+        'call_results': results,
+        'tool_calls_used': used,
+    }
+
+
+async def compose(state, runtime: Runtime):
+    execution = runtime.context
+    await execution.check_operation()
+    context = execution.claim.context
+    auth = AuthContext(
+        team_id=context.team_id,
+        subject=context.subject,
+        roles=context.roles,
+        identity_kind=context.identity_kind,
+        agent_scope=context.agent_scope,
+    )
+    outcome = (
+        await BudgetService(execution.backend).partial_outcome(auth, state['run_id'])
+    ).model_dump(mode='json')
+    results = state.get('call_results', [])
+    evidence = [
+        item['payload']['evidence_ref']
+        for item in results
+        if item.get('payload', {}).get('status') == 'ok' and item['payload'].get('evidence_ref')
+    ]
+    web_sources = []
+    for item in results:
+        payload = item.get('payload') or {}
+        data = payload.get('data') or {}
+        if (
+            item.get('alias') == 'web.search'
+            and payload.get('status') == 'ok'
+            and isinstance(data, dict)
+            and data.get('content_kind') == 'search_snippet'
+            and isinstance(data.get('results'), list)
+        ):
+            for result in data['results']:
+                if isinstance(result, dict):
+                    web_sources.append(
+                        {
+                            **result,
+                            'retrieved_at': data.get('retrieved_at'),
+                        }
+                    )
+    if not results:
         return {
             'phase': 'compose',
             'outcome': {
                 **outcome,
-                'completed': not unresolved,
-                'summary': summary,
-                'unresolved_items': unresolved,
-                'evidence_refs': evidence,
-                'web_search_sources': web_sources,
+                'completed': False,
+                'summary': '本轮未调用工具，缺少工具依据。',
+                'unresolved_items': ['本轮未调用工具，缺少工具依据。'],
+                'evidence_refs': [],
             },
         }
+    model_message = next(
+        (
+            message
+            for message in reversed(state.get('messages', []))
+            if isinstance(message, AIMessage)
+            and isinstance(message.content, str)
+            and message.content.strip()
+        ),
+        None,
+    )
+    if model_message is None:
+        return {
+            'phase': 'compose',
+            'outcome': {
+                **outcome,
+                'completed': False,
+                'summary': '工具对话未完成。',
+                'unresolved_items': [state.get('last_error') or 'MODEL_OUTPUT_UNAVAILABLE'],
+                'evidence_refs': evidence,
+            },
+        }
+    unresolved = []
+    for item in results:
+        if item['status'] != 'ok':
+            unresolved.append(f'{item["alias"]}: {item["status"]}')
+    if not evidence:
+        unresolved.append('没有当前可访问的工具证据。')
+    basis = '\n'.join(
+        f'- {item["alias"]} / {item["tool_call_id"]} / {item["status"]}' for item in results
+    )
+    summary = NOTICE + model_message.content + '\n\n工具依据：\n' + basis
+    return {
+        'phase': 'compose',
+        'outcome': {
+            **outcome,
+            'completed': not unresolved,
+            'summary': summary,
+            'unresolved_items': unresolved,
+            'evidence_refs': evidence,
+            'web_search_sources': web_sources,
+        },
+    }
 
+
+def route_after_model(state):
+    if (
+        state.get('tool_calls_used', 0) < MAX_TOOL_CALLS
+        and state.get('messages')
+        and getattr(state['messages'][-1], 'tool_calls', ())
+    ):
+        return 'tools'
+    return 'compose'
+
+
+def build_tool_conversation(saver):
     graph = StateGraph(ToolConversationState)
     graph.add_node('prepare', prepare)
     graph.add_node('model', model)
@@ -573,15 +591,7 @@ def build_tool_conversation(saver):
     graph.add_edge('prepare', 'model')
     graph.add_conditional_edges(
         'model',
-        lambda state: (
-            'tools'
-            if (
-                state.get('tool_calls_used', 0) < MAX_TOOL_CALLS
-                and state.get('messages')
-                and getattr(state['messages'][-1], 'tool_calls', ())
-            )
-            else 'compose'
-        ),
+        route_after_model,
         {'tools': 'tools', 'compose': 'compose'},
     )
     graph.add_edge('tools', 'model')

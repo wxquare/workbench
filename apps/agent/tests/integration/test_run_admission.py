@@ -78,6 +78,74 @@ async def test_same_key_concurrent_admission(client, platform, run_payload):
     assert await count(platform, 'run_jobs') == 1
 
 
+@pytest.mark.parametrize('failure_point', ['scope', 'job', 'event'])
+async def test_admission_write_failures_roll_back_and_allow_retry(
+    platform, monkeypatch, failure_point
+):
+    from contract.test_scoped_mcp_mapping import SCOPE
+    from integration.test_graph_catalog_api import publish_graph
+    from workbench_agent.application.runs import RunService
+    from workbench_agent.domain.runs import CreateRun
+
+    await publish_graph(platform, platform.auth, platform.agent_id, 'knowledge.scoped_excerpt')
+    service = RunService(platform.backend)
+    request = CreateRun.model_validate(
+        {
+            'agent_id': platform.agent_id,
+            'mode': 'qa',
+            'input': {'text': 'check'},
+            'client_message_id': 'rollback-source',
+            'business_context': {'query_scope': SCOPE},
+        }
+    )
+    tables = (
+        'threads',
+        'runs',
+        'messages',
+        'query_scope_revisions',
+        'usage_budget_policies',
+        'run_jobs',
+        'run_events',
+        'source_events',
+        'idempotency_records',
+    )
+    before = {table: await count(platform, table) for table in tables}
+    with monkeypatch.context() as patch:
+        if failure_point == 'scope':
+            original = service.contexts.query_scope
+
+            async def fail_scope(*args, **kwargs):
+                await original(*args, **kwargs)
+                raise RuntimeError('scope write failed')
+
+            patch.setattr(service.contexts, 'query_scope', fail_scope)
+        elif failure_point == 'job':
+            original = platform.backend.runs.insert
+
+            async def fail_job(uow, table, values):
+                result = await original(uow, table, values)
+                if table == 'run_jobs':
+                    raise RuntimeError('job write failed')
+                return result
+
+            patch.setattr(platform.backend.runs, 'insert', fail_job)
+        else:
+            original = platform.backend.execution_events.append_control
+
+            async def fail_event(*args, **kwargs):
+                await original(*args, **kwargs)
+                raise RuntimeError('event write failed')
+
+            patch.setattr(platform.backend.execution_events, 'append_control', fail_event)
+        with pytest.raises(RuntimeError, match='write failed'):
+            await service.create(platform.auth, request, 'rollback-run')
+    assert {table: await count(platform, table) for table in tables} == before
+    accepted = await service.create(platform.auth, request, 'rollback-run')
+    assert accepted.replayed is False
+    replay = await service.create(platform.auth, request, 'rollback-run')
+    assert replay.replayed is True and replay.run_id == accepted.run_id
+
+
 @pytest.mark.parametrize(
     'text,status', [('x' * 65536, 202), ('界' * 21845, 202), ('界' * 21846, 413)]
 )

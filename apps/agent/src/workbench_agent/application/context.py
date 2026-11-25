@@ -83,33 +83,6 @@ class ContextResolver:
         await self.backend.runs.insert(uow, 'query_scope_revisions', row)
         return row
 
-    async def revise_scope(self, auth, run_id, scope_ref, user_response):
-        """Revise a region against the current revision without moving its window."""
-        import json
-        from workbench_agent.application.errors import DomainError, not_found
-
-        if (
-            not isinstance(user_response, dict)
-            or set(user_response) != {'region'}
-            or not isinstance(user_response['region'], str)
-            or not user_response['region'].strip()
-            or user_response['region'] != user_response['region'].strip()
-        ):
-            raise DomainError('INVALID_SCOPE', 422)
-        async with self.backend.create_uow().begin_write() as uow:
-            run = await self.backend.runs.one(uow, 'runs', team_id=auth.team_id, run_id=run_id)
-            if run is None:
-                raise not_found()
-            await self.authorization.current(uow, auth, run['agent_id'], 'operator')
-            previous = await self.backend.runs.current_scope(uow, auth.team_id, run_id)
-            if not previous or previous['scope_id'] != scope_ref:
-                raise DomainError('STALE_QUERY_SCOPE', 409)
-            values = json.loads(previous['scope_json'])
-            if not isinstance(values, dict):
-                raise DomainError('INVALID_SCOPE', 422)
-            values['region'] = user_response['region']
-            return await self.query_scope(uow, auth, run_id, values)
-
     async def current_evidence(self, uow, auth, run_id):
         from workbench_agent.application.errors import not_found
 

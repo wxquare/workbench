@@ -194,10 +194,7 @@ def foundation_worker_registry(backend, *, supported_graph_ids=None):
     from workbench_agent.runtime.graphs.rca_batch import build_rca_batch_proposal as build_batch
 
     graphs.register(GraphId.RCA_BATCH_PROPOSAL, 'dod-state-v15', build_batch(saver))
-    from workbench_agent.runtime.graphs.sop_graph import (
-        build_sop,
-        STATE_SCHEMA_VERSION as SOP_STATE_VERSION,
-    )
+    from workbench_agent.runtime.graphs.sop_graph import build_sop
 
     graphs.register(
         GraphId.SOP_CONDITIONAL, 'dod-sop-v2', build_sop(saver, version=GraphId.SOP_CONDITIONAL)

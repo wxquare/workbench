@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 from typing import Any
-from dataclasses import dataclass
 
 SEED_KINDS = {'faq', 'runbook', 'glossary', 'case'}
 
@@ -245,25 +244,3 @@ def validate_experiment_config(value: dict) -> dict:
         ):
             raise ValueError('known pricing requires currency and complete prices')
     return value
-
-
-@dataclass(frozen=True)
-class AttemptOutcome:
-    value: dict
-    replayed: bool = False
-
-
-async def request_with_retry(operation, *, attempts: int = 3, delays=(0, 1, 2)):
-    """Retry only errors explicitly marked safe after the server rejects them."""
-    from workbench_agent.evaluation.api_client import APIError
-
-    for index in range(attempts):
-        try:
-            return AttemptOutcome(value=await operation(), replayed=index > 0)
-        except APIError as error:
-            if not error.retryable or index + 1 == attempts:
-                raise
-            import asyncio
-
-            await asyncio.sleep(delays[min(index, len(delays) - 1)])
-    raise RuntimeError('retry loop unexpectedly exhausted')

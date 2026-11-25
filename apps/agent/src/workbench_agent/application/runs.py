@@ -41,6 +41,114 @@ BUDGET_FIELDS = ('wall_seconds', 'model_calls', 'tool_calls', 'tokens')
 _SYNTHETIC_ALERT_V2 = object()
 
 
+def _admission_payload(request):
+    payload = request.model_dump(mode='json')
+    # The text cap is independent of canonical JSON escaping/envelope overhead.
+    if len(request.input.text.encode('utf-8')) > 65536:
+        raise DomainError('INPUT_TOO_LARGE', 413)
+    metadata = {k: v for k, v in payload.items() if k != 'input'}
+    if len(canonical(metadata).encode('utf-8')) > 65536:
+        raise DomainError('INPUT_TOO_LARGE', 413)
+    return payload
+
+
+def _admission_budgets(request, profile):
+    budgets = dict(zip(BUDGET_FIELDS, DEFAULT_BUDGETS[request.mode]))
+    if profile.budget_limits is not None:
+        for field, value in profile.budget_limits.model_dump(exclude_none=True).items():
+            budgets[field] = min(budgets[field], value)
+    for field, value in request.budgets.model_dump(exclude_none=True).items():
+        if value > budgets[field]:
+            raise DomainError('BUDGET_EXCEEDED', 422)
+        budgets[field] = value
+    return budgets
+
+
+def _validate_conversation_request(request, profile):
+    if request.business_context.get('conversation') is True and profile.graph_id not in (
+        GraphId.CONVERSATION_MULTI_TURN,
+        GraphId.CONVERSATION_TOOL_USE,
+    ):
+        raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
+    if (
+        profile.graph_id
+        in (
+            GraphId.CONVERSATION_MULTI_TURN,
+            GraphId.CONVERSATION_TOOL_USE,
+        )
+        and request.mode != 'qa'
+    ):
+        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    if (
+        profile.graph_id == GraphId.CONVERSATION_MULTI_TURN
+        and 'query_scope' in request.business_context
+    ):
+        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    if profile.graph_id == GraphId.CONVERSATION_TOOL_USE:
+        from workbench_agent.domain.query_scope import validate_qa_scope
+
+        try:
+            validate_qa_scope(request.business_context.get('query_scope'))
+        except ValueError:
+            raise DomainError('INVALID_SCOPE', 422) from None
+        if request.business_context.get('conversation') is not True:
+            raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
+
+
+def _validate_graph_scope(
+    request, profile, auth, ingress_capability, has_caller_uow, source_connector
+):
+    if profile.graph_id in (
+        GraphId.RCA_SYNTHETIC,
+        GraphId.RCA_PROPOSAL,
+        GraphId.RCA_BATCH_PROPOSAL,
+    ) and not (
+        ingress_capability is _SYNTHETIC_ALERT_V2
+        and has_caller_uow
+        and auth.identity_kind == 'connector'
+        and source_connector
+        and request.mode == 'rca'
+    ):
+        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    query_scope = None
+    if profile.graph_id == GraphId.CONVERSATION_SINGLE_TURN and (
+        request.mode != 'qa' or 'query_scope' in request.business_context
+    ):
+        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    if profile.graph_id in (
+        GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+        GraphId.KNOWLEDGE_CITATION_REVIEW,
+        GraphId.CONVERSATION_TOOL_USE,
+    ):
+        if request.mode != 'qa':
+            raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+        query_scope = request.business_context.get('query_scope')
+        from workbench_agent.domain.query_scope import validate_qa_scope
+
+        try:
+            query_scope = validate_qa_scope(query_scope)
+        except ValueError:
+            raise DomainError('INVALID_SCOPE', 422) from None
+    return query_scope
+
+
+def _validate_mode_and_workflow(request, profile):
+    if request.mode not in profile.allowed_modes:
+        raise DomainError('MODE_NOT_ALLOWED', 422)
+    if profile.graph_id == GraphId.SOP_CONDITIONAL and request.mode not in (
+        'sop',
+        'inspection',
+    ):
+        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    if request.mode in ('sop', 'inspection'):
+        if profile.graph_id != GraphId.SOP_CONDITIONAL or request.workflow_version_id is None:
+            raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    elif request.workflow_version_id is not None:
+        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
+    if request.input.artifact_ids:
+        raise DomainError('ARTIFACT_UNAVAILABLE', 409)
+
+
 class RunService:
     def __init__(self, backend, *, secret_availability=None):
         from workbench_agent.connectors.secrets import SecretReferenceAvailability
@@ -174,13 +282,7 @@ class RunService:
             or request.thread_id
         ):
             raise DomainError('INVALID_REQUEST', 422)
-        payload = request.model_dump(mode='json')
-        # The text cap is independent of canonical JSON escaping/envelope overhead.
-        if len(request.input.text.encode('utf-8')) > 65536:
-            raise DomainError('INPUT_TOO_LARGE', 413)
-        metadata = {k: v for k, v in payload.items() if k != 'input'}
-        if len(canonical(metadata).encode('utf-8')) > 65536:
-            raise DomainError('INPUT_TOO_LARGE', 413)
+        payload = _admission_payload(request)
         async with (
             self.backend.create_uow().begin_write() if _uow is None else nullcontext(_uow)
         ) as uow:
@@ -228,36 +330,7 @@ class RunService:
                 ):
                     raise DomainError('REVISION_CONFLICT', 409)
                 profile = await self.profiles.published(uow, auth, agent_id)
-                if request.business_context.get(
-                    'conversation'
-                ) is True and profile.graph_id not in (
-                    GraphId.CONVERSATION_MULTI_TURN,
-                    GraphId.CONVERSATION_TOOL_USE,
-                ):
-                    raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
-                if (
-                    profile.graph_id
-                    in (
-                        GraphId.CONVERSATION_MULTI_TURN,
-                        GraphId.CONVERSATION_TOOL_USE,
-                    )
-                    and request.mode != 'qa'
-                ):
-                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if (
-                    profile.graph_id == GraphId.CONVERSATION_MULTI_TURN
-                    and 'query_scope' in request.business_context
-                ):
-                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if profile.graph_id == GraphId.CONVERSATION_TOOL_USE:
-                    from workbench_agent.domain.query_scope import validate_qa_scope
-
-                    try:
-                        validate_qa_scope(request.business_context.get('query_scope'))
-                    except ValueError:
-                        raise DomainError('INVALID_SCOPE', 422) from None
-                    if request.business_context.get('conversation') is not True:
-                        raise DomainError('CONVERSATION_WORKFLOW_REQUIRED', 409)
+                _validate_conversation_request(request, profile)
                 if request.business_context.get('conversation') is True and thread is not None:
                     from sqlalchemy import case, func, select
                     from workbench_agent.persistence import schema
@@ -312,62 +385,11 @@ class RunService:
                     ).first()
                     if incompatible:
                         raise DomainError('CONVERSATION_HISTORY_INCOMPATIBLE', 409)
-                if profile.graph_id in (
-                    GraphId.RCA_SYNTHETIC,
-                    GraphId.RCA_PROPOSAL,
-                    GraphId.RCA_BATCH_PROPOSAL,
-                ) and not (
-                    _ingress_capability is _SYNTHETIC_ALERT_V2
-                    and _uow is not None
-                    and auth.identity_kind == 'connector'
-                    and source_connector
-                    and request.mode == 'rca'
-                ):
-                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                query_scope = None
-                if profile.graph_id == GraphId.CONVERSATION_SINGLE_TURN and (
-                    request.mode != 'qa' or 'query_scope' in request.business_context
-                ):
-                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if profile.graph_id in (
-                    GraphId.KNOWLEDGE_SCOPED_EXCERPT,
-                    GraphId.KNOWLEDGE_CITATION_REVIEW,
-                    GraphId.CONVERSATION_TOOL_USE,
-                ):
-                    if request.mode != 'qa':
-                        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                    query_scope = request.business_context.get('query_scope')
-                    from workbench_agent.domain.query_scope import validate_qa_scope
-
-                    try:
-                        query_scope = validate_qa_scope(query_scope)
-                    except ValueError:
-                        raise DomainError('INVALID_SCOPE', 422) from None
-                if request.mode not in profile.allowed_modes:
-                    raise DomainError('MODE_NOT_ALLOWED', 422)
-                if profile.graph_id == GraphId.SOP_CONDITIONAL and request.mode not in (
-                    'sop',
-                    'inspection',
-                ):
-                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if request.mode in ('sop', 'inspection'):
-                    if (
-                        profile.graph_id != GraphId.SOP_CONDITIONAL
-                        or request.workflow_version_id is None
-                    ):
-                        raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                elif request.workflow_version_id is not None:
-                    raise DomainError('WORKFLOW_UNAVAILABLE', 409)
-                if request.input.artifact_ids:
-                    raise DomainError('ARTIFACT_UNAVAILABLE', 409)
-                budgets = dict(zip(BUDGET_FIELDS, DEFAULT_BUDGETS[request.mode]))
-                if profile.budget_limits is not None:
-                    for field, value in profile.budget_limits.model_dump(exclude_none=True).items():
-                        budgets[field] = min(budgets[field], value)
-                for field, value in request.budgets.model_dump(exclude_none=True).items():
-                    if value > budgets[field]:
-                        raise DomainError('BUDGET_EXCEEDED', 422)
-                    budgets[field] = value
+                query_scope = _validate_graph_scope(
+                    request, profile, auth, _ingress_capability, _uow is not None, source_connector
+                )
+                _validate_mode_and_workflow(request, profile)
+                budgets = _admission_budgets(request, profile)
                 context = await self.contexts.resolve(auth, agent_id, uow=uow)
                 if request.workflow_version_id is not None:
                     from workbench_agent.domain.profiles import VersionRef

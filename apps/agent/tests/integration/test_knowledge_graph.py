@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
@@ -33,7 +31,6 @@ from workbench_agent.tools.registry import ToolRegistry
 async def test_qa_worker_uses_knowledge_authority_and_preserves_evidence(
     platform, monkeypatch, scenario
 ):
-    from pathlib import Path
     import httpx
     from workbench_agent.tools.mcp import (
         MCPAdapter,

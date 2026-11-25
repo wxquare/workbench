@@ -1,9 +1,19 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 from workbench_agent.domain.profiles import ProfileDraft, RoleModelBinding
-from workbench_agent.domain.identity import AuthContext
 from workbench_agent.application.errors import DomainError
+
+
+async def test_model_fixture_uses_current_management_service(platform, monkeypatch):
+    async def obsolete(*args, **kwargs):
+        raise AssertionError('obsolete model publisher called')
+
+    monkeypatch.setattr(platform.profiles, 'publish_model', obsolete, raising=False)
+    version = await platform.publish_model('fixture-current-publisher')
+    context = await platform.contexts.resolve(platform.auth, platform.agent_id)
+    assert context.default_model == version.ref
+    assert version.configuration.model_id == 'fixture-current-publisher'
 
 
 async def test_snapshot_pins_old_versions_and_role_binding_wins(platform):
@@ -36,7 +46,7 @@ async def test_snapshot_pins_old_versions_and_role_binding_wins(platform):
 
 
 async def test_cross_tenant_model_reference_cannot_be_published(platform):
-    other = await platform.profiles.get_active_model(platform.other_auth)
+    other = await platform.active_model(platform.other_auth)
     row = await platform.profiles.get_agent(platform.auth, platform.agent_id)
     with pytest.raises(DomainError) as error:
         await platform.profiles.save_draft(
@@ -50,7 +60,7 @@ async def test_cross_tenant_model_reference_cannot_be_published(platform):
 
 
 async def test_model_configuration_return_is_copy_isolated(platform):
-    version = await platform.profiles.get_active_model(platform.auth)
+    version = await platform.active_model(platform.auth)
     version.configuration.provider_options['thinking']['type'] = 'enabled'
     assert version.configuration.provider_options == {'thinking': {'type': 'disabled'}}
 
@@ -68,7 +78,7 @@ async def test_runtime_context_roundtrip_keeps_pinned_refs(platform):
 
 
 async def test_model_version_publication_requires_admin_even_with_stale_auth_roles(platform):
-    from workbench_agent.settings import ModelProfile
+    from workbench_agent.application.model_profiles import ModelProfileService
 
     await platform.teams.set_member(
         platform.auth,
@@ -79,18 +89,18 @@ async def test_model_version_publication_requires_admin_even_with_stale_auth_rol
         key='demote',
     )
     with pytest.raises(DomainError) as error:
-        await platform.profiles.publish_model(
+        await ModelProfileService(platform.backend).publish(
             platform.auth,
             platform.agent_id,
-            ModelProfile(model_id='unauthorized'),
-            expected_revision=0,
-            key='unauthorized-model',
+            'deepseek-dod-default',
+            0,
+            'unauthorized-model',
         )
     assert error.value.status == 403
 
 
 async def test_model_ref_invalid_version_is_a_validation_error(platform, client):
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
     ref = model.ref.model_dump()
     ref['version'] = 'not-an-integer'
     response = await client.patch(
@@ -185,6 +195,123 @@ class Factory:
     def build(self, profile, secrets, **scope):
         self.model_ids.append(profile.model_id)
         return self.model
+
+
+@pytest.mark.parametrize(
+    ('status', 'expected'),
+    [
+        (401, 'MODEL_CREDENTIAL_UNAVAILABLE'),
+        (403, 'MODEL_CREDENTIAL_UNAVAILABLE'),
+        (404, 'MODEL_INVALID'),
+        (429, 'MODEL_RATE_LIMITED'),
+        (503, 'MODEL_PROVIDER_UNAVAILABLE'),
+        (400, 'MODEL_PROVIDER_ERROR'),
+    ],
+)
+async def test_provider_failure_classification_charges_each_attempt(platform, status, expected):
+    from workbench_agent.runtime.models.invoker import ModelInvoker
+
+    run = await platform.create_run(summary_token_reserve=8000)
+    guard = (await claim(platform)).guard
+    failure = type('ProviderError', (Exception,), {'status_code': status})
+    model = Scripted([failure('synthetic') for _ in range(8)])
+    result = await ModelInvoker(platform.backend, Factory(model), object()).invoke(
+        guard, 'diagnosis', [HumanMessage(content='check')]
+    )
+    assert result.error_code == expected
+    usage = await platform.budgets.snapshot(platform.auth, run.run_id)
+    assert usage.model_attempts == model.count
+
+
+@pytest.mark.asyncio
+async def test_model_dispatch_rolls_back_budget_before_network(platform, monkeypatch):
+    from support.budgets import assert_dispatch_transaction_rolls_back
+    from workbench_agent.runtime.models.invoker import ModelInvoker
+
+    run = await platform.create_run(summary_token_reserve=8000)
+    guard = (await claim(platform)).guard
+    model = Scripted(['ok'])
+    invoker = ModelInvoker(platform.backend, Factory(model), object())
+
+    async def dispatch(stage):
+        await invoker.invoke(guard, 'diagnosis', [HumanMessage(content=stage)])
+
+    await assert_dispatch_transaction_rolls_back(platform, monkeypatch, invoker.budgets, dispatch)
+    usage = await platform.budgets.snapshot(platform.auth, run.run_id)
+    assert model.count == 0 and usage.model_attempts == 0 and usage.reserved_model_attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_model_cancelled_after_dispatch_preserves_uncertain_reservation(platform):
+    import asyncio
+    from uuid import uuid5
+    from workbench_agent.runtime.models.invoker import ModelInvoker
+
+    run = await platform.create_run(summary_token_reserve=8000)
+    guard = (await claim(platform)).guard
+    logical_id = str(uuid4())
+    invocation = str(uuid5(UUID(logical_id), 'attempt:1'))
+
+    class CancelledModel:
+        async def ainvoke(self, *args, **kwargs):
+            raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        await ModelInvoker(platform.backend, Factory(CancelledModel()), object()).invoke(
+            guard, 'diagnosis', [HumanMessage(content='check')], logical_call_id=logical_id
+        )
+    usage = await platform.budgets.snapshot(platform.auth, run.run_id)
+    assert usage.model_attempts == 1 and usage.reserved_tokens > 0
+    async with platform.backend.create_uow().begin_write() as uow:
+        with pytest.raises(DomainError, match='INVOCATION_POSSIBLY_SENT'):
+            await platform.budgets.release_unsent(guard, invocation, uow=uow)
+
+
+@pytest.mark.asyncio
+async def test_model_pre_network_failure_keeps_committed_send_state(platform, monkeypatch):
+    from workbench_agent.runtime.models import invoker as invoker_module
+
+    run = await platform.create_run(summary_token_reserve=8000)
+    guard = (await claim(platform)).guard
+    model = Scripted(['ok'])
+
+    def fail_after_commit(*args, **kwargs):
+        raise RuntimeError('failure before network call')
+
+    monkeypatch.setattr(invoker_module.logger, 'info', fail_after_commit)
+    with pytest.raises(RuntimeError, match='failure before network call'):
+        await invoker_module.ModelInvoker(platform.backend, Factory(model), object()).invoke(
+            guard, 'diagnosis', [HumanMessage(content='check')]
+        )
+    usage = await platform.budgets.snapshot(platform.auth, run.run_id)
+    assert model.count == 0 and usage.model_attempts == 1 and usage.reserved_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_model_settlement_failure_keeps_sent_reservation(platform, monkeypatch):
+    from uuid import uuid5
+    from workbench_agent.runtime.models.invoker import ModelInvoker
+
+    run = await platform.create_run(summary_token_reserve=8000)
+    guard = (await claim(platform)).guard
+    logical_id = str(uuid4())
+    invocation = str(uuid5(UUID(logical_id), 'attempt:1'))
+    model = Scripted(['ok'])
+    invoker = ModelInvoker(platform.backend, Factory(model), object())
+
+    async def fail_settlement(*args, **kwargs):
+        raise RuntimeError('settlement unavailable')
+
+    monkeypatch.setattr(invoker.budgets, 'settle', fail_settlement)
+    with pytest.raises(RuntimeError, match='settlement unavailable'):
+        await invoker.invoke(
+            guard, 'diagnosis', [HumanMessage(content='check')], logical_call_id=logical_id
+        )
+    usage = await platform.budgets.snapshot(platform.auth, run.run_id)
+    assert model.count == 1 and usage.model_attempts == 1 and usage.reserved_tokens > 0
+    async with platform.backend.create_uow().begin_write() as uow:
+        with pytest.raises(DomainError, match='INVOCATION_POSSIBLY_SENT'):
+            await platform.budgets.release_unsent(guard, invocation, uow=uow)
 
 
 @pytest.mark.asyncio

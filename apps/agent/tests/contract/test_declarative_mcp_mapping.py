@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from test_scoped_mcp_mapping import CONTEXT, GRANT, SCOPE
@@ -76,7 +74,6 @@ class Adapter:
             bind_arguments,
             validate_mapping,
         )
-        from workbench_agent.domain.tools import ToolBinding
 
         full_schema = {
             'type': 'object',

@@ -208,14 +208,7 @@ async def test_admission_uses_frozen_summary_role_model_before_first_claim(platf
     from workbench_agent.settings import ModelProfile
     from workbench_agent.domain.profiles import ProfileDraft, RoleModelBinding
 
-    draft = await platform.profiles.get_model_draft(platform.auth, 'deepseek-dod-default')
-    model = await platform.profiles.publish_model(
-        platform.auth,
-        platform.agent_id,
-        ModelProfile(max_context_tokens=32768),
-        expected_revision=draft['revision'],
-        key=str(uuid4()),
-    )
+    model = await platform.publish_model_version(ModelProfile(max_context_tokens=32768))
     async with platform.backend.create_uow().begin_read() as uow:
         published = await platform.profiles.published(uow, platform.auth, platform.agent_id)
     current = await platform.profiles.get_agent(platform.auth, platform.agent_id)

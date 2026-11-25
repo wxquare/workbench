@@ -25,7 +25,7 @@ from workbench_agent.execution.repositories import RepositoryService, Repository
     ],
 )
 async def test_guarded_snapshot_read_is_pinned_and_receipt_replays(
-    platform, tmp_path, source, expected
+    platform, tmp_path, source, expected, monkeypatch
 ):
     repo = tmp_path / 'repo'
     repo.mkdir()
@@ -97,6 +97,22 @@ async def test_guarded_snapshot_read_is_pinned_and_receipt_replays(
     execution = await execution_for_run(platform, run)
     reader = SnapshotReader(platform.backend, execution)
     (repo / 'app.py').write_text('changed')
+    from support.budgets import assert_dispatch_transaction_rolls_back
+
+    reads = []
+    original_get = objects.get
+
+    def record_get(*args, **kwargs):
+        reads.append(args)
+        return original_get(*args, **kwargs)
+
+    monkeypatch.setattr(objects, 'get', record_get)
+
+    async def dispatch(stage):
+        await reader.read(ref, 'app.py', 1, 2, invocation_id='rollback-' + stage)
+
+    await assert_dispatch_transaction_rolls_back(platform, monkeypatch, reader.budgets, dispatch)
+    assert reads == []
     result = await reader.read(ref, 'app.py', 1, 2, invocation_id='logical-read')
     assert result['data']['commit'] == commit
     assert result['data']['lines'] == [
@@ -111,6 +127,35 @@ async def test_guarded_snapshot_read_is_pinned_and_receipt_replays(
     assert (
         await BudgetService(platform.backend).snapshot(platform.auth, run.run_id)
     ).tool_attempts == 1
+    from workbench_agent.application.errors import DomainError
+
+    def unavailable(*args, **kwargs):
+        raise OSError('fixture object unavailable')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(objects, 'get', unavailable)
+        with pytest.raises(DomainError, match='SNAPSHOT_UNAVAILABLE'):
+            await reader.read(ref, 'app.py', 1, 2, invocation_id='unavailable-read')
+    with pytest.raises(DomainError, match='INVOCATION_ALREADY_STARTED'):
+        await reader.read(ref, 'app.py', 1, 2, invocation_id='unavailable-read')
+    assert (
+        await BudgetService(platform.backend).snapshot(platform.auth, run.run_id)
+    ).tool_attempts == 2
+
+    async def fail_settlement(*args, **kwargs):
+        raise RuntimeError('settlement unavailable')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(reader.budgets, 'settle', fail_settlement)
+        with pytest.raises(RuntimeError, match='settlement unavailable'):
+            await reader.read(ref, 'app.py', 1, 2, invocation_id='settlement-failure')
+    reads_after_failure = len(reads)
+    with pytest.raises(DomainError, match='INVOCATION_ALREADY_STARTED'):
+        await reader.read(ref, 'app.py', 1, 2, invocation_id='settlement-failure')
+    assert len(reads) == reads_after_failure
+    assert (
+        await BudgetService(platform.backend).snapshot(platform.auth, run.run_id)
+    ).tool_attempts == 3
     rules['experts']['diagnosis'] = []
     with pytest.raises(Exception):
         await reader.read(ref, 'app.py', 1, 2, invocation_id='logical-read')

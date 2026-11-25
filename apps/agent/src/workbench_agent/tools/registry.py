@@ -260,33 +260,6 @@ class ToolRegistry:
             )
             return VersionRef.model_validate(result.body)
 
-    async def probe_draft(self, auth, agent_id, alias, adapter):
-        async with self.backend.create_uow().begin_read() as uow:
-            await self.profiles.agent(uow, auth, agent_id, 'admin')
-            row = await self.backend.configuration.one(
-                uow, 'tool_binding_drafts', team_id=auth.team_id, agent_id=agent_id, alias=alias
-            )
-            if not row:
-                raise DomainError('DRAFT_REQUIRED', 409)
-            binding = ToolBinding.model_validate_json(row['payload'])
-        try:
-            catalog = await adapter.discover(
-                binding.server, binding.credential_scope, team_id=auth.team_id, agent_id=agent_id
-            )
-        except PermissionError:
-            return {'discovery': 'denied', 'schema': 'unknown', 'invocation': 'not_run'}
-        except Exception:
-            return {'discovery': 'unavailable', 'schema': 'unknown', 'invocation': 'not_run'}
-        if binding.tool_name not in catalog.names:
-            return {'discovery': 'ok', 'schema': 'missing', 'invocation': 'not_run'}
-        tool = catalog.tools[catalog.names.index(binding.tool_name)]
-        schema = tool.get('inputSchema') if isinstance(tool, dict) else tool.inputSchema
-        return {
-            'discovery': 'ok',
-            'schema': 'match' if schema == binding.input_schema else 'mismatch',
-            'invocation': 'not_run',
-        }
-
     async def enqueue_probe(self, auth, agent_id, alias, *, key):
         from dataclasses import asdict
         from workbench_agent.domain.admin_jobs import AdminAuth, AdminJob

@@ -2,8 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from workbench_agent.domain.workflows import WorkflowDefinition
-from workbench_agent.application.workflows import WorkflowService
-from workbench_agent.application.errors import DomainError
+from support.workflows import create_workflow_version
 
 
 def definition(**overrides):
@@ -34,37 +33,6 @@ def test_workflow_rejects_cycles_unknown_edges_and_duplicate_ids():
     ]:
         with pytest.raises(ValidationError):
             definition(steps=steps)
-
-
-@pytest.mark.asyncio
-async def test_workflow_publication_is_versioned_immutable_and_idempotent(platform):
-    service = WorkflowService(platform.backend)
-    first = await service.publish(platform.auth, platform.agent_id, definition(), key='publish1')
-    repeat = await service.publish(platform.auth, platform.agent_id, definition(), key='publish1')
-    assert first == repeat
-    second = await service.publish(
-        platform.auth,
-        platform.agent_id,
-        definition(steps=[{'step_id': 'logs', 'tool': 'logs.read'}]),
-        key='publish2',
-    )
-    assert first.version == 1 and second.version == 2
-    assert first.content_hash != second.content_hash
-    assert (
-        await service.get(platform.auth, platform.agent_id, first.workflow_version_id)
-    ).definition == definition()
-    with pytest.raises(DomainError):
-        await service.get(platform.other_auth, platform.agent_id, first.workflow_version_id)
-
-
-@pytest.mark.asyncio
-async def test_workflow_version_sequence_exceeds_page_limit(platform):
-    service = WorkflowService(platform.backend)
-    for index in range(160):
-        result = await service.publish(
-            platform.auth, platform.agent_id, definition(), key=f'v{index}'
-        )
-    assert result.version == 160
 
 
 @pytest.mark.asyncio
@@ -154,9 +122,7 @@ async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
                 'arguments': {'service': 'checkout'},
             }
         )
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth, platform.agent_id, definition(steps=steps), key='sop-wf'
-    )
+    wf = await create_workflow_version(platform, definition(steps=steps))
     request = CreateRun.model_validate(
         {
             'agent_id': platform.agent_id,
@@ -167,11 +133,8 @@ async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
         }
     )
     run = await RunService(platform.backend).create(platform.auth, request, 'sop-run')
-    newer = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
-        definition(steps=[{'step_id': 'other', 'tool': 'different'}]),
-        key='newer-wf',
+    newer = await create_workflow_version(
+        platform, definition(steps=[{'step_id': 'other', 'tool': 'different'}])
     )
     assert newer.version == 2
     async with platform.backend.create_uow().begin_write() as uow:
@@ -328,7 +291,15 @@ def test_workflow_conditions_and_schemas_are_bounded_and_non_executable():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'scenario', ['branch_taken', 'branch_skipped', 'invalid_output', 'branch_crash']
+    'scenario',
+    [
+        'branch_taken',
+        'branch_skipped',
+        'missing_field',
+        'type_mismatch',
+        'invalid_output',
+        'branch_crash',
+    ],
 )
 async def test_v12_worker_enforces_conditions_and_output_schema(platform, scenario, monkeypatch):
     from workbench_agent.domain.profiles import ProfileDraft
@@ -387,13 +358,15 @@ async def test_v12_worker_enforces_conditions_and_output_schema(platform, scenar
         'depends_on': ['metrics'],
         'arguments': {'service': 'checkout'},
         'condition': {
-            'source': 'metrics.service',
-            'equals': 'other' if scenario == 'branch_skipped' else 'checkout',
+            'source': 'metrics.missing' if scenario == 'missing_field' else 'metrics.service',
+            'equals': True
+            if scenario == 'type_mismatch'
+            else ('other' if scenario == 'branch_skipped' else 'checkout'),
         },
     }
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth, platform.agent_id, definition(steps=[first, second]), key='v12-wf'
-    )
+    if scenario == 'type_mismatch':
+        first['output_schema']['properties']['service']['type'] = 'integer'
+    wf = await create_workflow_version(platform, definition(steps=[first, second]))
     request = CreateRun.model_validate(
         {
             'agent_id': platform.agent_id,
@@ -420,7 +393,11 @@ async def test_v12_worker_enforces_conditions_and_output_schema(platform, scenar
 
         async def call(self, *args, **kwargs):
             self.calls += 1
-            return {'service': 123 if scenario == 'invalid_output' else 'checkout'}
+            return {
+                'service': 1
+                if scenario == 'type_mismatch'
+                else (123 if scenario == 'invalid_output' else 'checkout')
+            }
 
     transport = Transport()
     platform.backend._sop_factory = lambda execution: PolicyToolExecutor(
@@ -451,6 +428,8 @@ async def test_v12_worker_enforces_conditions_and_output_schema(platform, scenar
         == {
             'branch_taken': 'ok',
             'branch_skipped': 'skipped',
+            'missing_field': 'invalid_input',
+            'type_mismatch': 'skipped',
             'invalid_output': 'blocked',
             'branch_crash': 'ok',
         }[scenario]
@@ -507,11 +486,9 @@ async def test_conditional_sop_accepts_advanced_workflows(platform):
     await platform.profiles.publish(
         platform.auth, platform.agent_id, draft['revision'], key='old-publish'
     )
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
+    wf = await create_workflow_version(
+        platform,
         definition(steps=[{'step_id': 'a', 'tool': 'read', 'output_schema': {'type': 'object'}}]),
-        key='advanced',
     )
     request = CreateRun.model_validate(
         {
@@ -536,11 +513,9 @@ async def test_bootstrap_rejects_symlink_seed_without_partial_publication(platfo
 
 
 @pytest.mark.asyncio
-async def test_mutated_schema_is_revalidated_before_publication(platform):
+async def test_workflow_fixture_revalidates_mutated_schema(platform):
     wf = definition(steps=[{'step_id': 'a', 'tool': 'read', 'output_schema': {'type': 'object'}}])
     wf.steps[0].output_schema['$ref'] = 'https://example.invalid/schema'
     with pytest.raises(ValidationError):
-        await WorkflowService(platform.backend).publish(
-            platform.auth, platform.agent_id, wf, key='mutated-schema'
-        )
+        await create_workflow_version(platform, wf)
     assert await platform.count_rows('workflow_versions') == 0

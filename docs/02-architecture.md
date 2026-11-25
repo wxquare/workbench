@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: 99df50d
+verified_commit: 9978be3
 ---
 
 # 架构设计
@@ -704,6 +704,7 @@ Skill 加载只接受当前有效 Worker `Execution` 对应的冻结 RunContext�
 - summary_tokens 接受时固定。
 - 待确认用量继续保守占额；未知费用保持 pending。
 - 迟到回执走 usage_quarantine，不修改已结算记录。
+- 模型、只读工具、快照读取和 Runner 在同一事务内预留并标记可能已发送，提交前失败会回滚；提交后的未知结果不能作为未发送释放。`release_unsent` 保留为受 Guard 约束的预算操作，当前四条路径没有需要额外接线的持久未发送预留。
 
 预算的运行语义（预留、历史 Run 无策略的情况）见 [04 运维 §5](04-operations.md#5-预算策略)。
 

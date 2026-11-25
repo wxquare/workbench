@@ -2,7 +2,6 @@
 
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Request, Query
-from fastapi.responses import JSONResponse
 from workbench_agent.api.auth import authenticate
 from workbench_agent.api.common import revision
 from workbench_agent.application.errors import DomainError

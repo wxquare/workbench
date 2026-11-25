@@ -142,36 +142,80 @@ async def prepare(state, config, runtime: Runtime):
     return {'phase': 'prepare'}
 
 
+async def _knowledge_bindings(execution, uow, *, require_permission=False):
+    from workbench_agent.tools.policy import load_published_binding
+
+    context = execution.claim.context
+    bindings = []
+    for ref in context.tools:
+        row = await execution.backend.configuration.one(
+            uow,
+            'tool_bindings',
+            team_id=context.team_id,
+            binding_id=ref.resource_id,
+            agent_id=context.agent_id,
+            version=int(ref.version),
+            hash=ref.content_hash,
+        )
+        if row:
+            raw = json.loads(row['schema'])
+            binding = load_published_binding(raw) if digest(raw) == ref.content_hash else None
+            if (
+                binding
+                and binding.read_only
+                and binding.tool_name == 'knowledge_search'
+                and (
+                    not require_permission
+                    or execution.tool_permissions.allows(context, binding.permission, 'knowledge')
+                )
+            ):
+                bindings.append((ref, binding))
+    return bindings
+
+
+async def _retrieval_has_confirmed_empty(execution, state, scope, bindings, result):
+    # Only a durable empty receipt for the frozen scope and binding proves an empty result.
+    async with execution.backend.create_uow().begin_read() as uow:
+        receipts = await execution.backend.tools.succeeded_invocations(
+            uow, execution.guard.team_id, state['run_id']
+        )
+    empty = []
+    for row in receipts:
+        try:
+            value = json.loads(row['receipt_ref'])
+            empty.append(
+                value.get('kind') == 'mcp-empty-v1'
+                and value.get('scope_id') == scope['scope_id']
+                and any(
+                    value.get('binding') == ref.model_dump(mode='json')
+                    and row['tool_version'] == ref.resource_id
+                    and execution.tool_permissions.allows(
+                        execution.claim.context, binding.permission, 'knowledge'
+                    )
+                    for ref, binding in bindings
+                )
+            )
+        except (ValueError, TypeError):
+            pass
+    return bool(
+        empty
+        and all(empty)
+        and result.tool_statuses
+        and all(status == 'empty' for status in result.tool_statuses)
+    )
+
+
 async def retrieve(state, runtime: Runtime, *, saver):
     execution = runtime.context
     await execution.check_operation()
     factory = getattr(execution.backend, '_diagnosis_factory', None)
-    context = execution.claim.context
-    from workbench_agent.tools.policy import load_published_binding
-
     bindings = []
     async with execution.backend.create_uow().begin_read() as uow:
         scope = await execution.backend.runs.current_scope(
             uow, execution.guard.team_id, state['run_id']
         )
         if scope:
-            for ref in context.tools:
-                row = await execution.backend.configuration.one(
-                    uow,
-                    'tool_bindings',
-                    team_id=context.team_id,
-                    binding_id=ref.resource_id,
-                    agent_id=context.agent_id,
-                    version=int(ref.version),
-                    hash=ref.content_hash,
-                )
-                if row:
-                    raw = json.loads(row['schema'])
-                    binding = (
-                        load_published_binding(raw) if digest(raw) == ref.content_hash else None
-                    )
-                    if binding and binding.read_only and binding.tool_name == 'knowledge_search':
-                        bindings.append((ref, binding))
+            bindings = await _knowledge_bindings(execution, uow)
     failure = {
         'phase': 'retrieve',
         'evidence_refs': [],
@@ -211,35 +255,7 @@ async def retrieve(state, runtime: Runtime, *, saver):
     if current != scope['scope_id'] or set(allowed) != set(refs):
         return failure
     if not refs:
-        # Only a durable successful empty receipt for the frozen scope and binding proves an empty result.
-        async with execution.backend.create_uow().begin_read() as uow:
-            receipts = await execution.backend.tools.succeeded_invocations(
-                uow, execution.guard.team_id, state['run_id']
-            )
-        empty = []
-        for row in receipts:
-            try:
-                value = json.loads(row['receipt_ref'])
-                empty.append(
-                    value.get('kind') == 'mcp-empty-v1'
-                    and value.get('scope_id') == scope['scope_id']
-                    and any(
-                        value.get('binding') == ref.model_dump(mode='json')
-                        and row['tool_version'] == ref.resource_id
-                        and execution.tool_permissions.allows(
-                            context, binding.permission, 'knowledge'
-                        )
-                        for ref, binding in bindings
-                    )
-                )
-            except (ValueError, TypeError):
-                pass
-        if (
-            empty
-            and all(empty)
-            and result.tool_statuses
-            and all(status == 'empty' for status in result.tool_statuses)
-        ):
+        if await _retrieval_has_confirmed_empty(execution, state, scope, bindings, result):
             result_state['gap_reason'] = 'kb.empty'
         result_state['unresolved'] = [
             'No knowledge matches were found.'
@@ -394,6 +410,54 @@ async def review_support(state, runtime: Runtime):
     }
 
 
+async def _empty_gap_authorized(execution, state):
+    # Recheck the binding and current permission for empty results as well.
+    context = execution.claim.context
+    async with execution.backend.create_uow().begin_read() as uow:
+        receipts = await execution.backend.tools.succeeded_invocations(
+            uow, execution.guard.team_id, state['run_id']
+        )
+        scope = await execution.backend.runs.current_scope(
+            uow, execution.guard.team_id, state['run_id']
+        )
+        permitted_bindings = [
+            (ref.model_dump(mode='json'), binding)
+            for ref, binding in await _knowledge_bindings(execution, uow, require_permission=True)
+        ]
+    permitted = bool(receipts)
+    for receipt in receipts:
+        try:
+            value = json.loads(receipt['receipt_ref'])
+            from workbench_agent.tools.mcp import permits_knowledge_evidence
+
+            permitted = (
+                permitted
+                and bool(scope)
+                and scope['scope_id'] == state['scope_id']
+                and value.get('kind') == 'mcp-empty-v1'
+                and value.get('scope_id') == state['scope_id']
+                and any(
+                    value.get('binding') == ref
+                    and receipt['tool_version'] == ref['resource_id']
+                    and permits_knowledge_evidence(
+                        getattr(execution.backend, '_mcp_connection_policy', None),
+                        team_id=context.team_id,
+                        agent_id=context.agent_id,
+                        binding=binding,
+                        query_scope=json.loads(scope['scope_json']),
+                        run_id=state['run_id'],
+                        invocation_id=receipt['logical_call_id'],
+                        scope_id=state['scope_id'],
+                        upstream_scope=value.get('knowledge_scope'),
+                    )
+                    for ref, binding in permitted_bindings
+                )
+            )
+        except (ValueError, TypeError):
+            permitted = False
+    return permitted
+
+
 async def record_gap(state, runtime: Runtime):
     reason = state.get('gap_reason')
     execution = runtime.context
@@ -408,80 +472,12 @@ async def record_gap(state, runtime: Runtime):
                 'gap_reason': None,
                 'unresolved': ['Knowledge sources are no longer authorized.'],
             }
-    else:
-        # Recheck the binding and current permission for empty results as well.
-        from workbench_agent.tools.policy import load_published_binding
-
-        context = execution.claim.context
-        permitted_bindings = []
-        async with execution.backend.create_uow().begin_read() as uow:
-            receipts = await execution.backend.tools.succeeded_invocations(
-                uow, execution.guard.team_id, state['run_id']
-            )
-            scope = await execution.backend.runs.current_scope(
-                uow, execution.guard.team_id, state['run_id']
-            )
-            for ref in context.tools:
-                row = await execution.backend.configuration.one(
-                    uow,
-                    'tool_bindings',
-                    team_id=context.team_id,
-                    binding_id=ref.resource_id,
-                    agent_id=context.agent_id,
-                    version=int(ref.version),
-                    hash=ref.content_hash,
-                )
-                if row:
-                    raw = json.loads(row['schema'])
-                    binding = (
-                        load_published_binding(raw) if digest(raw) == ref.content_hash else None
-                    )
-                    if (
-                        binding
-                        and binding.read_only
-                        and binding.tool_name == 'knowledge_search'
-                        and execution.tool_permissions.allows(
-                            context, binding.permission, 'knowledge'
-                        )
-                    ):
-                        permitted_bindings.append((ref.model_dump(mode='json'), binding))
-        permitted = bool(receipts)
-        for receipt in receipts:
-            try:
-                value = json.loads(receipt['receipt_ref'])
-                from workbench_agent.tools.mcp import permits_knowledge_evidence
-
-                permitted = (
-                    permitted
-                    and bool(scope)
-                    and scope['scope_id'] == state['scope_id']
-                    and value.get('kind') == 'mcp-empty-v1'
-                    and value.get('scope_id') == state['scope_id']
-                    and any(
-                        value.get('binding') == ref
-                        and receipt['tool_version'] == ref['resource_id']
-                        and permits_knowledge_evidence(
-                            getattr(execution.backend, '_mcp_connection_policy', None),
-                            team_id=context.team_id,
-                            agent_id=context.agent_id,
-                            binding=binding,
-                            query_scope=json.loads(scope['scope_json']),
-                            run_id=state['run_id'],
-                            invocation_id=receipt['logical_call_id'],
-                            scope_id=state['scope_id'],
-                            upstream_scope=value.get('knowledge_scope'),
-                        )
-                        for ref, binding in permitted_bindings
-                    )
-                )
-            except (ValueError, TypeError):
-                permitted = False
-        if not permitted:
-            return {
-                'phase': 'record_gap',
-                'gap_reason': None,
-                'unresolved': ['Knowledge sources are no longer authorized.'],
-            }
+    elif not await _empty_gap_authorized(execution, state):
+        return {
+            'phase': 'record_gap',
+            'gap_reason': None,
+            'unresolved': ['Knowledge sources are no longer authorized.'],
+        }
     from workbench_agent.knowledge.gaps import KnowledgeGaps
 
     try:

@@ -14,7 +14,6 @@ from workbench_agent.persistence.schema_v1 import metadata as v1
 from workbench_agent.persistence.schema_v2 import metadata as v2
 from workbench_agent.persistence.schema_v3 import metadata as v3
 from workbench_agent.settings import Settings
-from support.interrupts import InterruptPlatform
 from support.jobs import row
 from test_storage_boundary_migration import seed_historical_run, snapshot, upgrade_historical
 

@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 import pytest
 from workbench_agent.runner.policy import RunnerRequest
 from workbench_agent.runner.service import ContainerRunner

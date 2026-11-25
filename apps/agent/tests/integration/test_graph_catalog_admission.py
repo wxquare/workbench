@@ -8,7 +8,7 @@ from integration.test_sop import definition
 from integration.test_synthetic_alert_v2 import event, ingress, publish_v13, signed
 from workbench_agent.application.errors import DomainError
 from workbench_agent.application.runs import RunService
-from workbench_agent.application.workflows import WorkflowService
+from support.workflows import create_workflow_version
 from workbench_agent.domain.runs import CreateRun
 from workbench_agent.runtime.graphs.catalog import get_graph
 
@@ -54,9 +54,7 @@ async def test_catalog_modes_and_entrypoints_match_admission(platform, graph_id)
 
     workflow = None
     if graph_id == 'sop.conditional':
-        workflow = await WorkflowService(platform.backend).publish(
-            platform.auth, platform.agent_id, definition(), key='admission-workflow'
-        )
+        workflow = await create_workflow_version(platform, definition())
     for mode in MODES:
         payload = {'agent_id': platform.agent_id, 'mode': mode, 'input': {'text': 'test'}}
         if graph_id.startswith('knowledge.'):

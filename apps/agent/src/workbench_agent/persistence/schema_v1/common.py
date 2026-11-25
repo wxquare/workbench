@@ -5,11 +5,11 @@ from sqlalchemy import (
     String,
     Text,
     BigInteger,
-    LargeBinary,
+    LargeBinary as LargeBinary,
     ForeignKeyConstraint,
     UniqueConstraint,
-    Index,
-    CheckConstraint,
+    Index as Index,
+    CheckConstraint as CheckConstraint,
 )
 
 metadata = MetaData(

@@ -86,7 +86,6 @@ async def test_summary_is_budgeted_and_extractive(platform, tmp_path, scenario, 
     repo_ref = VersionRef(
         resource_id=row['snapshot_id'], version=commit, content_hash=snapshot_identity_hash(row)
     )
-    from pathlib import Path
     import httpx
     from workbench_agent.tools.mcp import (
         MCPAdapter,

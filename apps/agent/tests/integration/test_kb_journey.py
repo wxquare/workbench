@@ -1,7 +1,6 @@
 """Real Worker → MCP protocol → normalized gateway → SQLite knowledge journey."""
 
 import json
-from uuid import uuid4
 
 import httpx
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage

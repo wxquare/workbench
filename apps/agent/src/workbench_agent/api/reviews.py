@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Request
 
 from workbench_agent.api.auth import authenticate
-from workbench_agent.application.reviews import REVIEW_TYPES, ReviewService
+from workbench_agent.application.reviews import ReviewService
 
 
 router = APIRouter(prefix='/v1/reviews')

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from workbench_agent.evaluation.dataset import safe_regex

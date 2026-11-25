@@ -35,6 +35,12 @@ class CapabilityBlocked(Exception):
     pass
 
 
+async def _stop_attempt(execution, attempt):
+    execution.cancelled.set()
+    attempt.cancel()
+    await asyncio.gather(attempt, return_exceptions=True)
+
+
 class Executor(Protocol):
     async def execute(self, execution: 'Execution') -> Any: ...
 
@@ -441,9 +447,7 @@ class Worker:
             done, _ = await asyncio.wait({attempt, renewal}, return_when=asyncio.FIRST_COMPLETED)
             if renewal in done:
                 # Even a concurrent executor return cannot project after lost ownership.
-                execution.cancelled.set()
-                attempt.cancel()
-                await asyncio.gather(attempt, return_exceptions=True)
+                await _stop_attempt(execution, attempt)
                 if await self._finish_cancel(claim):
                     return 'cancelled'
                 return 'lease_lost'
@@ -490,9 +494,7 @@ class Worker:
                 )
             return 'retry_wait'
         except asyncio.CancelledError:
-            execution.cancelled.set()
-            attempt.cancel()
-            await asyncio.gather(attempt, return_exceptions=True)
+            await _stop_attempt(execution, attempt)
             await self._release_if_owned(
                 claim,
                 status='queued',

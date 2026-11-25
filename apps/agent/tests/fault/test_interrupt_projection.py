@@ -1,6 +1,5 @@
 import pytest
 from workbench_agent.jobs.worker import Execution
-from support.interrupts import InterruptPlatform
 from support.jobs import claim, expire_lease, row
 from workbench_agent.persistence import schema as s
 

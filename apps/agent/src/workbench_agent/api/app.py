@@ -2,7 +2,7 @@
 
 from workbench_agent.persistence.readiness import storage_ready
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from workbench_agent.settings import load_settings, resolve_env_reference
 from workbench_agent.persistence.backends.sqlite import SQLiteBackend

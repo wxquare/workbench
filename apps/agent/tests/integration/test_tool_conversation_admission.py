@@ -67,7 +67,6 @@ async def test_tool_conversation_admits_scoped_published_knowledge_search(platfo
 
 @pytest.mark.asyncio
 async def test_configured_mapped_tool_requires_its_current_policy(platform, client):
-    from workbench_agent.settings import MCPConnectionBinding
     from workbench_agent.tools.registry import ToolRegistry
     from test_scope_mapping_policy import binding, connection
 

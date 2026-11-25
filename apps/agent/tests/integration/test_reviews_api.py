@@ -121,8 +121,6 @@ async def test_review_list_and_summary_match_after_action_requires_human_review(
 
 @pytest.mark.asyncio
 async def test_review_approval_for_a_different_human_is_not_visible(client, platform):
-    from sqlalchemy import update
-    from workbench_agent.persistence import schema
     from workbench_agent.tools.registry import ToolRegistry
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
@@ -130,7 +128,6 @@ async def test_review_approval_for_a_different_human_is_not_visible(client, plat
     from workbench_agent.application.actions import ActionService
     from workbench_agent.tools.permissions import DeploymentToolPermissions
     from test_action_contract import set_policy
-    from uuid import uuid4
 
     binding = ToolBinding(
         alias='ticket.create',

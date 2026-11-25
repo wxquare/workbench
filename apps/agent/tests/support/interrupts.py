@@ -1,7 +1,6 @@
 """T07 real SQLite, LangGraph and public service lifecycle helpers."""
 
 import asyncio
-import json
 from sqlalchemy import select, update, func
 from workbench_agent.domain.runs import AcceptedRun, ResumeRun
 from workbench_agent.application.runs import RunService

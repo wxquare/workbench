@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from workbench_agent.evaluation.dataset import load_dataset, validate_dataset
+from workbench_agent.evaluation.dataset import validate_dataset
 from workbench_agent.evaluation.metrics import apply_dataset_boundary
 
 

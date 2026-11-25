@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import update
 from workbench_agent.application.errors import DomainError
 from workbench_agent.persistence import schema as s
 from support.events import EventPlatform

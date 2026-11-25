@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Request, Depends, Query, Header
-from fastapi.responses import StreamingResponse
 from workbench_agent.api.auth import authenticate
 from workbench_agent.application.errors import DomainError
 from workbench_agent.runtime.streaming import EventResponse

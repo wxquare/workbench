@@ -237,13 +237,25 @@ async def test_delivery_requires_actual_lease_and_can_follow_terminal_stream(pla
             )
         )
     delivery = ActionGuard(platform.auth.team_id, run.run_id, action_id, outbox_id, 'dispatcher', 2)
-    with pytest.raises(StaleExecution):
-        await p.events.append_delivery(
-            replace(delivery, revision=1), 'delivery.updated', {'state': 'sent'}
+    for invalid in (replace(delivery, revision=1), replace(delivery, action_id=str(uuid4()))):
+        with pytest.raises(StaleExecution):
+            async with platform.backend.create_uow().begin_write() as uow:
+                await platform.backend.execution_events.require_delivery(uow, invalid)
+    async with platform.backend.create_uow().begin_write() as uow:
+        await platform.backend.execution_events.require_delivery(uow, delivery)
+        await platform.backend.execution_events.append_control(
+            uow,
+            delivery.team_id,
+            delivery.run_id,
+            'delivery.updated',
+            {
+                'state': 'sent',
+                'receipt': 'fixture-receipt',
+                'action_id': action_id,
+                'outbox_id': outbox_id,
+            },
         )
-    event = await p.events.append_delivery(
-        delivery, 'delivery.updated', {'state': 'sent', 'receipt': 'fixture-receipt'}
-    )
+    event = (await p.events.read_batch(platform.auth, run.run_id, tail, 100))[0]
     assert event.seq == tail + 1 and event.attempt == 1
     assert not await p.events.is_terminal_and_drained(platform.auth, run.run_id, tail)
     replay = await p.events.read_batch(platform.auth, run.run_id, tail, 100)
@@ -360,11 +372,10 @@ async def test_delivery_guard_rejects_a_finished_outbox_with_leftover_lease_fiel
             )
         )
     with pytest.raises(StaleExecution):
-        await p.events.append_delivery(
-            ActionGuard(guard.team_id, run.run_id, action_id, outbox_id, 'old', 1),
-            'delivery.updated',
-            {},
-        )
+        async with platform.backend.create_uow().begin_write() as uow:
+            await platform.backend.execution_events.require_delivery(
+                uow, ActionGuard(guard.team_id, run.run_id, action_id, outbox_id, 'old', 1)
+            )
 
 
 @pytest.mark.asyncio

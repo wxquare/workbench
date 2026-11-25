@@ -42,7 +42,6 @@ import time
 from uuid import uuid4
 from workbench_agent.application.errors import DomainError, not_found
 from workbench_agent.application.idempotency import canonical, digest
-from workbench_agent.domain.context import RunContext
 from workbench_agent.domain.tools import ToolBinding, ToolResult, ToolError, ActionProposal
 from workbench_agent.domain.usage import ReservationRequest, ActualUsage
 from workbench_agent.persistence.errors import StaleExecution

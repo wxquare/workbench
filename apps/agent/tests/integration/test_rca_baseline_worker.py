@@ -1,33 +1,41 @@
 """Local protocol integration: no enterprise system or credentials are used."""
 
 import json
-from pathlib import Path
-from uuid import uuid4
 import pytest
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'scenario',
+    ('graph_id', 'scenario'),
     [
-        'ok',
-        'empty',
-        'unavailable',
-        'timeout',
-        'crash',
-        'scope_change',
-        'revoked',
-        'budget',
-        'mixed_team',
-        'grant_change',
-        'grant_at_send',
-        'grant_after_checkpoint',
-        'legacy_receipt',
-        'check_durable',
+        *[
+            ('rca.synthetic', scenario)
+            for scenario in (
+                'ok',
+                'empty',
+                'unavailable',
+                'timeout',
+                'crash',
+                'scope_change',
+                'revoked',
+                'budget',
+                'mixed_team',
+                'grant_change',
+                'grant_at_send',
+                'grant_after_checkpoint',
+                'legacy_receipt',
+                'check_durable',
+            )
+        ],
+        *[
+            (graph_id, scenario)
+            for graph_id in ('rca.proposal', 'rca.batch_proposal')
+            for scenario in ('ok', 'empty', 'unavailable', 'scope_change', 'mixed_team')
+        ],
     ],
 )
 async def test_synthetic_baseline_uses_one_scope_and_recovers_without_resend(
-    platform, monkeypatch, scenario
+    platform, monkeypatch, graph_id, scenario
 ):
     import httpx
     from workbench_agent.domain.profiles import ProfileDraft, ProfileBudgetLimits
@@ -45,7 +53,7 @@ async def test_synthetic_baseline_uses_one_scope_and_recovers_without_resend(
         TrustedConnection,
         StreamableSessionFactory,
     )
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     from support.mcp import mcp_server_source
 
     server_src = mcp_server_source()
@@ -211,7 +219,7 @@ async def test_synthetic_baseline_uses_one_scope_and_recovers_without_resend(
             platform.agent_id,
             ProfileDraft(
                 default_model=context.default_model,
-                graph_id='rca.synthetic',
+                graph_id=graph_id,
                 tools=tuple(refs),
                 budget_limits=ProfileBudgetLimits(tool_calls=1) if scenario == 'budget' else None,
             ),
@@ -411,6 +419,14 @@ async def test_synthetic_baseline_uses_one_scope_and_recovers_without_resend(
             assert len(view.outcome['evidence_refs']) == (1 if scenario == 'budget' else 0)
             usage = await platform.budgets.snapshot(platform.auth, run.run_id)
             assert usage.tool_attempts == (2 if scenario == 'grant_at_send' else expected_calls)
+            assert not any(f['status'] == 'normal' for f in view.outcome['findings'])
+            if scenario in ('scope_change', 'mixed_team'):
+                async with platform.backend.create_uow().begin_read() as uow:
+                    saved = await platform.backend.runs.checkpoint(
+                        uow, platform.auth.team_id, run.run_id
+                    )
+                expected = 'stale' if scenario == 'scope_change' else 'conflicting'
+                assert expected in saved['values']['baseline_statuses'].values()
             return
         assert len(view.outcome['evidence_refs']) == (
             2 if scenario in ('ok', 'crash', 'check_durable') else 1
@@ -428,6 +444,16 @@ async def test_synthetic_baseline_uses_one_scope_and_recovers_without_resend(
             evidence = await platform.backend.runs.current_evidence(
                 uow, platform.auth.team_id, run.run_id
             )
+            if scenario == 'ok':
+                from uuid import UUID, uuid5
+
+                invocations = await platform.backend.tools.succeeded_invocations(
+                    uow, platform.auth.team_id, run.run_id
+                )
+                assert {row['logical_call_id'] for row in invocations} == {
+                    str(uuid5(UUID(run.run_id), f'{graph_id}:baseline:{name}'))
+                    for name in ('metrics', 'logs')
+                }
         statuses = saved['values']['baseline_statuses']
         assert statuses['metrics'] == 'valid' and statuses['trace'] == 'unavailable'
         assert (

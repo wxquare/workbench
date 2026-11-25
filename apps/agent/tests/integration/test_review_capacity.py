@@ -10,7 +10,6 @@ from workbench_agent.persistence import schema
 
 @pytest.mark.asyncio
 async def test_review_candidates_handle_ten_thousand_and_use_indexes(platform):
-    from workbench_agent.domain.identity import AuthContext
     from workbench_agent.application.reviews import ReviewService
 
     team_id, agent_id = platform.auth.team_id, platform.agent_id

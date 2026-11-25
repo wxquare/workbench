@@ -52,7 +52,6 @@ async def test_artifact_authority_precedes_signing_and_rechecks_on_every_request
 
 @pytest.mark.asyncio
 async def test_artifact_old_scope_expiry_and_default_api_fail_closed(platform, client):
-    from workbench_agent.application.artifacts import ArtifactService
     from support.events import evidence
 
     run = await platform.create_run()

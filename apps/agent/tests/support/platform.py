@@ -93,17 +93,35 @@ class Platform:
     async def bootstrap(self):
         return await BootstrapService(self.backend).apply(self.settings)
 
+    async def active_model(self, auth, agent_id=None):
+        async with self.backend.create_uow().begin_read() as uow:
+            agent = await self.profiles.agent(uow, auth, agent_id)
+            profile = await self.profiles.published(uow, auth, agent['agent_id'])
+            return await self.profiles.model_version(uow, auth, profile.default_model)
+
     async def publish_model(self, model_id):
-        current_model = await self.profiles.get_model_draft(self.auth, 'deepseek-dod-default')
-        version = await self.profiles.publish_model(
-            self.auth,
-            self.agent_id,
-            ModelProfile(model_id=model_id),
-            expected_revision=current_model['revision'],
-            key=str(uuid4()),
-        )
+        version = await self.publish_model_version(ModelProfile(model_id=model_id))
         await publish_agent_default(self.profiles, self.auth, self.agent_id, version.ref)
         return version
+
+    async def publish_model_version(self, model):
+        from workbench_agent.application.model_profiles import ModelProfileService
+        from workbench_agent.domain.profiles import ModelProfileVersion
+
+        service = ModelProfileService(self.backend)
+        current = await service.get(self.auth, self.agent_id, model.name)
+        patched = await service.patch(
+            self.auth,
+            self.agent_id,
+            model.name,
+            model.model_dump(mode='json'),
+            current['revision'],
+            str(uuid4()),
+        )
+        published = await service.publish(
+            self.auth, self.agent_id, model.name, patched.body['revision'], str(uuid4())
+        )
+        return ModelProfileVersion.model_validate(published.body)
 
 
 @pytest.fixture

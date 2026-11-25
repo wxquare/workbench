@@ -24,10 +24,6 @@ from workbench_agent.skill_management.drafts import (
 )
 
 
-def bundle_for(name, description, content):
-    return bundle_for_files(name, description, {'SKILL.md': content})
-
-
 def stored_files(draft):
     try:
         return normalize_files(json.loads(draft['files_json']))

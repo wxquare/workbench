@@ -1,0 +1,540 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "path": "apps/agent/src/workbench_agent/api/app.py",
+      "name": "create_app",
+      "rule": "C901",
+      "value": 21
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/api/app.py",
+      "name": "create_app",
+      "rule": "PLR0915",
+      "value": 109
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/action_authority.py",
+      "name": "require_action_authority",
+      "rule": "C901",
+      "value": 19
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/action_authority.py",
+      "name": "require_action_authority",
+      "rule": "PLR0915",
+      "value": 69
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/actions.py",
+      "name": "ActionService._propose_in",
+      "rule": "C901",
+      "value": 23
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/actions.py",
+      "name": "ActionService._propose_in",
+      "rule": "PLR0915",
+      "value": 79
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/actions.py",
+      "name": "ActionService.authorize",
+      "rule": "C901",
+      "value": 21
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/actions.py",
+      "name": "ActionService.authorize",
+      "rule": "PLR0915",
+      "value": 60
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/profiles.py",
+      "name": "ProfileService.validate_refs",
+      "rule": "C901",
+      "value": 22
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/profiles.py",
+      "name": "ProfileService.validate_refs",
+      "rule": "PLR0915",
+      "value": 54
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/results.py",
+      "name": "ResultService.finalize_in",
+      "rule": "C901",
+      "value": 15
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/results.py",
+      "name": "ResultService.finalize_in",
+      "rule": "PLR0915",
+      "value": 64
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/resume.py",
+      "name": "ResumeService.resume",
+      "rule": "C901",
+      "value": 26
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/resume.py",
+      "name": "ResumeService.resume",
+      "rule": "PLR0915",
+      "value": 81
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/resume.py",
+      "name": "ResumeService.resume.operation",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/resume.py",
+      "name": "ResumeService.resume.operation",
+      "rule": "PLR0915",
+      "value": 53
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/runs.py",
+      "name": "RunService.create",
+      "rule": "C901",
+      "value": 28
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/runs.py",
+      "name": "RunService.create",
+      "rule": "PLR0915",
+      "value": 98
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/runs.py",
+      "name": "RunService.create.operation",
+      "rule": "C901",
+      "value": 23
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/application/runs.py",
+      "name": "RunService.create.operation",
+      "rule": "PLR0915",
+      "value": 83
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/doctor.py",
+      "name": "check_sqlite_runtime",
+      "rule": "C901",
+      "value": 16
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/eval.py",
+      "name": "main",
+      "rule": "C901",
+      "value": 27
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/eval.py",
+      "name": "main",
+      "rule": "PLR0915",
+      "value": 112
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/main.py",
+      "name": "main",
+      "rule": "C901",
+      "value": 37
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/main.py",
+      "name": "main",
+      "rule": "PLR0915",
+      "value": 139
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/parser.py",
+      "name": "build_parser",
+      "rule": "PLR0915",
+      "value": 85
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/worker.py",
+      "name": "run_worker",
+      "rule": "C901",
+      "value": 26
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/cli/worker.py",
+      "name": "run_worker",
+      "rule": "PLR0915",
+      "value": 120
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/delivery/dispatcher.py",
+      "name": "Dispatcher.dispatch_one",
+      "rule": "C901",
+      "value": 22
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/delivery/dispatcher.py",
+      "name": "Dispatcher.dispatch_one",
+      "rule": "PLR0915",
+      "value": 73
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/budget.py",
+      "name": "ExperimentBudget.__init__",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/collector.py",
+      "name": "collect_case",
+      "rule": "C901",
+      "value": 28
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/collector.py",
+      "name": "collect_case",
+      "rule": "PLR0915",
+      "value": 98
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/contracts.py",
+      "name": "validate_experiment_config",
+      "rule": "C901",
+      "value": 22
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/contracts.py",
+      "name": "validate_experiment_config",
+      "rule": "PLR0915",
+      "value": 52
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/contracts.py",
+      "name": "validate_seed_manifest",
+      "rule": "C901",
+      "value": 15
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/dataset.py",
+      "name": "validate_dataset",
+      "rule": "C901",
+      "value": 37
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/dataset.py",
+      "name": "validate_dataset",
+      "rule": "PLR0915",
+      "value": 91
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/importer.py",
+      "name": "import_seed",
+      "rule": "PLR0915",
+      "value": 51
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/knowledge_report.py",
+      "name": "evaluate_knowledge_dataset",
+      "rule": "C901",
+      "value": 27
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/knowledge_report.py",
+      "name": "evaluate_knowledge_dataset",
+      "rule": "PLR0915",
+      "value": 85
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/runner.py",
+      "name": "run_experiment",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/scoring.py",
+      "name": "score_result",
+      "rule": "C901",
+      "value": 24
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/scoring.py",
+      "name": "score_result",
+      "rule": "PLR0915",
+      "value": 66
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/tool_conversation_eval.py",
+      "name": "score_tool_result",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/tool_conversation_eval.py",
+      "name": "validate_tool_dataset",
+      "rule": "C901",
+      "value": 20
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/evaluation/tool_runner.py",
+      "name": "run_tool_experiment",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/execution/snapshot_reader.py",
+      "name": "read_snapshot_lines",
+      "rule": "C901",
+      "value": 18
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/jobs/reconciler.py",
+      "name": "Reconciler.reconcile",
+      "rule": "C901",
+      "value": 34
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/jobs/reconciler.py",
+      "name": "Reconciler.reconcile",
+      "rule": "PLR0915",
+      "value": 106
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/jobs/worker.py",
+      "name": "Worker._run_claim",
+      "rule": "C901",
+      "value": 14
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/knowledge/chunking.py",
+      "name": "chunk_markdown",
+      "rule": "C901",
+      "value": 15
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/backends/jobs.py",
+      "name": "SQLiteJobStore._candidate",
+      "rule": "C901",
+      "value": 13
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/backends/sqlite.py",
+      "name": "SQLiteBackend.__init__",
+      "rule": "PLR0915",
+      "value": 59
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/backends/sqlite.py",
+      "name": "SQLiteBackend.health",
+      "rule": "C901",
+      "value": 13
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/backends/sqlite_backup.py",
+      "name": "validate",
+      "rule": "C901",
+      "value": 16
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/backends/sqlite_backup.py",
+      "name": "validate",
+      "rule": "PLR0915",
+      "value": 52
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/readiness.py",
+      "name": "persistent_path_errors",
+      "rule": "C901",
+      "value": 14
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/sqlite_diagnostics.py",
+      "name": "validate_required_schema",
+      "rule": "C901",
+      "value": 27
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/persistence/sqlite_diagnostics.py",
+      "name": "validate_required_schema",
+      "rule": "PLR0915",
+      "value": 55
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runner/service.py",
+      "name": "ContainerRunner.cleanup_resources",
+      "rule": "C901",
+      "value": 16
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runner/service.py",
+      "name": "ContainerRunner.execute",
+      "rule": "C901",
+      "value": 21
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runner/service.py",
+      "name": "ContainerRunner.execute",
+      "rule": "PLR0915",
+      "value": 80
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runner/service.py",
+      "name": "ContainerRunner.require_daemon",
+      "rule": "C901",
+      "value": 13
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/experts/knowledge.py",
+      "name": "KnowledgeChatModel._agenerate",
+      "rule": "C901",
+      "value": 13
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/graphs/evidence_authority.py",
+      "name": "authorized_sources",
+      "rule": "C901",
+      "value": 45
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/graphs/evidence_authority.py",
+      "name": "authorized_sources",
+      "rule": "PLR0915",
+      "value": 115
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/models/invoker.py",
+      "name": "ModelInvoker.invoke",
+      "rule": "C901",
+      "value": 29
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/models/invoker.py",
+      "name": "ModelInvoker.invoke",
+      "rule": "PLR0915",
+      "value": 110
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/streaming.py",
+      "name": "EventResponse.stream_response",
+      "rule": "C901",
+      "value": 18
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/runtime/streaming.py",
+      "name": "EventResponse.stream_response",
+      "rule": "PLR0915",
+      "value": 55
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/skill_management/drafts.py",
+      "name": "normalize_files",
+      "rule": "C901",
+      "value": 18
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/skill_management/validator.py",
+      "name": "validate_bundle",
+      "rule": "C901",
+      "value": 23
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/skill_management/validator.py",
+      "name": "validate_bundle",
+      "rule": "PLR0915",
+      "value": 62
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/skill_management/versions.py",
+      "name": "SkillService.publish",
+      "rule": "C901",
+      "value": 14
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/skill_management/versions.py",
+      "name": "SkillService.publish",
+      "rule": "PLR0915",
+      "value": 56
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/execution_executor.py",
+      "name": "ExecutionExecutor.execute",
+      "rule": "C901",
+      "value": 34
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/execution_executor.py",
+      "name": "ExecutionExecutor.execute",
+      "rule": "PLR0915",
+      "value": 134
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/mcp.py",
+      "name": "MCPAdapter.prepare",
+      "rule": "C901",
+      "value": 19
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/mcp.py",
+      "name": "build_business_arguments",
+      "rule": "C901",
+      "value": 16
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/mcp.py",
+      "name": "build_scoped_arguments",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/policy.py",
+      "name": "PolicyToolExecutor.execute",
+      "rule": "C901",
+      "value": 80
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/policy.py",
+      "name": "PolicyToolExecutor.execute",
+      "rule": "PLR0915",
+      "value": 205
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/probe.py",
+      "name": "ToolProbe.execute",
+      "rule": "C901",
+      "value": 15
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/probe.py",
+      "name": "ToolProbe.execute",
+      "rule": "PLR0915",
+      "value": 59
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/scope_mapping.py",
+      "name": "validate_mapping",
+      "rule": "C901",
+      "value": 17
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/snapshot_reader.py",
+      "name": "SnapshotReader.read",
+      "rule": "C901",
+      "value": 20
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/snapshot_reader.py",
+      "name": "SnapshotReader.read",
+      "rule": "PLR0915",
+      "value": 77
+    },
+    {
+      "path": "apps/agent/src/workbench_agent/tools/web_search_result.py",
+      "name": "validate_web_search_result",
+      "rule": "C901",
+      "value": 13
+    }
+  ],
+  "moves": []
+}

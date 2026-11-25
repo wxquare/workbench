@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: 99df50d
+verified_commit: 9978be3
 ---
 
 # 开发指南
@@ -113,7 +113,7 @@ flowchart LR
 | --- | --- | --- |
 | `settings.py` | Pydantic 配置模型与 `load_settings`；所有进程唯一配置解析入口 | `Settings`、`load_settings` |
 | `observability.py` | JSON 日志、OpenTelemetry/Langfuse 遥测、请求中间件 | `configure_logging`、`Telemetry`、`RequestObservabilityMiddleware` |
-| `cli/` | `workbench` 命令行：API、Worker、Scheduler 与维护命令 | `main.py` |
+| `cli/` | `workbench` 命令行：API、Worker、Scheduler 与维护命令 | `main.py`、`parser.py` |
 | `api/` | FastAPI 路由、Bearer 认证、错误映射、SSE、前端静态托管 | `app.py`、`runs.py`、`auth.py` |
 | `application/` | 用例与应用服务：受理 Run、恢复、取消、版本发布、幂等、授权、结果落库 | `runs.py`、`resume.py`、`results.py`、`profiles.py` |
 | `domain/` | 领域对象与规则（Pydantic/dataclass）：Run、Context、Outcome、Workflow、Guard | `runs.py`、`context.py`、`guards.py`、`workflows.py` |
@@ -226,7 +226,7 @@ workbench-local-dispatch = "workbench_agent.cli.local_dispatcher:main"
 
 > 原文把命令写作 `dod`，实际可执行名是 `workbench`；历史运维文档中残留的 `dod bootstrap` 应读作 `workbench bootstrap`。
 
-`PKG/cli/main.py` 用 `argparse` 声明全部子命令；除 `evaluate` 外都先 `load_settings(--config)`，失败时只打印 `{"ready": false, "errors": ["invalid or unreadable configuration"]}`，不回显配置内容（可能含凭据引用）。
+`PKG/cli/parser.py::build_parser` 用 `argparse` 声明全部子命令，`cli/main.py` 负责分发；`evaluate` 和 `eval` 独立处理，其他命令先 `load_settings(--config)`，失败时只打印 `{"ready": false, "errors": ["invalid or unreadable configuration"]}`，不回显配置内容（可能含凭据引用）。
 
 ```mermaid
 flowchart TD
@@ -402,7 +402,7 @@ sequenceDiagram
     R-->>C: 202 + run_id thread_id links
 ```
 
-`RunService.create` 在**同一个写事务**内依次完成下列步骤（按代码顺序）：
+`RunService.create` 先执行第 1–2 步的请求校验，再在**同一个写事务**内完成后续授权、幂等、版本冻结和写入；`create_in` 由调用方持有该事务。图请求校验和预算计算由同模块的纯函数完成，仍按原顺序调用：
 
 | 顺序 | 检查/写入 | 失败错误码（HTTP） |
 | --- | --- | --- |
@@ -412,17 +412,19 @@ sequenceDiagram
 | 4 | 指定 `thread_id` 时校验 Thread 归属于该 Agent | 404 |
 | 5 | `client_message_id`：命中且未过期的 `source_events` 回放原结果，不同请求体则冲突 | `SOURCE_CONFLICT`（409） |
 | 6 | `expected_revision` 与 Thread 当前 revision 比较 | `REVISION_CONFLICT`（409） |
-| 7 | 读取已发布 Profile；`business_context.conversation=true` 要求图为 `conversation.multi_turn` | `CONVERSATION_WORKFLOW_REQUIRED`（409） |
-| 8 | `conversation.multi_turn` 要求 `mode=qa` 且无 `query_scope`；会话中不得有未结束 Run；历史成功 Run 必须来自 `conversation.single_turn` 或 `conversation.multi_turn` | `WORKFLOW_UNAVAILABLE`、`THREAD_BUSY`、`CONVERSATION_HISTORY_INCOMPATIBLE`（409） |
-| 9 | v13–v15 仅允许合成告警受信通道调用 | `WORKFLOW_UNAVAILABLE`（409） |
-| 10 | `knowledge.scoped_excerpt`：仅 `qa`，`validate_qa_scope` 校验 `query_scope`；`conversation.single_turn`：仅 `qa` 且不得带 `query_scope` | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`（409） |
+| 7 | 读取已发布 Profile；`business_context.conversation=true` 要求多轮或工具对话图 | `CONVERSATION_WORKFLOW_REQUIRED`（409） |
+| 8 | 多轮及工具对话要求 `mode=qa`；多轮图不得带 `query_scope`，工具对话要求合法范围及会话标志；会话中不得有未结束 Run，历史成功 Run 必须来自对话图 | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`、`THREAD_BUSY`、`CONVERSATION_HISTORY_INCOMPATIBLE`（409） |
+| 9 | 三张 RCA 图仅允许合成告警受信通道调用 | `WORKFLOW_UNAVAILABLE`（409） |
+| 10 | 知识摘录、引用审查和工具对话仅允许 `qa`，并校验 `query_scope`；单轮对话仅允许 `qa` 且不得带 `query_scope` | `INVALID_SCOPE`（422）、`WORKFLOW_UNAVAILABLE`（409） |
 | 11 | `request.mode` 必须在 Profile 的 `allowed_modes` 中 | `MODE_NOT_ALLOWED`（422） |
-| 12 | `sop`/`inspection` 必须使用 v11/v12 且提供 `workflow_version_id`；其他模式不得提供 | `WORKFLOW_UNAVAILABLE`（409） |
+| 12 | `sop`/`inspection` 必须使用 `sop.conditional` 且提供 `workflow_version_id`；其他模式不得提供 | `WORKFLOW_UNAVAILABLE`（409） |
 | 13 | 不接受非空 `input.artifact_ids` | `ARTIFACT_UNAVAILABLE`（409） |
 | 14 | 预算：`DEFAULT_BUDGETS[mode]` → 与 Profile 限制取 min → 请求值只能更小 | `BUDGET_EXCEEDED`（422） |
-| 15 | `ContextResolver.resolve` 固定 Profile/模型/Skill/工具/仓库引用；工作流校验哈希，v11 拒绝含 `condition` 或 `output_schema` 的定义 | `WORKFLOW_UNAVAILABLE`（409） |
+| 15 | `ContextResolver.resolve` 固定 Profile/模型/Skill/工具/仓库引用；工作流按固定版本读取并校验哈希 | `WORKFLOW_UNAVAILABLE`（409） |
 | 16 | 各模型引用的 `secret_ref` 必须可解析；`summary_token_reserve` ≤ 汇总模型上下文 | `MODEL_PROFILE_UNAVAILABLE`（409）、`SUMMARY_RESERVE_INVALID`（422） |
 | 17 | 写入 `runs`（`status='queued'`，`revision=1`，`wall_deadline_at = now + 48h`）、可选 `run_trace_contexts`、`query_scope`、`usage_budget_policies`、`messages`（user）、`run_jobs`（`generation=1, kind='run', status='ready'`）、事件 `run.accepted` | — |
+
+新 Thread、来源去重记录及幂等回执同样归属该事务；范围、Job 或事件写入失败时整笔回滚，不留下部分受理记录。
 
 默认预算（`application/runs.py::DEFAULT_BUDGETS`，字段顺序 `wall_seconds, model_calls, tool_calls, tokens`）：
 
@@ -668,7 +670,7 @@ SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4
 
 ### 4.1 图版本注册与选择
 
-`runtime/graphs/registry.py::foundation_worker_registry` 注册八个语义化图 ID；`runtime/graphs/catalog.py` 维护展示元数据并从编译图提取结构。`GraphRegistry.resolve(graph_id, state_schema_version)` 同时核对图 ID 和状态 Schema，恢复时使用受理快照固定的图。新增图须登记唯一 ID、目录元数据和节点及边说明，补充受理、结构、权限和执行测试；不兼容行为应使用新 ID。默认 Worker 仅启用两张对话图，其他图需在 `worker.supported_graph_ids` 中配置。旧 `dod.v1`–`dod.v11` 已退役，切换前须清库重建。
+`runtime/graphs/registry.py::foundation_worker_registry` 注册九个语义化图 ID；`runtime/graphs/catalog.py` 维护展示元数据并从编译图提取结构。`GraphRegistry.resolve(graph_id, state_schema_version)` 同时核对图 ID 和状态 Schema，恢复时使用受理快照固定的图。新增图须登记唯一 ID、目录元数据和节点及边说明，补充受理、结构、权限和执行测试；不兼容行为应使用新 ID。默认 Worker 仅启用两张对话图，其他图需在 `worker.supported_graph_ids` 中配置。旧 `dod.v1`–`dod.v11` 已退役，切换前须清库重建。
 
 | 入口 | 责任 | 不能省略的检查 |
 | --- | --- | --- |
@@ -820,7 +822,9 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 `.github/workflows/ci.yml` 在 PR 和推送到 main 时运行五个独立检查：`agent`、`mcp-server`、`web`、`scripts` 和 `docs`，`ci-ok` 要求全部成功。完整本地命令见[文档入口的测试步骤](README.md#快速开始)。脚本测试调用 agent 虚拟环境中的 Python，因此先执行 agent 的 `uv sync --frozen`。
 
-Agent 检查使用 uv 管理的 Python 3.12，先运行 `uv run ruff check src tests` 和 `uv run ruff format --check src tests`，再输出并断言 SQLite ≥ 3.51.3，运行离线测试（不启用 `--run-live`）。Ruff 固定为 0.17.5，使用 100 字符行宽、单引号；历史迁移目录不检查或格式化。当前启用 E4、E7、E9、F 规则，暂不启用 F401（现有导入包括兼容导出和带副作用的导入），旧 schema 的星号导入与少数延迟导入按文件豁免；后续应逐项审查这些存量例外。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22；GitHub Actions 的运行时使用 Node 24，与 Web 的构建 Node 版本独立。`docs` 检查链接、图、元信息和代码关联文档；代码关联文档缺同步仅警告，文档拆分按主题、职责与阅读成本判断，不设机械行数阈值。纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
+Agent 检查使用 uv 管理的 Python 3.12，先运行 `uv run ruff check src tests` 和 `uv run ruff format --check src tests`，再输出并断言 SQLite ≥ 3.51.3，运行离线测试（不启用 `--run-live`）。Ruff 固定为 0.17.5，使用 100 字符行宽、单引号；历史迁移目录不检查或格式化。当前启用 E4、E7、E9、F 规则（包括 F401）；历史 schema 的兼容导出及表注册使用显式导出，星号导入与少数延迟导入按文件豁免。CI 不需要模型密钥。Agent job 暂设 60 分钟超时并输出最慢的 25 个测试；首次 GitHub Actions 运行后根据实际耗时评估并行拆分。Web 使用 Node 22；GitHub Actions 的运行时使用 Node 24，与 Web 的构建 Node 版本独立。`docs` 检查链接、图、元信息和代码关联文档；代码关联文档缺同步仅警告，文档拆分按主题、职责与阅读成本判断，不设机械行数阈值。纯错别字 PR 的 `docs-typo` 标签仅跳过版本更新检查。分支保护只需要求 `ci-ok`，新增检查时必须加入其 `needs`。见 [ADR-011](05-decisions.md#adr-011-ci-的-sqlite-版本由断言守住)。GitHub runner 上的解释器版本与测试结果以实际运行记录为准。
+
+复杂度另由 `python3 scripts/check_python_complexity.py --base <基准提交>` 检查 Agent 的 `src/`（历史迁移除外，测试代码不计入），使用锁定 Ruff 的 C901 > 12 和 PLR0915 > 50 诊断。基线按仓库相对路径、完整函数限定名和规则记录上限；新增超限、存量恶化及指向已删除函数的条目会失败。消除超限后应删除对应基线条目；降低但仍超限时可下调数值。迁移超限函数时在基线的 `moves` 中记录旧、新的路径及限定名和人工核对原因，并同时迁移条目；CI 对比 PR 基准或推送前提交，只允许基线删除、下调或经映射且数值不增加的迁移。不得用扫描结果覆盖基线。Ruff 执行失败或输出损坏时门禁失败关闭。
 
 ## 10 开发指引
 

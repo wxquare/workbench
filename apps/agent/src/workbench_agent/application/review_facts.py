@@ -5,8 +5,6 @@ import json
 from workbench_agent.application.authorization import Authorization
 from workbench_agent.application.action_authority import require_action_authority
 from workbench_agent.application.errors import DomainError
-from workbench_agent.domain.context import RunContext
-from workbench_agent.domain.identity import AuthContext
 
 
 def _denied():

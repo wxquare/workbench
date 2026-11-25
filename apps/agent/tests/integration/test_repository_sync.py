@@ -1,5 +1,4 @@
 import subprocess
-import pytest
 from workbench_agent.jobs.worker import ExecutorRegistry, Worker
 from workbench_agent.skill_management.objects import LocalSkillObjects
 from workbench_agent.execution.repositories import RepositoryService, RepositorySyncWorker

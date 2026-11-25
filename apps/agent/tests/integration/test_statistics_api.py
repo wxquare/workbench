@@ -97,7 +97,6 @@ async def test_statistics_uses_terminal_denominator_and_current_agent_access(cli
 
 async def test_statistics_rejects_viewer_and_invalid_range(client, platform):
     from uuid import uuid4
-    from sqlalchemy import update
 
     await platform.teams.set_member(
         platform.auth, 'stat-viewer', 'viewer', 'active', expected_revision=0, key=str(uuid4())

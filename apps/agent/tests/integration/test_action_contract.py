@@ -364,6 +364,36 @@ async def test_action_and_delivery_changes_are_audited(platform):
 
 
 @pytest.mark.asyncio
+async def test_dispatcher_discards_receipt_after_lease_expires(platform):
+    from sqlalchemy import select, update
+    from workbench_agent.delivery.dispatcher import Dispatcher
+    from workbench_agent.persistence import schema
+
+    service, action = await setup_action(platform)
+    await service.authorize(platform.auth, action['approval_id'], 'approve', action['payload_hash'])
+
+    class Sender:
+        async def send(self, *args):
+            async with platform.backend.create_uow().begin_write() as uow:
+                await uow.execute(
+                    update(schema.outbox)
+                    .where(schema.outbox.c.action_id == action['action_id'])
+                    .values(lease_until=0)
+                )
+            return {'external_id': 'late-receipt'}
+
+    platform.backend._delivery_senders = {'ticket': Sender()}
+    assert await Dispatcher(platform.backend, 'expired-worker').dispatch_one() == 'unknown'
+    async with platform.backend.create_uow().begin_read() as uow:
+        row = await platform.backend.actions.one(
+            uow, 'actions', team_id=platform.auth.team_id, action_id=action['action_id']
+        )
+        events = (await uow.execute(select(schema.run_events.c.type))).scalars().all()
+    assert row['state'] == 'authorized' and row['receipt'] is None
+    assert 'delivery.updated' not in events
+
+
+@pytest.mark.asyncio
 async def test_untrusted_receipt_extra_fields_are_not_persisted(platform):
     from workbench_agent.delivery.dispatcher import Dispatcher
     from sqlalchemy import select
@@ -956,7 +986,6 @@ async def test_api_composition_uses_only_explicit_deployment_action_grants(platf
 async def test_database_grant_revocation_is_immediate_across_independent_backends(platform):
     from workbench_agent.application.action_grants import ActionGrantService
     from workbench_agent.persistence.backends.sqlite import SQLiteBackend
-    from workbench_agent.tools.permissions import DeploymentToolPermissions
     from workbench_agent.delivery.dispatcher import Dispatcher
 
     service, action = await setup_action(platform)

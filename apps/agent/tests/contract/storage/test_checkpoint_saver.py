@@ -246,7 +246,6 @@ async def test_list_pagination_namespace_and_persisted_task_path(platform):
 
 
 def test_codec_roundtrips_only_registered_types_and_rejects_unknown_decode():
-    import json
     from langgraph.types import Interrupt, Send
 
     codec = CheckpointCodec()

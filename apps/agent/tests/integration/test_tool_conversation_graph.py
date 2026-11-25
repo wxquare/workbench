@@ -19,7 +19,7 @@ from workbench_agent.tools.policy import PolicyToolExecutor
 from workbench_agent.tools.registry import ToolRegistry
 
 
-async def setup_tool_run(platform, client, monkeypatch, model):
+async def setup_tool_run(platform, client, monkeypatch, model, *, model_call_limit=None):
     from support.mcp import mcp_server_source
 
     monkeypatch.syspath_prepend(str(mcp_server_source()))
@@ -245,6 +245,8 @@ async def setup_tool_run(platform, client, monkeypatch, model):
     platform.backend._tool_permissions = permissions
     platform.backend._mcp_connection_policy = policy
     payload = make_run_payload(platform.agent_id)
+    if model_call_limit is not None:
+        payload['budgets'] = {'model_calls': model_call_limit}
     payload['input']['text'] = 'What should I do before retrying?'
     scope = dict(SCOPE, start_at='2026-11-13T00:00:00.000Z', end_at='2026-11-13T00:10:00.000Z')
     payload['business_context'] = {'conversation': True, 'query_scope': scope}
@@ -405,6 +407,8 @@ async def test_tool_conversation_records_readable_evidence_from_scoped_adapter(
         assert evidence.status_code == 200
         assert 'Check the queue before retrying.' in evidence.text
         assert 'knowledge.search / call-1 / ok' in result['outcome']['summary']
+        usage = await platform.budgets.snapshot(platform.auth, run_id)
+        assert usage.model_attempts == 2 and usage.tool_attempts == 1
     finally:
         await backend.close()
         await runtime.close()
@@ -422,6 +426,61 @@ async def test_tool_conversation_never_executes_more_than_four_calls(platform, c
         assert result['outcome']['completed'] is False
         assert 'knowledge_search: denied' in ' '.join(result['outcome']['unresolved_items'])
         assert len(calls) <= 4
+        usage = await platform.budgets.snapshot(platform.auth, run_id)
+        assert usage.model_attempts == 2
+        assert usage.tool_attempts == 0
+    finally:
+        await backend.close()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_tool_conversation_respects_shared_model_budget(platform, client, monkeypatch):
+    runtime, app, backend, worker, calls, run_id = await setup_tool_run(
+        platform, client, monkeypatch, ToolModel(), model_call_limit=1
+    )
+    try:
+        assert await worker.run_once() == 'projected'
+        outcome = (await client.get('/v1/runs/' + run_id)).json()
+        assert outcome['outcome']['completed'] is False
+        usage = await platform.budgets.snapshot(platform.auth, run_id)
+        assert usage.model_attempts == 0 and usage.tool_attempts == 0
+        assert calls == []
+    finally:
+        await backend.close()
+        await runtime.close()
+
+
+@pytest.mark.asyncio
+async def test_tool_conversation_recovery_does_not_redispatch_received_tool_result(
+    platform, client, monkeypatch
+):
+    runtime, app, backend, worker, calls, run_id = await setup_tool_run(
+        platform, client, monkeypatch, ToolModel()
+    )
+    original = PolicyToolExecutor.execute
+    dispatched = 0
+
+    async def crash_after_receipt(self, *args, **kwargs):
+        nonlocal dispatched
+        result = await original(self, *args, **kwargs)
+        dispatched += 1
+        if dispatched == 1:
+            raise RuntimeError('simulated crash after durable receipt')
+        return result
+
+    try:
+        monkeypatch.setattr(PolicyToolExecutor, 'execute', crash_after_receipt)
+        assert await worker.run_once() == 'recovery_scheduled'
+        monkeypatch.setattr(PolicyToolExecutor, 'execute', original)
+        recovery = await worker.registry.reconciler.recover(run_id)
+        assert recovery.action == 'failed'
+        assert recovery.reason == 'STATE_RECONCILIATION_REQUIRED'
+        assert await worker.run_once() == 'idle'
+        usage = await platform.budgets.snapshot(platform.auth, run_id)
+        assert usage.tool_attempts == 1
+        result = (await client.get('/v1/runs/' + run_id)).json()
+        assert result['status'] == 'failed'
     finally:
         await backend.close()
         await runtime.close()

@@ -8,6 +8,10 @@ from workbench_agent.domain.guards import TERMINAL_RUN_STATUSES
 from workbench_agent.runtime.results import saved_outcome
 
 
+def _is_rca_graph(graph_id):
+    return graph_id in (GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL)
+
+
 @dataclass(frozen=True)
 class RecoveryDecision:
     run_id: str
@@ -158,19 +162,11 @@ class Reconciler:
         if outcome is not None:
             from workbench_agent.runtime.graphs.evidence_authority import sanitize_v8_outcome
 
-            if claim.context.graph_id not in (
-                GraphId.RCA_SYNTHETIC,
-                GraphId.RCA_PROPOSAL,
-                GraphId.RCA_BATCH_PROPOSAL,
-            ):
+            if not _is_rca_graph(claim.context.graph_id):
                 outcome = await sanitize_v8_outcome(self.backend, uow, claim, outcome)
             from workbench_agent.application.errors import DomainError
 
-            if claim.context.graph_id not in (
-                GraphId.RCA_SYNTHETIC,
-                GraphId.RCA_PROPOSAL,
-                GraphId.RCA_BATCH_PROPOSAL,
-            ):
+            if not _is_rca_graph(claim.context.graph_id):
                 try:
                     await ResultService(self.backend).validate(uow, guard, outcome)
                 except (ValueError, DomainError):
@@ -178,11 +174,7 @@ class Reconciler:
             try:
                 await ResultService(self.backend).finalize_in(uow, guard, outcome, outcome.digest())
             except DomainError as error:
-                if (
-                    claim.context.graph_id
-                    not in (GraphId.RCA_SYNTHETIC, GraphId.RCA_PROPOSAL, GraphId.RCA_BATCH_PROPOSAL)
-                    or error.code != 'OPERATION_DENIED'
-                ):
+                if not _is_rca_graph(claim.context.graph_id) or error.code != 'OPERATION_DENIED':
                     raise
                 await self.backend.jobs.release(
                     uow,
@@ -195,11 +187,7 @@ class Reconciler:
                 return decision('unavailable', 'EXECUTION_CAPABILITY_LOST')
             return decision('finalized')
         if saved and saved['interrupts'] and pending is None:
-            if claim.context.graph_id not in (
-                GraphId.RCA_SYNTHETIC,
-                GraphId.RCA_PROPOSAL,
-                GraphId.RCA_BATCH_PROPOSAL,
-            ):
+            if not _is_rca_graph(claim.context.graph_id):
                 return await fail('STATE_RECONCILIATION_REQUIRED')
             # Only registered, exact named descriptors can become a public wait.
             try:

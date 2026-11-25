@@ -337,7 +337,6 @@ async def test_priority_and_team_rotation_use_real_candidates(platform):
 
 
 async def test_caught_stale_guard_still_aborts_transaction(platform):
-    from workbench_agent.persistence.errors import StorageError
 
     run = await platform.create_run()
     owned = await claim(platform, 'a')

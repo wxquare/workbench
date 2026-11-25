@@ -9,7 +9,6 @@ from workbench_agent.application.profiles import ProfileService
 from workbench_agent.settings import ModelProfile
 from workbench_agent.domain.admin_jobs import AdminAuth, AdminJob
 from workbench_agent.domain.profiles import ModelProfileVersion
-from workbench_agent.jobs.admin import AdminJobService
 from workbench_agent.persistence.backends.model_profiles import list_team, list_visible
 from workbench_agent.application.authorization import Authorization
 

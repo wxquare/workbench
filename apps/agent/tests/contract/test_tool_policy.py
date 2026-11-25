@@ -57,7 +57,6 @@ async def test_timeout_consumes_budget_and_is_not_normal(platform):
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     binding = ToolBinding(
@@ -111,11 +110,10 @@ async def test_timeout_consumes_budget_and_is_not_normal(platform):
 
 
 @pytest.mark.asyncio
-async def test_success_records_scoped_evidence_and_never_replays_dispatch(platform):
+async def test_success_records_scoped_evidence_and_never_replays_dispatch(platform, monkeypatch):
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     binding = ToolBinding(
@@ -146,18 +144,16 @@ async def test_success_records_scoped_evidence_and_never_replays_dispatch(platfo
     await platform.profiles.publish(
         platform.auth, platform.agent_id, updated['revision'], key='profile'
     )
-    from workbench_agent.application.workflows import WorkflowService
+    from support.workflows import create_workflow_version
     from workbench_agent.domain.workflows import WorkflowDefinition
     from workbench_agent.domain.runs import CreateRun
     from workbench_agent.application.runs import RunService
 
-    workflow = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
+    workflow = await create_workflow_version(
+        platform,
         WorkflowDefinition.model_validate(
             {'name': 'check', 'steps': [{'step_id': 'logs', 'tool': 'logs.search'}]}
         ),
-        key='workflow',
     )
     run = await RunService(platform.backend).create(
         platform.auth,
@@ -187,6 +183,15 @@ async def test_success_records_scoped_evidence_and_never_replays_dispatch(platfo
 
     transport = Transport()
     executor = executor_for(platform, claimed, transport, 'logs.read')
+    from support.budgets import assert_dispatch_transaction_rolls_back
+
+    async def dispatch(stage):
+        await executor.execute(
+            claimed.context, claimed.guard, 'rollback-' + stage, ref, {'service': 'payment-api'}
+        )
+
+    await assert_dispatch_transaction_rolls_back(platform, monkeypatch, executor.budgets, dispatch)
+    assert transport.calls == 0
     result = await executor.execute(
         claimed.context, claimed.guard, 'logical-1', ref, {'service': 'payment-api'}
     )
@@ -229,11 +234,30 @@ async def test_success_records_scoped_evidence_and_never_replays_dispatch(platfo
             {'service': 'payment-api', 'query': 'changed'},
         )
     assert error.value.code == 'INVOCATION_CONFLICT'
+
+    async def fail_settlement(*args, **kwargs):
+        raise RuntimeError('settlement unavailable')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(executor.budgets, 'settle', fail_settlement)
+        with pytest.raises(RuntimeError, match='settlement unavailable'):
+            await executor.execute(
+                claimed.context,
+                claimed.guard,
+                'settlement-failure',
+                ref,
+                {'service': 'payment-api'},
+            )
+    uncertain = await executor.execute(
+        claimed.context, claimed.guard, 'settlement-failure', ref, {'service': 'payment-api'}
+    )
+    assert uncertain.status == 'unknown' and transport.calls == 2
+    assert (await platform.budgets.snapshot(platform.auth, run.run_id)).tool_attempts == 2
     executor.permissions._provider = lambda: {}
     denied = await executor.execute(
         claimed.context, claimed.guard, 'logical-1', ref, {'service': 'payment-api'}
     )
-    assert denied.status == 'denied' and denied.data is None and transport.calls == 1
+    assert denied.status == 'denied' and denied.data is None and transport.calls == 2
 
 
 @pytest.mark.asyncio
@@ -241,7 +265,6 @@ async def test_missing_scope_never_reaches_transport(platform):
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     b = ToolBinding(
@@ -301,7 +324,6 @@ async def test_deployment_denial_does_not_retry(platform):
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     b = ToolBinding(
@@ -356,7 +378,6 @@ async def test_transport_timeout_never_exceeds_run_budget(platform):
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     b = ToolBinding(
@@ -474,47 +495,6 @@ async def test_tool_draft_and_publish_api(platform, client):
 
 
 @pytest.mark.asyncio
-async def test_probe_reports_discovery_and_schema_separately(platform):
-    from workbench_agent.domain.tools import ToolBinding
-    from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.mcp import ToolCatalog
-
-    b = ToolBinding(
-        alias='logs.search',
-        provider='mcp',
-        tool_name='local.logs',
-        server='logs',
-        credential_scope='reader',
-        permission='logs.read',
-        input_schema={'type': 'object', 'properties': {'service': {'type': 'string'}}},
-    )
-    registry = ToolRegistry(platform.backend)
-    await registry.save_draft(platform.auth, platform.agent_id, b, expected_revision=0, key='d1')
-
-    class Adapter:
-        async def discover(self, *args, **kwargs):
-            return ToolCatalog(
-                ('local.logs',),
-                (
-                    {
-                        'name': 'local.logs',
-                        'inputSchema': {
-                            'type': 'object',
-                            'properties': {'service': {'type': 'integer'}},
-                        },
-                    },
-                ),
-            )
-
-    result = await registry.probe_draft(platform.auth, platform.agent_id, b.alias, Adapter())
-    assert (
-        result['discovery'] == 'ok'
-        and result['schema'] == 'mismatch'
-        and result['invocation'] == 'not_run'
-    )
-
-
-@pytest.mark.asyncio
 async def test_probe_api_fails_closed_without_deployment_mcp(platform, client):
     path = f'/v1/agents/{platform.agent_id}/tool-bindings/logs.search'
     response = await client.post(path + '/probe', headers={'Idempotency-Key': 'missing'})
@@ -532,7 +512,6 @@ async def test_executor_uses_mcp_structured_content_as_tool_output(platform):
         StreamableSessionFactory,
     )
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from support.jobs import claim
@@ -612,7 +591,6 @@ async def test_write_binding_only_returns_action_proposal_never_calls_transport(
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     b = ToolBinding(
@@ -892,7 +870,6 @@ async def test_log_scope_grant_builds_real_schema_request_for_local_mcp(platform
         StreamableSessionFactory,
     )
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from support.jobs import claim
@@ -1024,7 +1001,6 @@ async def test_revoked_permission_layer_prevents_dispatch(platform, layer):
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.tools.registry import ToolRegistry
-    from workbench_agent.tools.policy import PolicyToolExecutor
     from support.jobs import claim
 
     b = ToolBinding(
@@ -1182,7 +1158,6 @@ async def test_production_probe_uses_trusted_business_scope_and_real_mcp_schema(
 
 def test_tool_executor_rejects_unbound_or_forged_authority(platform):
     from workbench_agent.tools.policy import PolicyToolExecutor
-    from workbench_agent.jobs.worker import Execution
 
     with pytest.raises(ValueError):
         PolicyToolExecutor(

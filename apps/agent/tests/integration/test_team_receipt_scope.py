@@ -1,5 +1,4 @@
 from uuid import UUID, uuid4
-import pytest
 from workbench_agent.domain.identity import AuthContext
 
 

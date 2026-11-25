@@ -14,7 +14,7 @@ from workbench_agent.execution.repositories import RepositoryService, Repository
 
 
 async def test_executor_dispatches_only_pinned_approved_script_and_charges_budget(
-    platform, tmp_path
+    platform, tmp_path, monkeypatch
 ):
     repo = tmp_path / 'repo'
     repo.mkdir()
@@ -99,6 +99,22 @@ async def test_executor_dispatches_only_pinned_approved_script_and_charges_budge
     platform.backend._snapshot_objects = objects
     platform.backend._runner_daemon_id = 'test-daemon'
     executor = ExecutionExecutor(platform.backend, execution)
+    from support.budgets import assert_dispatch_transaction_rolls_back
+
+    runner_calls = []
+    original_execute = platform.backend._runner.execute
+
+    async def record_execute(*args, **kwargs):
+        runner_calls.append(args)
+        return await original_execute(*args, **kwargs)
+
+    monkeypatch.setattr(platform.backend._runner, 'execute', record_execute)
+
+    async def dispatch(stage):
+        await executor.execute('check', invocation_id='rollback-' + stage)
+
+    await assert_dispatch_transaction_rolls_back(platform, monkeypatch, executor.budgets, dispatch)
+    assert runner_calls == []
     result = await executor.execute('check', invocation_id='first')
     assert result.status == 'completed'
     async with platform.backend.create_uow().begin_read() as uow:
@@ -202,6 +218,21 @@ async def test_executor_dispatches_only_pinned_approved_script_and_charges_budge
     assert (await executor.receipt('uncertain'))['status'] == 'unknown'
     with pytest.raises(DomainError):
         await executor.execute('check', invocation_id='uncertain')
+
+    async def fail_settlement(*args, **kwargs):
+        raise RuntimeError('settlement unavailable')
+
+    platform.backend._runner = FixedRunner(RunnerResult('completed', 0, b'ok', b''))
+    before = (await platform.budgets.snapshot(platform.auth, run.run_id)).tool_attempts
+    with monkeypatch.context() as patch:
+        patch.setattr(executor.budgets, 'settle', fail_settlement)
+        with pytest.raises(RuntimeError, match='settlement unavailable'):
+            await executor.execute('check', invocation_id='settlement-failure')
+    assert (await executor.receipt('settlement-failure'))['status'] == 'unknown'
+    assert (await platform.budgets.snapshot(platform.auth, run.run_id)).tool_attempts == before + 1
+    with pytest.raises(DomainError):
+        await executor.execute('check', invocation_id='settlement-failure')
+
     from support.jobs import expire_lease
 
     await expire_lease(platform, execution.guard)

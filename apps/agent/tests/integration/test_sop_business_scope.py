@@ -1,6 +1,5 @@
 """Local MCP service and synthetic data only; no business access."""
 
-from pathlib import Path
 import pytest
 
 
@@ -15,7 +14,7 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(
 ):
     import httpx
     from workbench_agent.application.runs import RunService
-    from workbench_agent.application.workflows import WorkflowService
+    from support.workflows import create_workflow_version
     from workbench_agent.domain.workflows import WorkflowDefinition
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.domain.tools import ToolBinding
@@ -182,9 +181,8 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(
         await platform.profiles.publish(
             platform.auth, platform.agent_id, draft['revision'], key='mixed-publish'
         )
-        wf = await WorkflowService(platform.backend).publish(
-            platform.auth,
-            platform.agent_id,
+        wf = await create_workflow_version(
+            platform,
             WorkflowDefinition.model_validate(
                 {
                     'name': 'check',
@@ -203,7 +201,6 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(
                     ],
                 }
             ),
-            key='mixed-wf',
         )
         request = CreateRun.model_validate(
             {

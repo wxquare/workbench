@@ -1,5 +1,4 @@
 import json
-import time
 
 import httpx
 import pytest
@@ -7,7 +6,7 @@ import pytest
 from workbench_agent.evaluation.api_client import EvaluationAPI
 from workbench_agent.evaluation.contracts import make_run_key
 from workbench_agent.evaluation.dataset import dataset_fingerprint
-from workbench_agent.evaluation.journal import Journal, atomic_json
+from workbench_agent.evaluation.journal import Journal
 from workbench_agent.evaluation.runner import (
     ExperimentDirectory,
     ExperimentLocked,

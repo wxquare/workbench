@@ -14,12 +14,10 @@ from workbench_agent.evaluation.metrics import apply_dataset_boundary
 from workbench_agent.evaluation.holdout import authorize_split, append_holdout_access
 from workbench_agent.evaluation.runner import (
     ExperimentDirectory,
-    _config_hash,
     _manifest,
     run_experiment,
 )
 import asyncio
-import hashlib
 import os
 from workbench_agent.evaluation.api_client import EvaluationAPI
 from workbench_agent.evaluation.journal import Journal

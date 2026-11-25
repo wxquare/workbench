@@ -14,9 +14,7 @@ from workbench_agent.evaluation.contracts import make_run_key
 from workbench_agent.evaluation.dataset import (
     dataset_fingerprint,
     select_cases,
-    validate_manifest,
 )
-from workbench_agent.evaluation.journal import Journal, atomic_json, fsync_directory
 
 
 class ExperimentLocked(RuntimeError):
@@ -52,13 +50,6 @@ class ExperimentDirectory:
             except FileNotFoundError:
                 pass
         return False
-
-
-def _read_manifest(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding='utf-8'))
-    if not isinstance(value, dict):
-        raise ValueError('experiment manifest must be an object')
-    return value
 
 
 def _config_hash(config: dict) -> str:

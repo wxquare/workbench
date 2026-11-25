@@ -17,6 +17,12 @@ def test_knowledge_search_accepts_complex_published_schema_via_scalar_projection
     projected = project_model_schema('knowledge_search', published)
     assert set(projected['properties']) == {'query', 'scene', 'limit'}
     validate_model_schema(projected)
+    from jsonschema import Draft202012Validator
+
+    validator = Draft202012Validator(projected)
+    assert validator.is_valid({'query': 'help', 'scene': 'qa'})
+    for protected in ('scope', 'team', 'env', 'session_key'):
+        assert not validator.is_valid({'query': 'help', 'scene': 'qa', protected: 'injected'})
 
 
 def test_unknown_nested_schema_is_rejected_for_model_projection():

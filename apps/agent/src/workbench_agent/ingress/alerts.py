@@ -160,7 +160,6 @@ class SyntheticAlertV2Ingress:
         self.runs = RunService(backend)
 
     async def accept(self, raw_body: bytes, headers: dict):
-        from datetime import datetime, timezone
         from sqlalchemy import insert, select
         from workbench_agent.persistence import schema
         from workbench_agent.application.idempotency import canonical, digest

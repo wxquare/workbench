@@ -37,7 +37,7 @@ async def test_revocation_invalidates_existing_context_and_bearer(platform, clie
 
 async def test_concurrent_draft_cas_has_one_winner(platform):
     current = await platform.profiles.get_agent(platform.auth, platform.agent_id)
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
 
     async def save():
         return await platform.profiles.save_draft(
@@ -54,7 +54,7 @@ async def test_concurrent_draft_cas_has_one_winner(platform):
 
 
 async def test_mutation_replay_and_mismatch_are_atomic(platform, client):
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
     body = {'default_model': model.ref.model_dump()}
     url = f'/v1/agents/{platform.agent_id}'
     headers = {
@@ -75,7 +75,7 @@ async def test_mutation_replay_and_mismatch_are_atomic(platform, client):
 
 
 async def test_replay_does_not_bypass_current_revocation(platform, client):
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
     url = f'/v1/agents/{platform.agent_id}'
     headers = {
         'If-Match': str(
@@ -92,7 +92,7 @@ async def test_replay_does_not_bypass_current_revocation(platform, client):
 
 
 async def test_mutation_requires_headers_and_rejects_client_team_claim(platform, client):
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
     body = {'default_model': model.ref.model_dump()}
     url = f'/v1/agents/{platform.agent_id}'
     assert (
@@ -106,7 +106,7 @@ async def test_mutation_requires_headers_and_rejects_client_team_claim(platform,
 
 
 async def test_semantic_revision_is_in_idempotency_hash(platform, client):
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
     body = {'default_model': model.ref.model_dump()}
     url = f'/v1/agents/{platform.agent_id}'
     revision = (await platform.profiles.get_agent(platform.auth, platform.agent_id))['revision']
@@ -161,12 +161,12 @@ async def test_new_team_is_seeded_with_usable_published_agent(platform, client):
     auth = AuthContext(team_id=row['team_id'], subject=platform.auth.subject, roles=('admin',))
     context = await platform.contexts.resolve(auth, row['agent_id'])
     assert context.team_id == row['team_id']
-    model = await platform.profiles.get_active_model(auth, row['agent_id'])
+    model = await platform.active_model(auth, row['agent_id'])
     assert model.model_id == 'deepseek-flash'
 
 
 async def test_mutation_audit_and_receipt_are_committed_once(platform):
-    model = await platform.profiles.get_active_model(platform.auth)
+    model = await platform.active_model(platform.auth)
     draft = ProfileDraft(default_model=model.ref)
     revision = (await platform.profiles.get_agent(platform.auth, platform.agent_id))['revision']
     async with platform.backend.create_uow().begin_read() as uow:

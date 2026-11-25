@@ -738,9 +738,8 @@ async def test_v2_ingress_fails_closed_without_database_source_policy(platform):
 
 @pytest.mark.asyncio
 async def test_other_backend_policy_revocation_blocks_worker_and_deadline(platform):
-    from workbench_agent.persistence.backends.sqlite import SQLiteBackend
     from workbench_agent.application.synthetic_source_policy import SyntheticSourcePolicy
-    from workbench_agent.jobs.worker import Worker, Execution, DeploymentConnectorPolicy
+    from workbench_agent.jobs.worker import Execution, DeploymentConnectorPolicy
     from workbench_agent.jobs.deadlines import DeadlineService
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     from support.jobs import claim

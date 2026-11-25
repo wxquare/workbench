@@ -1,5 +1,3 @@
-import json
-
 import pytest
 
 from workbench_agent.evaluation.contracts import (

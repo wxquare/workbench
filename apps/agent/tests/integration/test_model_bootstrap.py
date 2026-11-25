@@ -7,7 +7,7 @@ async def test_bootstrap_does_not_replace_published_profile(platform):
     first = await platform.bootstrap()
     await platform.publish_model(model_id='team-approved-model')
     await platform.bootstrap()
-    current = await platform.profiles.get_active_model(platform.auth)
+    current = await platform.active_model(platform.auth)
     assert current.model_id == 'team-approved-model'
     assert first.default_model.name == 'deepseek-dod-default'
     assert current.secret_ref == 'env://DEEPSEEK_API_KEY'
@@ -15,7 +15,7 @@ async def test_bootstrap_does_not_replace_published_profile(platform):
 
 async def test_seed_configuration_is_published_without_resolving_credentials(platform, monkeypatch):
     monkeypatch.setenv('DEEPSEEK_API_KEY', 'must-never-be-persisted')
-    current = await platform.profiles.get_active_model(platform.auth)
+    current = await platform.active_model(platform.auth)
     assert current.version == '1'
     assert current.configuration.base_url == 'https://api.deepseek.com'
     assert current.configuration.provider_options == {'thinking': {'type': 'disabled'}}
@@ -37,12 +37,11 @@ async def test_bootstrap_does_not_reactivate_revoked_admin(platform):
     from workbench_agent.application.errors import DomainError
 
     with pytest.raises(DomainError):
-        await platform.profiles.get_active_model(platform.auth)
+        await platform.active_model(platform.auth)
 
 
 async def test_api_lifespan_never_creates_or_seeds_database(config_data):
     from workbench_agent.api.app import create_app
-    from pathlib import Path
     from httpx import ASGITransport, AsyncClient
     from workbench_agent.settings import Settings
 
@@ -77,7 +76,6 @@ def test_standard_bootstrap_cli_requires_explicit_migration_and_is_repeatable(
     import subprocess
     import sys
     import yaml
-    from pathlib import Path
 
     config = tmp_path / 'config.yaml'
     config.write_text(yaml.safe_dump(config_data))
@@ -158,7 +156,6 @@ async def test_probe_job_executes_and_stores_versioned_report(platform):
     from workbench_agent.application.model_profiles import ModelProfileService
     from workbench_agent.runtime.models.deepseek import ModelProbe
     from workbench_agent.jobs.worker import ExecutorRegistry, Worker
-    from dataclasses import asdict
     from langchain_core.messages import AIMessage, AIMessageChunk
 
     closed = []
@@ -271,7 +268,6 @@ async def test_probe_records_credential_unavailable(platform):
     from workbench_agent.runtime.models.deepseek import ModelProbe
     from workbench_agent.jobs.worker import ExecutorRegistry, Worker
     from workbench_agent.runtime.models.factory import ModelFactory
-    from workbench_agent.connectors.secrets import SecretProvider
     from workbench_agent.domain.admin_jobs import AdminAuth
     from workbench_agent.jobs.admin import AdminJobService
     import json

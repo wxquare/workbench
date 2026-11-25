@@ -1,7 +1,7 @@
 ---
 title: 产品说明
 status: stable
-verified_commit: 99df50d
+verified_commit: 9978be3
 ---
 
 # 产品说明
@@ -163,7 +163,7 @@ flowchart TB
 | FR-02 | 团队和 Agent 管理 | 成员/角色、Agent 草稿与发布、模型、提示词、偏好、上下文、预算 | 🟡 | Agent、模型、Skill 和工具绑定管理页可用；团队成员与仓库绑定仍缺完整管理页 |
 | FR-03 | 单轮与多轮答疑 | 直接 LLM 问答、有界历史追问；知识问答、业务工具、引用 | 🟡 | 直接问答可用；`knowledge.citation_review` 带引用结论和独立支持检查，真实模型与业务质量待验收；`knowledge.scoped_excerpt` 仍为 partial |
 | FR-04 | 告警诊断 | 规范化告警、时间锚点、历史事件、监控/日志/Trace、代码分析 | 🟡 | 范围确认与基线采集在合成数据上验证；无真实数据与根因结论 |
-| FR-05 | Agent 协作 | 主图 + Knowledge/Diagnosis/Code 专家，按需调用，共用预算 | 🟡 | 专家与多专家流程存在；无并行与完整证据合成 |
+| FR-05 | Agent 协作 | 主图 + Knowledge/Diagnosis/Code 专家，按需调用，共用预算 | 🟡 | 知识图调用知识专家；Code 专家保留但没有图调用，多专家协作和完整证据合成未完成 |
 | FR-06 | Skill 和知识 | 导入、校验、版本、发布/回滚、按需加载、知识检索 | 🟡 | Skill 共享库可用；内置知识库支持条目、版本和检索；Skill 仅加载 SKILL.md 文本 |
 | FR-07 | Agent 执行 | 仓库快照、文件读取、脚本执行、受控环境、产物 | 🟡 | 快照读取与 Runner 代码存在；Runner 可按配置装配但尚无图调用，真实容器/对象存储未验收 |
 | FR-08 | 工具 | MCP 发现/调用、Schema 校验、身份注入、台账 | 🟡 | MCP 客户端与治理已实现；授权连接、只读工具管理及部署钉住的声明式参数映射已接入，企业真实上游与第二业务工具未验收 |
@@ -193,8 +193,8 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-04.1 | 告警范围确认与补充区域 | 🟡 | runtime/graphs/rca_synthetic；网页支持登记的区域输入 schema，待真实业务验收 |
 | FR-04.2 | 指标/日志/Trace 基线采集 | 🟡 | runtime/graphs/rca_synthetic；仅合成上游 |
 | FR-04.3 | 根因结论 | ⏳ | M3 验收：无完整根因；合成结果恒为 partial |
-| FR-05.1 | 专家子流程（Knowledge/Diagnosis/Code） | 🟡 | runtime/experts；知识摘录图 |
-| FR-05.2 | 专家并行 | ⏳ | M3 验收：受控并行未完成；当前顺序执行 |
+| FR-05.1 | 专家子流程（Knowledge/Diagnosis/Code） | 🟡 | 知识摘录及引用审查图调用 Knowledge；Code 未接入图，Diagnosis 旧实现已移除 |
+| FR-05.2 | 专家并行 | ⏳ | 受控多专家并行未完成 |
 | FR-06.1 | 团队共享 Skill 库（创建、草稿、发布、历史版本） | ✅ | web 的 Skills 页；api/skill_library；skill_management/library |
 | FR-06.2 | Agent 绑定 Skill 精确版本 | ✅ | web 的 Agents 页"添加 Skill"；上限 16 个 |
 | FR-06.3 | Skill 包导入（Git/产物） | 🟡 | api/skills、skill_management/importer；无页面 |
@@ -214,7 +214,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-10.5 | 网页流式展示 | 🟡 | 详情页支持 SSE 事件和草稿展示，连接失败时回退轮询；生产模型调用尚未接入草稿事件，待真实浏览器验收 |
 | FR-11.1 | Incident 记录与关联 | 🟡 | incidents/service、api/incidents；`/incidents` 已重定向人工审核中心，尚未提供 incident 详情页 |
 | FR-11.2 | 动作审批与不确定结果对账 | 🟡 | api/actions、delivery/reconcile；仅本地模拟器回执 |
-| FR-11.3 | 真实 Jira / SeaTalk / DoD 交付 | ⏳ | M3 验收：真实发送器默认关闭；connectors/dod 仅骨架 |
+| FR-11.3 | 真实 Jira / SeaTalk / DoD 交付 | ⏳ | 真实发送器默认关闭；DoD 只读工具名保留为兼容声明，真实交付尚未验收 |
 | FR-12.1 | 任务详情（结果、证据 ID、状态） | ✅ | web 的 RunDetail 页 |
 | FR-12.2 | 用量与费用查询 | ✅ | 详情显示逐 Run 用量，任务列表批量显示费用；未知计费与多币种分开表达 |
 | FR-12.3 | 用户反馈 | ✅ | 详情和聊天回答共用反馈组件；知识负反馈在同一事务内生成去重缺口 |
@@ -701,7 +701,7 @@ flowchart LR
 | Skill 的引用资料与脚本 | `conversation.multi_turn` 只加载绑定的 `SKILL.md` 文本 | 引用资源与脚本不会自动加载或执行 |
 | 产物下载 | API 的生产签名器尚未装配 | 部分环境下载不可用 |
 | 长期记忆 | 仅 `conversation.multi_turn` 有界加载同会话已完成历史（≤ 8 轮、16000 字节） | 跨会话记忆不存在，也不在 P0 计划内 |
-| 并行调查 | 多专家顺序执行；SOP 按 DAG 串行 | 长任务耗时高于目标设计 |
+| 并行调查 | 多专家流程尚未接入；SOP 按 DAG 串行 | 长任务耗时高于目标设计 |
 
 ### 9.2 技术与验收缺口
 

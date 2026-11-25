@@ -1,22 +1,32 @@
+from types import SimpleNamespace
+
 import pytest
 
+from workbench_agent.domain.tools import ToolBinding
+from workbench_agent.runtime.graphs.tool_conversation import _conversation_tool_allowed
 
-def test_business_tool_schema_hides_scope_and_message_side_effect_fields():
-    from workbench_agent.runtime.experts.diagnosis import model_tool_schema
 
-    full = {
-        'type': 'object',
-        'properties': {
-            'query': {'type': 'string'},
-            'team': {'type': 'string'},
-            'env': {'type': 'string'},
-            'session_key': {'type': 'string'},
-        },
-        'additionalProperties': False,
-    }
-    exposed = model_tool_schema('SRE-Log-Query', full)
-    assert set(exposed['properties']) == {'query', 'limit'}
-    assert exposed['required'] == ['query']
-    assert model_tool_schema('Common-DoD-GetInfo', full)['properties'] == {}
-    with pytest.raises(ValueError):
-        model_tool_schema('SRE-Log-TraceQuery', full)
+@pytest.mark.parametrize(
+    'name',
+    [
+        'SRE-Log-Query',
+        'SRE-Log-TraceQuery',
+        'Common-DoD-GetInfo',
+        'metrics_query',
+        'logs_search',
+        'trace_get',
+    ],
+)
+def test_unmapped_business_tools_are_not_admitted_to_model_conversation(name):
+    binding = ToolBinding(
+        alias='fixture.read',
+        provider='mcp',
+        tool_name=name,
+        server='local',
+        credential_scope='read',
+        permission='read',
+        input_schema={'type': 'object'},
+    )
+    backend = SimpleNamespace(_mcp_connections=())
+    context = SimpleNamespace(team_id='team', agent_id='agent')
+    assert not _conversation_tool_allowed(backend, context, binding)

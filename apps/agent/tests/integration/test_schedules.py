@@ -43,7 +43,7 @@ async def test_concurrent_schedule_scans_admit_one_run(platform):
     from datetime import datetime, timezone
     from workbench_agent.application.schedules import ScheduleService
     from workbench_agent.jobs.schedules import ScheduleScanner
-    from workbench_agent.application.workflows import WorkflowService
+    from support.workflows import create_workflow_version
     from workbench_agent.domain.workflows import WorkflowDefinition
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.domain.schedules import ScheduleSpec
@@ -66,13 +66,11 @@ async def test_concurrent_schedule_scans_admit_one_run(platform):
     await platform.profiles.publish(
         platform.auth, platform.agent_id, d['revision'], key='schedule-profile'
     )
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
+    wf = await create_workflow_version(
+        platform,
         WorkflowDefinition.model_validate(
             {'name': 'check', 'steps': [{'step_id': 'logs', 'tool': 'logs.read'}]}
         ),
-        key='schedule-workflow',
     )
     service = ScheduleService(platform.backend)
     schedule = await service.create(
@@ -101,7 +99,7 @@ async def test_concurrent_schedule_scans_admit_one_run(platform):
 async def prepare_schedule(platform, *, cron='*/5 * * * *', graph_id='sop.conditional'):
     from datetime import datetime, timezone
     from workbench_agent.application.schedules import ScheduleService
-    from workbench_agent.application.workflows import WorkflowService
+    from support.workflows import create_workflow_version
     from workbench_agent.domain.workflows import WorkflowDefinition
     from workbench_agent.domain.profiles import ProfileDraft
     from workbench_agent.domain.schedules import ScheduleSpec
@@ -124,13 +122,11 @@ async def prepare_schedule(platform, *, cron='*/5 * * * *', graph_id='sop.condit
     await platform.profiles.publish(
         platform.auth, platform.agent_id, d['revision'], key='setup-profile'
     )
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
+    wf = await create_workflow_version(
+        platform,
         WorkflowDefinition.model_validate(
             {'name': 'check', 'steps': [{'step_id': 'logs', 'tool': 'logs.read'}]}
         ),
-        key='setup-workflow',
     )
     service = ScheduleService(platform.backend)
     item = await service.create(
@@ -236,7 +232,7 @@ async def test_schedule_rolls_back_all_when_admission_fails_after_writes(platfor
 @pytest.mark.asyncio
 async def test_schedule_http_create_list_pause_and_manual_trigger(platform, client):
     from workbench_agent.domain.workflows import WorkflowDefinition
-    from workbench_agent.application.workflows import WorkflowService
+    from support.workflows import create_workflow_version
     from workbench_agent.domain.profiles import ProfileDraft
 
     ctx = await platform.contexts.resolve(platform.auth, platform.agent_id)
@@ -251,13 +247,11 @@ async def test_schedule_http_create_list_pause_and_manual_trigger(platform, clie
     await platform.profiles.publish(
         platform.auth, platform.agent_id, d['revision'], key='api-profile'
     )
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
+    wf = await create_workflow_version(
+        platform,
         WorkflowDefinition.model_validate(
             {'name': 'check', 'steps': [{'step_id': 'logs', 'tool': 'logs.read'}]}
         ),
-        key='api-wf',
     )
     path = f'/v1/agents/{platform.agent_id}/schedules'
     request = {
@@ -301,7 +295,6 @@ async def test_scheduler_tick_scans_persisted_schedule(platform):
 
 @pytest.mark.asyncio
 async def test_scheduled_run_scope_uses_due_time_and_is_atomic(platform):
-    from workbench_agent.application.schedules import ScheduleService
     from workbench_agent.domain.schedules import ScheduleSpec, ScheduleScope
     from workbench_agent.jobs.schedules import ScheduleScanner
 
@@ -703,22 +696,19 @@ async def test_schedule_accepts_v12_and_pins_workflow(platform):
 @pytest.mark.asyncio
 async def test_conditional_schedule_accepts_advanced_workflow_at_creation(platform):
     from workbench_agent.application.schedules import ScheduleService
-    from workbench_agent.application.workflows import WorkflowService
-    from workbench_agent.application.errors import DomainError
+    from support.workflows import create_workflow_version
     from workbench_agent.domain.workflows import WorkflowDefinition
     from workbench_agent.domain.schedules import ScheduleSpec
 
     await prepare_schedule(platform, graph_id='sop.conditional')
-    wf = await WorkflowService(platform.backend).publish(
-        platform.auth,
-        platform.agent_id,
+    wf = await create_workflow_version(
+        platform,
         WorkflowDefinition.model_validate(
             {
                 'name': 'advanced',
                 'steps': [{'step_id': 'a', 'tool': 'read', 'output_schema': {'type': 'object'}}],
             }
         ),
-        key='advanced-wf',
     )
     item = await ScheduleService(platform.backend).create(
         platform.auth,

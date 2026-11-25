@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
 
 import httpx
 
@@ -102,13 +101,6 @@ class EvaluationAPI:
 
     async def get_kb_version(self, entry_id: str, version: int) -> dict:
         return await self._json('GET', f'/v1/kb/entries/{entry_id}/versions/{version}')
-
-    async def search_knowledge(self, query: str, scope: dict, *, limit: int = 3) -> dict:
-        return await self._json(
-            'POST',
-            '/v1/kb/search',
-            body={'query': query, 'scope': scope, 'limit': limit},
-        )
 
     async def get_run(self, run_id: str) -> dict:
         return await self._json('GET', f'/v1/runs/{run_id}')

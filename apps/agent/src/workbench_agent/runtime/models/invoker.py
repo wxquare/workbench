@@ -22,6 +22,23 @@ from workbench_agent.observability import current_telemetry, span_or_none
 logger = logging.getLogger('workbench.models')
 
 
+def _provider_error_code(exc):
+    status = getattr(exc, 'status_code', None)
+    if status in (401, 403):
+        return 'MODEL_CREDENTIAL_UNAVAILABLE'
+    if status == 404:
+        return 'MODEL_INVALID'
+    if status == 429:
+        return 'MODEL_RATE_LIMITED'
+    if status and status >= 500:
+        return 'MODEL_PROVIDER_UNAVAILABLE'
+    if isinstance(exc, TimeoutError) or type(exc).__name__ == 'APITimeoutError':
+        return 'MODEL_TIMEOUT'
+    if type(exc).__name__ == 'APIConnectionError':
+        return 'MODEL_PROVIDER_UNAVAILABLE'
+    return 'MODEL_PROVIDER_ERROR'
+
+
 def retry_after_seconds(value, now=None):
     import math
     from datetime import datetime, timezone
@@ -275,21 +292,7 @@ class ModelInvoker:
                     raise
                 except Exception as exc:
                     await self._settle(guard, ident, ActualUsage())
-                    status = getattr(exc, 'status_code', None)
-                    if status in (401, 403):
-                        code = 'MODEL_CREDENTIAL_UNAVAILABLE'
-                    elif status == 404:
-                        code = 'MODEL_INVALID'
-                    elif status == 429:
-                        code = 'MODEL_RATE_LIMITED'
-                    elif status and status >= 500:
-                        code = 'MODEL_PROVIDER_UNAVAILABLE'
-                    elif isinstance(exc, TimeoutError) or type(exc).__name__ == 'APITimeoutError':
-                        code = 'MODEL_TIMEOUT'
-                    elif type(exc).__name__ == 'APIConnectionError':
-                        code = 'MODEL_PROVIDER_UNAVAILABLE'
-                    else:
-                        code = 'MODEL_PROVIDER_ERROR'
+                    code = _provider_error_code(exc)
                     logger.warning(
                         'model failed',
                         extra={

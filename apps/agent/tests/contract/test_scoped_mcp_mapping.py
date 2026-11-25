@@ -219,7 +219,6 @@ async def test_server_status_is_not_misreported_as_success(platform, provider_st
 async def test_actual_workbench_mcp_server_end_to_end(
     platform, monkeypatch, name, args, record_key, record
 ):
-    from pathlib import Path
     import httpx
     from support.mcp import mcp_server_source
 
@@ -524,23 +523,6 @@ def test_http_mcp_requires_explicit_numeric_loopback_opt_in():
     ):
         with pytest.raises(ValueError):
             MCPConnectionBinding(**dict(args, endpoint=bad), allow_loopback_http=True)
-
-
-@pytest.mark.parametrize(
-    'name,required,forbidden',
-    [
-        ('knowledge_search', 'query', 'scope'),
-        ('metrics_query', 'template_id', 'parameters'),
-        ('logs_search', 'keyword', 'start'),
-        ('trace_get', 'trace_id', 'context'),
-    ],
-)
-def test_expert_model_sees_only_safe_local_mcp_inputs(name, required, forbidden):
-    from workbench_agent.runtime.experts.diagnosis import model_tool_schema
-
-    schema = model_tool_schema(name, {})
-    assert required in schema['properties'] and forbidden not in schema['properties']
-    assert schema['additionalProperties'] is False
 
 
 async def test_retryable_provider_timeout_consumes_each_attempt(platform):

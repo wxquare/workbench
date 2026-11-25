@@ -262,7 +262,6 @@ async def test_final_checkpoint_recovery_supersedes_interrupted_draft_once(platf
     from workbench_agent.jobs.reconciler import Reconciler
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     from workbench_agent.persistence.events import RunEventStore
-    from uuid import uuid4
 
     run = await platform.create_run()
     owned = await claim(platform)

@@ -24,6 +24,8 @@ jobs:
       UV_PYTHON_PREFERENCE: only-managed
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -31,6 +33,15 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check src tests
       - run: uv run ruff format --check src tests
+      - name: Check Python complexity against baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            uv run python ../../scripts/check_python_complexity.py --base "$BASE_SHA"
+          else
+            uv run python ../../scripts/check_python_complexity.py
+          fi
       - name: Verify SQLite version
         run: uv run python -c "import sqlite3; print('SQLite', sqlite3.sqlite_version); assert sqlite3.sqlite_version_info >= (3, 51, 3), sqlite3.sqlite_version"
       - name: Verify browser harness prerequisites

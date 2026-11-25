@@ -105,9 +105,3 @@ class ModelProfileVersion(FrozenModel):
     @property
     def secret_ref(self):
         return self.configuration.secret_ref
-
-
-def resolve_role_model(
-    role: str, default: VersionRef, role_bindings: dict[str, VersionRef]
-) -> VersionRef:
-    return role_bindings.get(role, default)

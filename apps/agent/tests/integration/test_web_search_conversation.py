@@ -6,7 +6,6 @@ import pytest
 from workbench_agent.domain.tools import ToolBinding
 from workbench_agent.tools.mcp import ConnectionPolicy, TrustedConnection
 from workbench_agent.tools.web_search_result import validate_web_search_response
-from workbench_agent.tools.policy import PolicyToolExecutor
 
 
 def binding():

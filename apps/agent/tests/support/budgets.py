@@ -1,7 +1,25 @@
 """Real caller-UoW budget operations shared by integration scenarios."""
 
+import pytest
+
 from workbench_agent.domain.usage import ReservationRequest, Reservation
-from workbench_agent.runtime.budgets.service import BudgetService
+
+
+async def assert_dispatch_transaction_rolls_back(platform, monkeypatch, budget, dispatch):
+    """Inject faults after each budget write and verify no reservation survives."""
+    before = await platform.count_rows('usage_reservations')
+    for method in ('reserve', 'mark_sent'):
+        original = getattr(budget, method)
+
+        async def fail_after_write(*args, **kwargs):
+            await original(*args, **kwargs)
+            raise RuntimeError('injected transaction failure')
+
+        with monkeypatch.context() as patch:
+            patch.setattr(budget, method, fail_after_write)
+            with pytest.raises(RuntimeError, match='injected transaction failure'):
+                await dispatch(method)
+        assert await platform.count_rows('usage_reservations') == before
 
 
 async def reserve_usage(

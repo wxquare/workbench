@@ -3,7 +3,7 @@
 import pytest
 from workbench_agent.application.errors import DomainError
 from workbench_agent.persistence.errors import StaleExecution
-from support.jobs import claim, expire_lease, row
+from support.jobs import claim, expire_lease
 from workbench_agent.persistence import schema as s
 
 
@@ -263,7 +263,6 @@ async def test_reservation_payload_conflict_and_unsent_receipt_rejected(platform
 
 @pytest.mark.asyncio
 async def test_dispatch_confirmation_cannot_create_or_repeat_permission(platform):
-    from workbench_agent.domain.usage import ActualUsage
 
     await platform.create_run()
     guard = (await claim(platform)).guard
