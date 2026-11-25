@@ -1,1 +1,1 @@
-"""DoD administration commands."""
+"""Workbench administration commands."""

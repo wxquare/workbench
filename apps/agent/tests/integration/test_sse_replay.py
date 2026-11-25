@@ -94,16 +94,16 @@ async def test_cursor_retention_validation_and_revoke(platform, client):
 @pytest.mark.asyncio
 async def test_heartbeat_no_sequence_and_db_poll_survives_lost_hint(platform):
     import asyncio
-    from workbench_agent.runtime.streaming import stream_events
+    from workbench_agent.runtime.streaming import EventResponse
 
     p = EventPlatform(platform)
     run, guard, outcome = await p.finalizable_run()
     before = await p.read_events(run.run_id)
     last = before[-1].seq
-    stream = stream_events(p.events, platform.auth, run.run_id, last, heartbeat_seconds=0.03)
-    assert await asyncio.wait_for(anext(stream), 0.5) == b': heartbeat\n\n'
-    assert (await p.read_events(run.run_id))[-1].seq == last
-    await stream.aclose()
+    response = EventResponse(p.events, platform.auth, run.run_id, last, heartbeat_seconds=0.03)
+    async with StreamingClient(response, '/', token(platform)) as stream:
+        assert (await stream.chunk())['body'] == b': heartbeat\n\n'
+        assert (await p.read_events(run.run_id))[-1].seq == last
     async with StreamingClient(
         create_app(platform.settings, backend=platform.backend),
         f'/v1/runs/{run.run_id}/events?after_seq={last}',

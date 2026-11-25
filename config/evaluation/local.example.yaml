@@ -24,4 +24,8 @@ pricing:
   pricing_version: null
   input_micros_per_million: null
   output_micros_per_million: null
+  # With an amount budget, set an explicit per-call ceiling for every tool.
+  # Use 0 only when all allowed tools are confirmed free.
+  # tool_call_micros: 0
+  # scope: all_run_models_and_tools
 experiment_budget_micros: null

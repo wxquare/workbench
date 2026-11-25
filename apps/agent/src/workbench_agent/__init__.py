@@ -1,1 +1,1 @@
-"""DoD Agent application package."""
+"""Workbench Agent application package."""

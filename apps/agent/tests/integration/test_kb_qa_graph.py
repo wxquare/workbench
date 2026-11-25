@@ -3,7 +3,7 @@ import json
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from contract.test_dod_mcp_mapping import GRANT, SCOPE
+from contract.test_scoped_mcp_mapping import GRANT, SCOPE
 from workbench_agent.domain.profiles import ProfileDraft
 from workbench_agent.domain.tools import ToolBinding
 from workbench_agent.jobs.worker import Worker

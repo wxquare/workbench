@@ -71,7 +71,7 @@ async def publish_profile(platform, graph_id, *, tools=(), repositories=()):
 
 async def test_live_qa_uses_local_mcp_synthetic_source(platform, monkeypatch):
     import httpx
-    from contract.test_dod_mcp_mapping import GRANT, SCOPE
+    from contract.test_scoped_mcp_mapping import GRANT, SCOPE
     from workbench_agent.tools.mcp import (
         MCPAdapter,
         ConnectionPolicy,

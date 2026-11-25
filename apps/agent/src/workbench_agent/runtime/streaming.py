@@ -1,36 +1,6 @@
 """SSE transport: short read batches, bounded buffering, durable cursor replay."""
 
 import time
-from workbench_agent.application.errors import DomainError
-from workbench_agent.persistence.errors import StorageError
-
-
-async def stream_events(events, auth, run_id, after_seq, *, heartbeat_seconds=15):
-    last_sent = time.monotonic()
-    while True:
-        try:
-            batch = await events.read_batch(auth, run_id, after_seq, limit=100)
-            # Pull-driven backpressure: no producer/prefetch while network awaits.
-            # At most 100 durable records live in this generator at any time.
-            for event in batch:
-                if hasattr(events, 'project_event'):
-                    event = await events.project_event(auth, event)
-                yield event.to_sse()
-                after_seq = event.seq
-                last_sent = time.monotonic()
-            del batch
-            if await events.is_terminal_and_drained(auth, run_id, after_seq):
-                return
-            if time.monotonic() - last_sent >= heartbeat_seconds:
-                yield b': heartbeat\n\n'
-                last_sent = time.monotonic()
-            await events.wait_for_hint_or_timeout(
-                run_id, min(1, max(0, heartbeat_seconds - (time.monotonic() - last_sent)))
-            )
-        except (DomainError, StorageError):
-            # Headers already sent; revocation/retention/storage failure closes stream.
-            # Reconnect performs preflight again and receives its HTTP status.
-            return
 
 
 import asyncio

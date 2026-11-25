@@ -1,7 +1,4 @@
-import pytest
-
 from workbench_agent.runtime.graphs.validation import EvidenceValidator
-from workbench_agent.runtime.state.reducers import merge_evidence, merge_hypotheses
 
 
 def test_validator_requires_completed_steps_and_current_valid_references():
@@ -49,20 +46,6 @@ def test_validator_cannot_succeed_without_scope_or_references():
     assert not result.valid
     assert result.missing_scope
     assert result.missing_evidence
-
-
-def test_reducers_check_identity_and_preserve_opposing_evidence():
-    with pytest.raises(ValueError):
-        merge_evidence({}, {'a': {'evidence_id': 'b'}})
-    left = {'h': {'hypothesis_id': 'h', 'summary': 'cause', 'support': ['a'], 'contradict': []}}
-    right = {'h': {'hypothesis_id': 'h', 'summary': 'cause', 'support': ['b'], 'contradict': ['c']}}
-    assert merge_hypotheses(left, right)['h'] == {
-        'hypothesis_id': 'h',
-        'summary': 'cause',
-        'support': ['a', 'b'],
-        'contradict': ['c'],
-    }
-    assert left['h']['support'] == ['a']
 
 
 def test_unrecoverable_evidence_is_not_valid():

@@ -35,9 +35,9 @@ CONTEXT = {'run_id': 'run-1', 'invocation_id': 'invoke-1', 'query_scope_ref': 's
     ],
 )
 def test_local_mapping_binds_scope_and_context(name, args):
-    from workbench_agent.tools.mcp import build_dod_arguments
+    from workbench_agent.tools.mcp import build_scoped_arguments
 
-    result = build_dod_arguments(name, args, SCOPE, GRANT, CONTEXT)
+    result = build_scoped_arguments(name, args, SCOPE, GRANT, CONTEXT)
     assert result['scope'] == {
         'team': 'ExampleTeam',
         'environment': 'test',
@@ -64,14 +64,14 @@ def test_local_mapping_binds_scope_and_context(name, args):
     ],
 )
 def test_local_mapping_rejects_model_scope_or_identity(override):
-    from workbench_agent.tools.mcp import build_dod_arguments
+    from workbench_agent.tools.mcp import build_scoped_arguments
 
     with pytest.raises(PermissionError):
-        build_dod_arguments('logs_search', override, SCOPE, GRANT, CONTEXT)
+        build_scoped_arguments('logs_search', override, SCOPE, GRANT, CONTEXT)
 
 
 def test_local_mapping_rejects_unauthorized_scope_and_long_window():
-    from workbench_agent.tools.mcp import build_dod_arguments
+    from workbench_agent.tools.mcp import build_scoped_arguments
 
     for scope in (
         dict(SCOPE, region='sg'),
@@ -79,7 +79,7 @@ def test_local_mapping_rejects_unauthorized_scope_and_long_window():
         dict(SCOPE, service=''),
     ):
         with pytest.raises(PermissionError):
-            build_dod_arguments('logs_search', {}, scope, GRANT, CONTEXT)
+            build_scoped_arguments('logs_search', {}, scope, GRANT, CONTEXT)
 
 
 @pytest.mark.parametrize(
@@ -619,7 +619,7 @@ async def test_retryable_provider_timeout_consumes_each_attempt(platform):
 
 
 def test_local_mapping_accepts_fixed_utc_scope_with_equivalent_grant_window():
-    from workbench_agent.tools.mcp import build_dod_arguments
+    from workbench_agent.tools.mcp import build_scoped_arguments
 
     scope = dict(SCOPE, start_at='2026-11-13T00:00:00+00:00', end_at='2026-11-13T00:10:00+00:00')
     for name, args in [
@@ -627,20 +627,20 @@ def test_local_mapping_accepts_fixed_utc_scope_with_equivalent_grant_window():
         ('logs_search', {}),
         ('trace_get', {'trace_id': 'abc'}),
     ]:
-        result = build_dod_arguments(name, args, scope, GRANT, CONTEXT)
+        result = build_scoped_arguments(name, args, scope, GRANT, CONTEXT)
         assert result['start'] == '2026-11-13T08:00:00+08:00'
         assert result['end'] == '2026-11-13T08:10:00+08:00'
 
 
 def test_utc_scope_cannot_expand_grant_or_use_ambiguous_naive_iso():
-    from workbench_agent.tools.mcp import build_dod_arguments
+    from workbench_agent.tools.mcp import build_scoped_arguments
 
     for scope in (
         dict(SCOPE, start_at='2026-11-12T15:59:59+00:00', end_at='2026-11-12T16:10:00+00:00'),
         dict(SCOPE, start_at='2026-11-13T00:00:00', end_at='2026-11-13T00:10:00'),
     ):
         with pytest.raises(PermissionError):
-            build_dod_arguments('logs_search', {}, scope, GRANT, CONTEXT)
+            build_scoped_arguments('logs_search', {}, scope, GRANT, CONTEXT)
 
 
 def test_legacy_mapping_hash_is_frozen_for_existing_bindings():

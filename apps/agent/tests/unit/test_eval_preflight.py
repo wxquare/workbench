@@ -2,6 +2,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from workbench_agent.evaluation.preflight import preflight
+from workbench_agent.evaluation.contracts import validate_experiment_config
+import pytest
 
 
 def config(tmp_path):
@@ -53,6 +55,21 @@ def settings(*, graph='knowledge.citation_review'):
         ),
         worker=SimpleNamespace(supported_graph_ids=[graph]),
     )
+
+
+def test_amount_budget_requires_explicit_model_and_tool_cost_ceiling(tmp_path):
+    value = config(tmp_path)
+    value['experiment_budget_micros'] = 10
+    value['pricing'] = {
+        'currency': 'USD',
+        'pricing_version': 'v1',
+        'input_micros_per_million': 1,
+        'output_micros_per_million': 2,
+    }
+    with pytest.raises(ValueError, match='cost ceilings'):
+        validate_experiment_config(value)
+    value['pricing'].update(tool_call_micros=0, scope='all_run_models_and_tools')
+    assert validate_experiment_config(value) is value
 
 
 def test_port_collision_and_missing_secrets_fail_closed(tmp_path):

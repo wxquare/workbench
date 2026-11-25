@@ -94,7 +94,7 @@ async def test_summary_is_budgeted_and_extractive(platform, tmp_path, scenario, 
         TrustedConnection,
         StreamableSessionFactory,
     )
-    from contract.test_dod_mcp_mapping import GRANT, SCOPE
+    from contract.test_scoped_mcp_mapping import GRANT, SCOPE
     from support.mcp import mcp_server_source
 
     server_src = mcp_server_source()

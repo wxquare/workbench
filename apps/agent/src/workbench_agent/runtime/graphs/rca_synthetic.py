@@ -57,7 +57,7 @@ def _alert(state, execution):
 async def _baseline_plan(execution, state, executor):
     """Map frozen tools against current trusted policy before any dispatch."""
     from workbench_agent.application.idempotency import digest
-    from workbench_agent.tools.mcp import MCPAdapter, dod_business_identity
+    from workbench_agent.tools.mcp import MCPAdapter, scope_identity
     from workbench_agent.tools.policy import load_published_binding
 
     if not isinstance(executor.transport, MCPAdapter):
@@ -123,14 +123,14 @@ async def _baseline_plan(execution, state, executor):
                     'query_scope_ref': state['scope_ref'],
                 },
             )
-            identity = dod_business_identity(mapped)
+            identity = scope_identity(mapped)
         except PermissionError:
             continue
         result[key] = (ref, arguments[key], identity)
     return result, scope_values, False
 
 
-def build_rca(saver):
+def build_rca_synthetic(saver):
     async def prepare(state, config, runtime: Runtime):
         await runtime.context.check_operation()
         if state['run_id'] != config['configurable']['thread_id']:

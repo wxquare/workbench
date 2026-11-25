@@ -6,7 +6,7 @@ from uuid import uuid4
 import httpx
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from contract.test_dod_mcp_mapping import GRANT, SCOPE
+from contract.test_scoped_mcp_mapping import GRANT, SCOPE
 from support.mcp import mcp_server_source
 from support.runs import make_run_payload
 from workbench_agent.api.app import create_app

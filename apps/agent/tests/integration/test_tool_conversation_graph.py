@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
-from contract.test_dod_mcp_mapping import GRANT, SCOPE
+from contract.test_scoped_mcp_mapping import GRANT, SCOPE
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from support.runs import make_run_payload
 
@@ -117,9 +117,9 @@ async def setup_tool_run(platform, client, monkeypatch, model):
             query_scope,
             correlation=None,
         ):
-            from workbench_agent.tools.mcp import build_dod_arguments
+            from workbench_agent.tools.mcp import build_scoped_arguments
 
-            bound = build_dod_arguments(
+            bound = build_scoped_arguments(
                 tool_name,
                 args,
                 query_scope,

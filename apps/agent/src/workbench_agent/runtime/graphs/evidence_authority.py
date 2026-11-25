@@ -5,7 +5,7 @@ import json
 from workbench_agent.application.idempotency import digest
 from workbench_agent.domain.profiles import VersionRef
 from workbench_agent.tools.policy import load_published_binding
-from workbench_agent.tools.mcp import ConnectionPolicy, DOD_MCP_TOOLS
+from workbench_agent.tools.mcp import ConnectionPolicy, SCOPED_READ_TOOLS
 from workbench_agent.tools.scope_mapping import validate_mapping
 
 
@@ -208,7 +208,7 @@ async def authorized_sources(
             ) or (
                 context.graph_id == GraphId.SOP_CONDITIONAL
                 and receipt.get('kind') == 'mcp-evidence-v1'
-                and binding.tool_name in DOD_MCP_TOOLS
+                and binding.tool_name in SCOPED_READ_TOOLS
             ):
                 # Pre-binding v10 receipts did not prove the business team.
                 # Keep them unavailable instead of guessing their provenance.
@@ -239,13 +239,13 @@ async def authorized_sources(
                 }:
                     continue
                 if not truncated:
-                    from workbench_agent.tools.mcp import dod_business_identity
+                    from workbench_agent.tools.mcp import scope_identity
 
                     upstream_refs = value.get('evidence_refs')
                     if not isinstance(upstream_refs, list) or not upstream_refs:
                         continue
                     if any(
-                        list(dod_business_identity({'scope': item['scope'], **item['time_window']}))
+                        list(scope_identity({'scope': item['scope'], **item['time_window']}))
                         != business
                         for item in upstream_refs
                     ):

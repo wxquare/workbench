@@ -5,7 +5,6 @@ import json
 from workbench_agent.application.authorization import Authorization
 from workbench_agent.application.action_authority import require_action_authority
 from workbench_agent.application.errors import DomainError
-from workbench_agent.application.review_eligibility import review_eligibility
 from workbench_agent.domain.context import RunContext
 from workbench_agent.domain.identity import AuthContext
 
@@ -118,13 +117,3 @@ async def action_review_facts(backend, uow, auth, action, outbox):
         }
     except Exception:
         return _denied()
-
-
-def run_eligibility(run, interrupt, checkpoint, facts):
-    return review_eligibility(
-        'run_approval'
-        if interrupt and json.loads(interrupt['schema']).get('kind') == 'approval'
-        else 'run_input',
-        facts=facts,
-        now_ms=facts.get('now_ms', 0),
-    )

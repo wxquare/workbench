@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 status: stable
-verified_commit: bffb189
+verified_commit: 99df50d
 ---
 
 # 开发指南
@@ -678,7 +678,7 @@ SSE 事件（`api/events.py`、`runtime/streaming.py`）与前端消费见 §8.4
 | `PortableCheckpointSaver` | 把 LangGraph 检查点映射到统一存储 | 每次受保护写入绑定当前 `InvocationGuard` |
 | `ResultProjector` | 将检查点进度变成业务状态 | 只能投影已持久化的图事实 |
 
-源码：`runtime/graphs/registry.py`、`runtime/checkpoints/portable.py`、`runtime/results.py`。图定义分别位于 `runtime/graphs/{qa_v16,rca_synthetic,rca_proposal,rca_batch,sop_graph,direct_qa,conversation_qa,knowledge_qa}.py`。图的输入/输出结构和 reducer 位于 `runtime/state/`。
+源码：`runtime/graphs/registry.py`、`runtime/checkpoints/portable.py`、`runtime/results.py`。图定义分别位于 `runtime/graphs/{knowledge_excerpt,rca_synthetic,rca_proposal,rca_batch,sop_graph,direct_qa,conversation_qa,knowledge_qa}.py`。图的输入/输出结构和 reducer 位于 `runtime/state/`。
 
 ### 4.2 图状态与业务状态的两次落盘
 
@@ -786,7 +786,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 
 ## 9 测试与验证
 
-详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。取消与 resume 使用幂等键，同一请求在网络失败后复用，内容、Run revision 或等待版本变化后换新；恢复请求的 `expected_revision` 使用 Run 的 revision，而非 waiting 的 revision；未知等待 schema 禁止提交。路由或身份变化会中止旧连接。
+详情页以 `GET /v1/runs/{id}` 为状态权威；SSE 事件触发防抖刷新，delta 仅作为未验证草稿展示，失效后退回三秒轮询。目前 `DeltaMerger` 没有生产调用方，模型调用使用 `ainvoke`，因此已有草稿消费链尚未接入生产模型输出；能力状态见 [01 产品 FR-10.5](01-product.md#42-细项状态与依据)。取消与 resume 使用幂等键，同一请求在网络失败后复用，内容、Run revision 或等待版本变化后换新；恢复请求的 `expected_revision` 使用 Run 的 revision，而非 waiting 的 revision；未知等待 schema 禁止提交。路由或身份变化会中止旧连接。
 
 ### 9.1 测试层次与命令
 
@@ -811,7 +811,7 @@ MCP 入口把工具参数映射为 `application/queries.py::QueryRequest`，用�
 | 存储 Schema | `contract/storage/test_agent_boundary.py`、迁移与备份故障测试 |
 | 模型或预算 | `test_model_binding.py`、`test_usage.py`、专家预算集成测试 |
 | Skill 版本 | `test_shared_skills.py`、`test_skill_versions.py`、包校验测试 |
-| MCP Schema/映射 | `contract/test_dod_mcp_mapping.py`、`test_declarative_mcp_mapping.py`、`test_scope_mapping_policy.py`、`test_configured_mapped_tool.py` 与 MCP Server acceptance 测试 |
+| MCP Schema/映射 | `contract/test_scoped_mcp_mapping.py`、`test_declarative_mcp_mapping.py`、`test_scope_mapping_policy.py`、`test_configured_mapped_tool.py` 与 MCP Server acceptance 测试 |
 | Web 事件 | `tests/run-stream.test.ts`、`tests/sse.test.ts`、页面测试 |
 
 测试通过只能证明相应范围内的合同；合成数据源与本地模拟投递不等同于真实监控、SeaTalk、Jira 或 DoD 的业务验收。
@@ -994,6 +994,8 @@ SQLite 知识检索在存在内容关键词时，会从查询分词中移除与�
 工程合成集可检验控制流、范围和报告格式，但 `quality_status=unavailable`、`release_passed=false`；业务评测需真实来源、人工标签和冻结版本。先预检本机模型/知识服务、导入受控种子，按来源 ID 核对 1–3 题冒烟，再采集完整 dev 集、人工逐题评审并合并报告。业务报告缺评审、重复输出、数据集 hash 不匹配或合成来源时不得通过。工具对话另用至少六类真实/故障注入案例核对正常、空、不可用、截断、越权和调用上限，故障注入要明确标记。留出集至少 12 题，由独立保管人持有，不进入调优配置。
 
 每次实验记录 dataset kind/hash、split、repeats、graph_id、Profile/模型/工具指纹、来源快照、预算、评分版本与代码提交。报告同时展示首次成功、`pass@k`、`pass^k`、失败原因、p95 和成功成本；未知费用不能写零，多币种不直接相加。仅有规则评分时可报告回归状态，业务质量仍为 unavailable。CI 只接收白名单字段的脱敏 `eval-summary-v1` 制品，校验来源 workflow、仓库、分支、完成状态、时间、新鲜度、checksum 和路径；不能上传问题正文、答案、证据、完整 URL 查询、评审正文或密钥。
+
+知识与工具对话 runner 在创建用例 Run 前重放实验 journal、预留单用例金额上界，并在终态后重新读取用量。可确认拒绝时释放预留，已发送但回执未知或费用待确认时保留；预算不足、超出预留或无法核对旧预留时停止新派发。恢复已知 Run 仍可继续读取和对账。
 
 实施现况：E1 工具 runner、Q1–Q3、R1–R4 离线代码及 W1/W2 合同已在 `008f681` 合入；Q1 完整构造后 16 KiB 上界、Q3 首次成功聚合、E1 成本结算/未知保留、E2 离线报告合并器、E3 夜间采集/CI 仍需继续。R2 的 10,000 行容量用例已经通过，但目标部署查询计划尚未记录；R4 五类真实浏览器旅程未验收。真实 A4、真实工具和三日调度验证依赖目标环境及人工资料，不能用此处历史测试数字代替。
 

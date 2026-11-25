@@ -31,7 +31,7 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(
     )
     from workbench_agent.runtime.graphs.registry import foundation_worker_registry
     from workbench_agent.jobs.worker import Worker
-    from contract.test_dod_mcp_mapping import GRANT
+    from contract.test_scoped_mcp_mapping import GRANT
     from support.mcp import mcp_server_source
 
     source = mcp_server_source()
@@ -310,6 +310,10 @@ async def test_sop_rejects_mixed_business_teams_before_dispatch(
                 'legacy_receipt': 1,
             }[scenario]
         )
+        if scenario == 'same':
+            assert calls[0].tool == 'metrics_query'
+            assert calls[1].tool == 'logs_search'
+            assert calls[1].parameters['keyword'] == 'dod-tool-result-v1'
     finally:
         await life.__aexit__(None, None, None)
         await runtime.close()

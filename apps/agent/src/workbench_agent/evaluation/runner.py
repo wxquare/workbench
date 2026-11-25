@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 
 from workbench_agent.evaluation.collector import collect_case, read_rows, write_rows
+from workbench_agent.evaluation.budget import ExperimentBudget
+from workbench_agent.evaluation.contracts import make_run_key
 from workbench_agent.evaluation.dataset import (
     dataset_fingerprint,
     select_cases,
@@ -87,10 +89,11 @@ def _manifest(
     repeats: int,
     git_commit: str | None,
     comparability: str,
+    dataset_hash: str | None = None,
 ) -> dict:
     return {
         'experiment_id': experiment_id,
-        'dataset_hash': dataset_fingerprint(dataset),
+        'dataset_hash': dataset_hash if dataset_hash is not None else dataset_fingerprint(dataset),
         'config_hash': _config_hash(config),
         'seed_hash': _seed_hash(config),
         'git_commit': git_commit,
@@ -123,11 +126,13 @@ async def run_experiment(
         raise ValueError('unsupported split')
     if type(repeats) is not int or not 1 <= repeats <= 5:
         raise ValueError('repeats must be between 1 and 5')
-    if manifest['dataset_hash'] != dataset_fingerprint(dataset):
+    purpose = manifest.get('purpose', 'business')
+    if manifest['dataset_hash'] != dataset_fingerprint(dataset, purpose=purpose):
         raise ValueError('dataset does not match manifest')
     if manifest['config_hash'] != _config_hash(config):
         raise ValueError('config does not match manifest')
-    cases = select_cases(dataset, split)
+    cases = select_cases(dataset, split, purpose=purpose)
+    budget = ExperimentBudget(config, journal)
     output_path = Path(journal.path).with_name('results.jsonl')
     existing = {(row['case_id'], row['repeat']): row for row in read_rows(output_path)}
     for event in journal.events():
@@ -153,6 +158,10 @@ async def run_experiment(
     for case in cases:
         for repeat in range(repeats):
             recovered = existing.get((case['id'], repeat))
+            if recovered:
+                budget.observe(recovered)
+                if await budget.refresh_terminal(recovered, api):
+                    write_rows(output_path, list(existing.values()))
             if (
                 recovered
                 and recovered.get('run_id')
@@ -166,6 +175,21 @@ async def run_experiment(
                     'expired',
                 }
             ):
+                continue
+            if recovered and recovered.get('transport_status') == 'rejected':
+                continue
+            key = make_run_key(
+                manifest['experiment_id'],
+                manifest['dataset_hash'],
+                manifest['config_hash'],
+                case['id'],
+                repeat,
+            )
+            already_sent = recovered and (
+                recovered.get('run_id')
+                or recovered.get('transport_status') in ('submitted', 'needs_reconciliation')
+            )
+            if not already_sent and not budget.reserve(case['id'], repeat, key):
                 continue
             deadline = time.monotonic() + deadline_seconds
             row = await collect_case(
@@ -182,6 +206,7 @@ async def run_experiment(
                 deadline=deadline,
             )
             existing[(case['id'], repeat)] = row
+            budget.observe(row)
             write_rows(output_path, list(existing.values()))
     rows = list(existing.values())
     return {
@@ -189,24 +214,4 @@ async def run_experiment(
         and len(rows) == len(cases) * repeats,
         'rows': rows,
         'expected': len(cases) * repeats,
-    }
-
-
-def recover_case(events: list[dict], case_id: str, repeat: int) -> dict:
-    rows = {}
-    for event in events:
-        row = event.get('row')
-        if (
-            isinstance(row, dict)
-            and event.get('case_id', row.get('case_id')) == case_id
-            and event.get('repeat', row.get('repeat')) == repeat
-        ):
-            rows[(case_id, repeat)] = row
-    if (case_id, repeat) in rows:
-        return rows[(case_id, repeat)]
-    return {
-        'case_id': case_id,
-        'repeat': repeat,
-        'transport_status': 'not_started',
-        'run_id': None,
     }

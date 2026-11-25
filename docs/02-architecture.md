@@ -1,7 +1,7 @@
 ---
 title: 架构设计
 status: stable
-verified_commit: 44b29b3
+verified_commit: 99df50d
 ---
 
 # 架构设计
@@ -144,6 +144,12 @@ workbench/
 - Agent 与 MCP Server 不共享进程，也不共享 Python 包。
 - Web 只通过 HTTP 访问 Agent API，由 Agent 的 `/app/` 路由托管构建产物。
 - 运行时不得依赖工作目录猜测资源路径；`WORKBENCH_ASSET_ROOT`、`WORKBENCH_FRONTEND_DIST_ROOT` 等环境变量控制资源位置。
+
+### 2.3.1 历史命名与兼容契约
+
+内部代码可以使用描述当前用途的 Workbench 和 scoped 命名，但历史存储、检查点、线路协议和部署资源中的 DoD 名称仍是兼容契约。存储及检查点标识包括 `dod-storage-agent-v1`、`dod-checkpoint-v1`、`dod-json`、`dod-state-v16` 等状态版本和 `dod_storage_metadata`；MCP 结果与授权包括 `dod-tool-result-v1`、`dod-mcp-v1`。合成告警签名头及域分隔符、Runner 容器和卷前缀、模型与对象存储默认配置、备份前缀及遥测服务名也可能被现有部署识别。真实 DoD 值班业务名称继续表示其业务含义。
+
+这些值不能随内部变量改名而更改；如需演进，应先识别所有读取方和历史数据，通过显式迁移与兼容读取验证，不改写历史迁移。
 
 ### 2.4 两层编排：LangGraph 与 LangChain
 
@@ -694,6 +700,7 @@ Skill 加载只接受当前有效 Worker `Execution` 对应的冻结 RunContext�
 ### 11.3 预算策略
 
 - 专家、重试、汇总和评估共用父 Run 预算。
+- 离线评测另以实验 journal 固定每个用例的金额预留和结算；仅在确认未受理或终态费用已明确时释放或结算。未知发送和费用保留预留；恢复旧实验若无法重建已发送用例的预留，则禁止新派发。金额预算依赖受信配置覆盖所有模型及工具的费用上界，不能将配置估计当作供应商实际账单。
 - summary_tokens 接受时固定。
 - 待确认用量继续保守占额；未知费用保持 pending。
 - 迟到回执走 usage_quarantine，不修改已结算记录。

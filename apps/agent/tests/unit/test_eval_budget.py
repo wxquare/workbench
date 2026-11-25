@@ -15,7 +15,33 @@ def test_unknown_price_is_rejected_and_upper_bound_is_conservative():
             'output_micros_per_million': 2,
         },
     )
-    assert value == 1
+    assert value == 4
+
+
+def test_run_token_limit_is_a_total_not_a_per_call_limit():
+    value = case_upper_bound(
+        {'model_calls': 2, 'tokens': 1_000_000},
+        {
+            'currency': 'USD',
+            'pricing_version': 'v1',
+            'input_micros_per_million': 1,
+            'output_micros_per_million': 2,
+        },
+    )
+    assert value == 5  # Up to four input/output charges may round independently.
+
+
+def test_upper_bound_covers_per_call_currency_rounding():
+    value = case_upper_bound(
+        {'model_calls': 2, 'tokens': 2},
+        {
+            'currency': 'USD',
+            'pricing_version': 'v1',
+            'input_micros_per_million': 1,
+            'output_micros_per_million': 1,
+        },
+    )
+    assert value == 2
 
 
 def test_pending_usage_keeps_reservation_and_stops_before_overrun():

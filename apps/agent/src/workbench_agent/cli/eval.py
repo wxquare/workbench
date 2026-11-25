@@ -11,6 +11,7 @@ from workbench_agent.evaluation.dataset import select_cases
 from workbench_agent.evaluation.journal import atomic_json
 from workbench_agent.evaluation.metrics import summarize_repeats
 from workbench_agent.evaluation.metrics import apply_dataset_boundary
+from workbench_agent.evaluation.holdout import authorize_split, append_holdout_access
 from workbench_agent.evaluation.runner import (
     ExperimentDirectory,
     _config_hash,
@@ -39,6 +40,32 @@ def _tool_dataset(path):
     except (OSError, ValueError, UnicodeError):
         return False
     return isinstance(value, dict) and value.get('schema_version') == 'tool-conversation-eval-v1'
+
+
+def _authorize_holdout(args, split, dataset_hash, experiment_id, *, record=True):
+    if split != 'holdout':
+        return
+    permit_path = getattr(args, 'holdout_permit', None)
+    ledger = getattr(args, 'holdout_ledger', None)
+    permit = json.loads(Path(permit_path).read_text(encoding='utf-8')) if permit_path else None
+    release_id = getattr(args, 'release_id', None)
+    authorize_split(split, purpose=args.purpose, permit=permit, release_id=release_id)
+    if not ledger:
+        raise PermissionError('holdout access ledger required')
+    if not record:
+        return
+    from datetime import datetime, timezone
+
+    append_holdout_access(
+        ledger,
+        {
+            'release_id': release_id,
+            'dataset_hash': dataset_hash,
+            'experiment_id': experiment_id,
+            'purpose': 'release',
+            'accessed_at': datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
 
 def main(args) -> int:
@@ -71,6 +98,8 @@ def main(args) -> int:
             else getattr(args, 'purpose', None) or 'business'
         )
         manifest_path = Path(args.resume) / 'manifest.json' if args.resume else None
+        if manifest_path is not None and not manifest_path.exists():
+            manifest_path = manifest_path.with_name('experiment.json')
         resumed_tool = (
             manifest_path is not None
             and manifest_path.exists()
@@ -79,12 +108,25 @@ def main(args) -> int:
             .get('schema_version')
             == 'tool-conversation-eval-v1'
         )
+        if manifest_path is not None and manifest_path.exists():
+            resumed_tool = resumed_tool or (
+                json.loads(manifest_path.read_text()).get('scoring_version')
+                == 'tool-conversation-rules-v1'
+            )
         tool = _tool_dataset(args.dataset) or resumed_tool
         if bool(args.resume) == bool(args.dataset and args.config and args.experiment_id):
             raise ValueError('provide either new inputs or --resume')
         if args.resume:
             experiment = Path(args.resume)
-            manifest = json.loads((experiment / 'experiment.json').read_text())
+            source = experiment / 'manifest.json'
+            if not source.exists():
+                source = experiment / 'experiment.json'
+            manifest = json.loads(source.read_text())
+            frozen_purpose = manifest.get('purpose', 'business')
+            requested_purpose = getattr(args, 'purpose', None)
+            if requested_purpose is not None and purpose != frozen_purpose:
+                raise ValueError('resume purpose does not match manifest')
+            purpose = frozen_purpose
             config_path = args.config or manifest.get('config_path')
             dataset = (
                 load_tool_dataset(args.dataset or manifest.get('dataset_path'))
@@ -93,6 +135,8 @@ def main(args) -> int:
             )
             config = json.loads(Path(config_path).read_text()) if config_path else None
             split, repeats = manifest['split'], manifest['repeats']
+            if args.split is not None and args.split != split:
+                raise ValueError('resume split does not match manifest')
             if config is None:
                 raise ValueError('resume requires the original config path')
         else:
@@ -106,7 +150,12 @@ def main(args) -> int:
             experiment = (
                 Path(config.get('output_root', 'artifacts/evaluation')) / args.experiment_id
             )
-            split, repeats = args.split, args.repeats
+            split, repeats = args.split or 'dev', args.repeats
+            fingerprint = (
+                tool_dataset_fingerprint(dataset)
+                if tool
+                else dataset_fingerprint(dataset, purpose=purpose)
+            )
             manifest = _manifest(
                 dataset,
                 config,
@@ -115,6 +164,7 @@ def main(args) -> int:
                 repeats=repeats,
                 git_commit=None,
                 comparability='available',
+                dataset_hash=fingerprint,
             )
             manifest['dataset_path'] = str(dataset_path)
             manifest['config_path'] = str(config_path)
@@ -122,9 +172,24 @@ def main(args) -> int:
             manifest['dataset_kind'] = dataset['dataset_kind']
             if tool:
                 manifest['scoring_version'] = 'tool-conversation-rules-v1'
-        if args.split == 'holdout' and args.purpose != 'release':
-            raise ValueError('holdout may only run for an explicit release')
+        if tool and split != 'dev':
+            raise ValueError('tool conversation experiments only allow dev split')
+        actual_hash = (
+            tool_dataset_fingerprint(dataset)
+            if tool
+            else dataset_fingerprint(dataset, purpose=purpose)
+        )
+        if actual_hash != manifest['dataset_hash']:
+            raise ValueError('dataset does not match manifest')
+        _authorize_holdout(
+            args, split, manifest['dataset_hash'], manifest['experiment_id'], record=False
+        )
         with ExperimentDirectory(experiment):
+            if not args.resume and any(
+                path.name != '.runner.lock' for path in experiment.iterdir()
+            ):
+                raise ValueError('experiment directory already contains data')
+            _authorize_holdout(args, split, manifest['dataset_hash'], manifest['experiment_id'])
             if not (experiment / 'manifest.json').exists():
                 atomic_json(experiment / 'manifest.json', manifest)
             journal = Journal(experiment / 'journal.jsonl')
@@ -169,11 +234,29 @@ def main(args) -> int:
         atomic_json(experiment / 'run-summary.json', report)
         return 0 if result['complete'] else 1
     if args.eval_command == 'score':
-        purpose = getattr(args, 'purpose', 'business')
+        purpose = 'business' if args.purpose == 'release' else args.purpose
         experiment = Path(args.experiment)
         tool = _tool_dataset(args.dataset)
         dataset = (
             load_tool_dataset(args.dataset) if tool else load_dataset(args.dataset, purpose=purpose)
+        )
+        if tool and args.split != 'dev':
+            raise ValueError('tool conversation experiments only allow dev split')
+        dataset_hash = (
+            tool_dataset_fingerprint(dataset)
+            if tool
+            else dataset_fingerprint(dataset, purpose=purpose)
+        )
+        source = experiment / 'manifest.json'
+        if not source.exists():
+            source = experiment / 'experiment.json'
+        manifest = json.loads(source.read_text(encoding='utf-8'))
+        if not isinstance(manifest, dict) or manifest.get('split') != args.split:
+            raise ValueError('score split does not match manifest')
+        if manifest.get('dataset_hash') != dataset_hash:
+            raise ValueError('score dataset does not match manifest')
+        _authorize_holdout(
+            args, manifest['split'], dataset_hash, manifest.get('experiment_id', experiment.name)
         )
         results = [
             json.loads(line)

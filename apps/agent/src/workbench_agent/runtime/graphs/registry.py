@@ -143,12 +143,16 @@ def foundation_worker_registry(backend, *, supported_graph_ids=None):
     provider = InvocationGuard()
     saver = PortableCheckpointSaver(backend, provider, CheckpointCodec())
     graphs = GraphRegistry()
-    from workbench_agent.runtime.graphs.qa_v16 import (
-        build_dod as build_qa_v16,
-        STATE_SCHEMA_VERSION as QA_V16_STATE_VERSION,
+    from workbench_agent.runtime.graphs.knowledge_excerpt import (
+        build_knowledge_excerpt as build_knowledge_excerpt,
+        STATE_SCHEMA_VERSION as KNOWLEDGE_EXCERPT_STATE_VERSION,
     )
 
-    graphs.register(GraphId.KNOWLEDGE_SCOPED_EXCERPT, QA_V16_STATE_VERSION, build_qa_v16(saver))
+    graphs.register(
+        GraphId.KNOWLEDGE_SCOPED_EXCERPT,
+        KNOWLEDGE_EXCERPT_STATE_VERSION,
+        build_knowledge_excerpt(saver),
+    )
     from workbench_agent.runtime.graphs.direct_qa import (
         build_direct_qa,
         STATE_SCHEMA_VERSION as DIRECT_QA_STATE_VERSION,
@@ -181,13 +185,13 @@ def foundation_worker_registry(backend, *, supported_graph_ids=None):
     graphs.register(
         GraphId.CONVERSATION_TOOL_USE, TOOL_USE_STATE_VERSION, build_tool_conversation(saver)
     )
-    from workbench_agent.runtime.graphs.rca_synthetic import build_rca as build_synthetic
+    from workbench_agent.runtime.graphs.rca_synthetic import build_rca_synthetic as build_synthetic
 
     graphs.register(GraphId.RCA_SYNTHETIC, 'dod-state-v13', build_synthetic(saver))
-    from workbench_agent.runtime.graphs.rca_proposal import build_rca as build_proposal
+    from workbench_agent.runtime.graphs.rca_proposal import build_rca_proposal as build_proposal
 
     graphs.register(GraphId.RCA_PROPOSAL, 'dod-state-v14', build_proposal(saver))
-    from workbench_agent.runtime.graphs.rca_batch import build_rca as build_batch
+    from workbench_agent.runtime.graphs.rca_batch import build_rca_batch_proposal as build_batch
 
     graphs.register(GraphId.RCA_BATCH_PROPOSAL, 'dod-state-v15', build_batch(saver))
     from workbench_agent.runtime.graphs.sop_graph import (

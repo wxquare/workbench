@@ -90,6 +90,32 @@ async def test_reservation_rollback_unsent_release_and_sent_no_refund(platform):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('failure_after_mark_sent', [False, True])
+async def test_atomic_reserve_and_send_mark_roll_back_before_dispatch(
+    platform, failure_after_mark_sent
+):
+    from workbench_agent.runtime.budgets.service import BudgetService
+    from workbench_agent.domain.usage import ReservationRequest
+
+    run = await platform.create_run()
+    guard = (await claim(platform)).guard
+    budgets = BudgetService(platform.backend)
+    request = ReservationRequest(
+        invocation_id='atomic-attempt', kind='expert', model_attempts=1, token_upper_bound=100
+    )
+    with pytest.raises(RuntimeError, match='transaction failed'):
+        async with platform.backend.create_uow().begin_write() as uow:
+            await budgets.reserve(guard, request, uow=uow)
+            if failure_after_mark_sent:
+                await budgets.mark_sent(guard, request.invocation_id, uow=uow)
+            raise RuntimeError('transaction failed')
+    snapshot = await budgets.snapshot(platform.auth, run.run_id)
+    assert snapshot.reserved_model_attempts == 0
+    assert snapshot.model_attempts == 0
+    assert await platform.count_rows('usage_reservations') == 0
+
+
+@pytest.mark.asyncio
 async def test_stale_settlement_is_quarantined_then_current_owner_reconciles(platform):
     from workbench_agent.runtime.budgets.service import BudgetService
     from workbench_agent.domain.usage import ReservationRequest, ActualUsage

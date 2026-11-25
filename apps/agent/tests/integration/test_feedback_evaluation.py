@@ -63,7 +63,7 @@ async def test_feedback_list_is_agent_scoped_and_uses_pagination(client, platfor
 @pytest.mark.asyncio
 async def test_negative_knowledge_feedback_creates_one_gap_atomically(client, platform):
     from integration.test_public_knowledge_qa import publish_qa
-    from contract.test_dod_mcp_mapping import SCOPE
+    from contract.test_scoped_mcp_mapping import SCOPE
     from workbench_agent.persistence import schema
     from sqlalchemy import select, update
 
@@ -141,7 +141,7 @@ async def test_positive_feedback_cannot_include_reason(client, platform):
 @pytest.mark.asyncio
 async def test_gap_insert_failure_rolls_back_feedback_and_receipt(client, platform, monkeypatch):
     from integration.test_public_knowledge_qa import publish_qa
-    from contract.test_dod_mcp_mapping import SCOPE
+    from contract.test_scoped_mcp_mapping import SCOPE
     from workbench_agent.persistence import schema
     from sqlalchemy import update
 

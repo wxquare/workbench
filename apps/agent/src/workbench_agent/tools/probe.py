@@ -80,7 +80,7 @@ class ToolProbe:
                 'parameter_template_id',
                 'instantiated_parameters',
             }
-            from workbench_agent.tools.mcp import BUSINESS_TOOLS, DOD_MCP_TOOLS
+            from workbench_agent.tools.mcp import BUSINESS_TOOLS, SCOPED_READ_TOOLS
 
             query_scope = None
             try:
@@ -95,7 +95,9 @@ class ToolProbe:
                         'query_scope_ref': 'probe-' + claim.job_id,
                     }
                     options = (
-                        {'correlation': correlation} if binding.tool_name in DOD_MCP_TOOLS else {}
+                        {'correlation': correlation}
+                        if binding.tool_name in SCOPED_READ_TOOLS
+                        else {}
                     )
                     checked = self.adapter.prepare(
                         binding.server,

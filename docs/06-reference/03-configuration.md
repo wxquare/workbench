@@ -1,7 +1,7 @@
 ---
 title: 配置参考
 status: stable
-verified_commit: a3396e9
+verified_commit: 99df50d
 ---
 
 # 配置参考（Agent 与 MCP Server）
@@ -504,3 +504,9 @@ mcp-server check --config config/local/mcp-server.yaml   # 命令名以 pyprojec
 发布 Agent profile 时可配置 `knowledge_max_age_seconds`，必须是正整数，单位为秒，受理时冻结到 Run；缺省无阈值，不能判定来源新鲜。部署需要显式将 `knowledge.citation_review` 加入 `worker.supported_graph_ids` 并设置知识工具及完整范围授权。真实上游的协议、范围隔离、允许域名与阈值必须先经确认，不应直接启用示例来源。
 
 实验图须显式加入 `worker.supported_graph_ids` 并重启 Worker 与 Scheduler。三张 RCA 图仅通过合成告警入口运行，当前适配器供本地集成测试；真实知识源启用前须完成来源和范围隔离验收。
+
+## 离线评测金额预算
+
+`config/evaluation/local.example.yaml` 的 `experiment_budget_micros` 默认为 null，不启用实验金额限制。启用时 `pricing.currency` 为三位大写币种，`pricing_version` 标识受信价格版本，`input_micros_per_million` 和 `output_micros_per_million` 是覆盖所有冻结模型的最高每百万 token 费用上界。额外要求非负整数 `tool_call_micros` 覆盖所有允许工具的单次最高费用，以及 `scope: all_run_models_and_tools` 声明确认覆盖全部模型和工具。0 代表经确认免费，不能用于费用未知的情况。
+
+每用例上界为 Run 总 token 上限乘较高模型单价，加上按每次输入和输出独立向上取整的余量，再加工具次数上限乘工具单次费用上界。实验 journal 保存预留、结算及停止事件；价格配置按实验固定，未知费用和未知受理继续占用预留。这是基于受信上界的派发控制，不替代真实供应商费用结算；供应商的最低收费或额外费用也须包含在受信上界内。

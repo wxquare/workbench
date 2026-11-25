@@ -18,10 +18,6 @@ _IDENTITY_KEYS = frozenset(
 )
 
 
-def effective_permissions(user, team, agent, skill, expert):
-    return set(user) & set(team) & set(agent) & set(skill) & set(expert)
-
-
 def arguments_within_scope(args, scope):
     return bool(scope) and all(
         isinstance(value, str) and bool(value.strip()) and args.get(key) == value
@@ -54,10 +50,10 @@ from workbench_agent.runtime.budgets.service import BudgetService
 from workbench_agent.tools.mcp import (
     SchemaChanged,
     ScopeMappingChanged,
-    dod_business_identity,
+    scope_identity,
     MCPAdapter,
     BUSINESS_TOOLS,
-    DOD_MCP_TOOLS,
+    SCOPED_READ_TOOLS,
 )
 from workbench_agent.tools.permissions import DeploymentToolPermissions
 
@@ -294,7 +290,7 @@ class PolicyToolExecutor:
                             argument_mapping=binding.argument_mapping,
                             full_schema=binding.input_schema,
                         )
-                    elif binding.tool_name in DOD_MCP_TOOLS:
+                    elif binding.tool_name in SCOPED_READ_TOOLS:
                         prepare_options['correlation'] = {
                             'run_id': guard.run_id,
                             'invocation_id': invocation_id,
@@ -312,7 +308,7 @@ class PolicyToolExecutor:
                         status='denied', error=ToolError(code='TOOL_SCOPE_UNAVAILABLE')
                     )
                 if expected_business_scope is not None:
-                    if binding.tool_name not in DOD_MCP_TOOLS or dod_business_identity(
+                    if binding.tool_name not in SCOPED_READ_TOOLS or scope_identity(
                         bound_args, values
                     ) != tuple(expected_business_scope):
                         raise DomainError('BASELINE_SCOPE_CONFLICT', 409)
@@ -448,7 +444,8 @@ class PolicyToolExecutor:
                 }
                 options = (
                     {'correlation': correlation}
-                    if binding.tool_name in DOD_MCP_TOOLS or binding.argument_mapping is not None
+                    if binding.tool_name in SCOPED_READ_TOOLS
+                    or binding.argument_mapping is not None
                     else {}
                 )
                 if binding.argument_mapping is not None:
@@ -576,7 +573,7 @@ class PolicyToolExecutor:
                             error=ToolError(code=web_result['error']),
                         )
                     response = {key: value for key, value in web_result.items() if key != 'grant'}
-                elif binding.argument_mapping is None and binding.tool_name in DOD_MCP_TOOLS:
+                elif binding.argument_mapping is None and binding.tool_name in SCOPED_READ_TOOLS:
                     result = getattr(response, 'structuredContent', None)
                     if (
                         not isinstance(result, dict)
@@ -723,7 +720,7 @@ class PolicyToolExecutor:
 
                 payload, truncated = safe_evidence_payload(response, binding.max_output_bytes)
                 if (
-                    binding.tool_name in DOD_MCP_TOOLS
+                    binding.tool_name in SCOPED_READ_TOOLS
                     and isinstance(response, dict)
                     and response.get('meta', {}).get('truncated') is True
                 ):

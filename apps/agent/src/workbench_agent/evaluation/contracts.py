@@ -192,13 +192,32 @@ def validate_experiment_config(value: dict) -> dict:
     if any(type(item) is not int or item <= 0 for item in limits.values()):
         raise ValueError('run limits must be positive integers')
     pricing = value['pricing']
-    if not isinstance(pricing, dict) or set(pricing) != {
+    required_pricing = {
         'currency',
         'pricing_version',
         'input_micros_per_million',
         'output_micros_per_million',
-    }:
+    }
+    ceiling_fields = {'tool_call_micros', 'scope'}
+    if (
+        not isinstance(pricing, dict)
+        or not required_pricing <= set(pricing)
+        or set(pricing) - required_pricing - ceiling_fields
+    ):
         raise ValueError('invalid pricing fields')
+    if budget is not None and (
+        pricing.get('scope') != 'all_run_models_and_tools'
+        or type(pricing.get('tool_call_micros')) is not int
+        or pricing['tool_call_micros'] < 0
+        or any(pricing.get(field) is None for field in required_pricing)
+    ):
+        raise ValueError('complete model and tool cost ceilings are required')
+    if ceiling_fields & set(pricing) and (
+        pricing.get('scope') != 'all_run_models_and_tools'
+        or type(pricing.get('tool_call_micros')) is not int
+        or pricing['tool_call_micros'] < 0
+    ):
+        raise ValueError('invalid tool cost ceiling')
     known = [
         pricing['currency'],
         pricing['pricing_version'],
@@ -208,8 +227,14 @@ def validate_experiment_config(value: dict) -> dict:
     if any(item is not None for item in known):
         if (
             not all(item is not None and item != '' for item in known)
-            or len(str(pricing['currency'])) != 3
-            or str(pricing['currency']) != str(pricing['currency']).upper()
+            or not isinstance(pricing['currency'], str)
+            or len(pricing['currency']) != 3
+            or not pricing['currency'].isascii()
+            or not pricing['currency'].isalpha()
+            or pricing['currency'] != pricing['currency'].upper()
+            or not isinstance(pricing['pricing_version'], str)
+            or not pricing['pricing_version'].strip()
+            or pricing['pricing_version'] != pricing['pricing_version'].strip()
             or any(
                 type(pricing[field]) is not int or pricing[field] < 0
                 for field in (

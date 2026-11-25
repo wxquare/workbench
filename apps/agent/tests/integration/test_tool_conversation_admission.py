@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from contract.test_dod_mcp_mapping import SCOPE
+from contract.test_scoped_mcp_mapping import SCOPE
 from support.runs import make_run_payload
 from workbench_agent.domain.profiles import ProfileDraft
 from workbench_agent.domain.tools import ToolBinding

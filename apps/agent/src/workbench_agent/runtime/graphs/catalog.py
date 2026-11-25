@@ -395,18 +395,18 @@ def graph_structure(graph_id):
         raise KeyError(graph_id)
     from workbench_agent.runtime.graphs.direct_qa import build_direct_qa
     from workbench_agent.runtime.graphs.conversation_qa import build_conversation_qa
-    from workbench_agent.runtime.graphs.qa_v16 import build_dod
+    from workbench_agent.runtime.graphs.knowledge_excerpt import build_knowledge_excerpt
     from workbench_agent.runtime.graphs.sop_graph import build_sop
-    from workbench_agent.runtime.graphs.rca_synthetic import build_rca as build_synthetic
-    from workbench_agent.runtime.graphs.rca_proposal import build_rca as build_proposal
-    from workbench_agent.runtime.graphs.rca_batch import build_rca as build_batch
+    from workbench_agent.runtime.graphs.rca_synthetic import build_rca_synthetic as build_synthetic
+    from workbench_agent.runtime.graphs.rca_proposal import build_rca_proposal as build_proposal
+    from workbench_agent.runtime.graphs.rca_batch import build_rca_batch_proposal as build_batch
     from workbench_agent.runtime.graphs.knowledge_qa import build_knowledge_qa
     from workbench_agent.runtime.graphs.tool_conversation import build_tool_conversation
 
     builders = {
         GraphId.CONVERSATION_SINGLE_TURN: build_direct_qa,
         GraphId.CONVERSATION_MULTI_TURN: build_conversation_qa,
-        GraphId.KNOWLEDGE_SCOPED_EXCERPT: build_dod,
+        GraphId.KNOWLEDGE_SCOPED_EXCERPT: build_knowledge_excerpt,
         GraphId.SOP_CONDITIONAL: lambda saver: build_sop(saver, version=GraphId.SOP_CONDITIONAL),
         GraphId.RCA_SYNTHETIC: build_synthetic,
         GraphId.RCA_PROPOSAL: build_proposal,

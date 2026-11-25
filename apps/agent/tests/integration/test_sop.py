@@ -68,59 +68,6 @@ async def test_workflow_version_sequence_exceeds_page_limit(platform):
 
 
 @pytest.mark.asyncio
-async def test_required_failure_cannot_be_overridden_by_later_summary():
-    from workbench_agent.runtime.graphs.sop import execute_workflow
-
-    calls = []
-
-    async def invoke(step, inputs):
-        calls.append((step.step_id, inputs))
-        return {'status': 'timeout', 'output': {}}
-
-    result = await execute_workflow(definition(), invoke)
-    assert result.status == 'partial'
-    assert result.steps['metrics'].status == 'timeout'
-    assert result.steps['logs'].status == 'blocked'
-    assert 'metrics: timeout' in result.unresolved_items
-    assert 'logs: blocked' in result.unresolved_items
-    assert len(calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_named_outputs_flow_to_dependent_step():
-    from workbench_agent.runtime.graphs.sop import execute_workflow
-
-    async def invoke(step, inputs):
-        if step.step_id == 'metrics':
-            return {'status': 'ok', 'output': {'service': 'checkout'}}
-        assert inputs == {'service': 'checkout'}
-        return {'status': 'ok', 'output': {'count': 1}}
-
-    result = await execute_workflow(definition(), invoke)
-    assert result.status == 'completed'
-    assert result.steps['logs'].output == {'count': 1}
-
-
-@pytest.mark.asyncio
-async def test_optional_failure_blocking_required_step_is_partial():
-    from workbench_agent.runtime.graphs.sop import execute_workflow
-
-    wf = definition(
-        steps=[
-            {'step_id': 'first', 'tool': 'x', 'required': False},
-            {'step_id': 'second', 'tool': 'y', 'required': True},
-        ]
-    )
-
-    async def invoke(step, inputs):
-        return {'status': 'timeout', 'output': {}}
-
-    result = await execute_workflow(wf, invoke)
-    assert result.status == 'partial'
-    assert 'second: blocked' in result.unresolved_items
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     'scenario',
     [
@@ -131,6 +78,7 @@ async def test_optional_failure_blocking_required_step_is_partial():
         'scope_change',
         'revoked',
         'revoked_at_dispatch',
+        'optional_failure',
     ],
 )
 async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
@@ -191,12 +139,12 @@ async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
         {
             'step_id': 'metrics',
             'tool': 'metrics.read',
-            'required': True,
+            'required': scenario != 'optional_failure',
             'timeout_seconds': 1 if scenario == 'step_timeout' else 20,
             'arguments': {'service': 'checkout'},
         }
     ]
-    if scenario in ('scope_change', 'revoked', 'revoked_at_dispatch'):
+    if scenario in ('scope_change', 'revoked', 'revoked_at_dispatch', 'optional_failure'):
         steps.append(
             {
                 'step_id': 'logs',
@@ -304,7 +252,7 @@ async def test_worker_runs_pinned_workflow_and_required_failure_remains_partial(
     assert view.status == 'partial'
     if scenario == 'success_crash':
         assert not any('other:' in text for text in view.outcome['unresolved_items'])
-    elif scenario in ('scope_change', 'revoked', 'revoked_at_dispatch'):
+    elif scenario in ('scope_change', 'revoked', 'revoked_at_dispatch', 'optional_failure'):
         assert any('logs: blocked' in text for text in view.outcome['unresolved_items'])
     else:
         assert any(

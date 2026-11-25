@@ -1,7 +1,7 @@
 ---
 title: 产品说明
 status: stable
-verified_commit: 44b29b3
+verified_commit: 99df50d
 ---
 
 # 产品说明
@@ -165,10 +165,10 @@ flowchart TB
 | FR-04 | 告警诊断 | 规范化告警、时间锚点、历史事件、监控/日志/Trace、代码分析 | 🟡 | 范围确认与基线采集在合成数据上验证；无真实数据与根因结论 |
 | FR-05 | Agent 协作 | 主图 + Knowledge/Diagnosis/Code 专家，按需调用，共用预算 | 🟡 | 专家与多专家流程存在；无并行与完整证据合成 |
 | FR-06 | Skill 和知识 | 导入、校验、版本、发布/回滚、按需加载、知识检索 | 🟡 | Skill 共享库可用；内置知识库支持条目、版本和检索；Skill 仅加载 SKILL.md 文本 |
-| FR-07 | Agent 执行 | 仓库快照、文件读取、脚本执行、受控环境、产物 | 🟡 | 快照读取与 Runner 代码存在；真实容器/对象存储未验收 |
+| FR-07 | Agent 执行 | 仓库快照、文件读取、脚本执行、受控环境、产物 | 🟡 | 快照读取与 Runner 代码存在；Runner 可按配置装配但尚无图调用，真实容器/对象存储未验收 |
 | FR-08 | 工具 | MCP 发现/调用、Schema 校验、身份注入、台账 | 🟡 | MCP 客户端与治理已实现；授权连接、只读工具管理及部署钉住的声明式参数映射已接入，企业真实上游与第二业务工具未验收 |
 | FR-09 | SOP 和巡检 | 版本化工作流、变量、分支、有限并行、定时与手动触发 | 🟡 | 顺序执行与条件分支、定时调度已实现；无并行，无页面 |
-| FR-10 | 任务生命周期 | 排队、异步、SSE、取消、等待输入/确认、恢复、持久化 | 🟡 | 网页已实现实时流、取消、补充输入与 Run 级审批；待手工验收 |
+| FR-10 | 任务生命周期 | 排队、异步、SSE、取消、等待输入/确认、恢复、持久化 | 🟡 | 网页已接入 SSE 事件、取消、补充输入与 Run 级审批；待手工验收 |
 | FR-11 | 业务结果 | Duty Event、DoD 跟进、Jira、SeaTalk 通知 | 🟡 | 事件、审批、动作台账与本地模拟回执可用；真实发送器默认关闭 |
 | FR-12 | 运营与评估 | Run 详情、用量、反馈、知识缺口、基础统计 | 🟡 | 任务详情、反馈入口、知识缺口、用量费用和基础统计页已接入；真实业务基线与正式生产验收仍待完成 |
 | FR-13 | 可替换存储 | SQLite 首版，MySQL/PostgreSQL 后续 | 🟡 | SQLite 已运行并有恢复测试；MySQL/PostgreSQL 未实现 |
@@ -189,7 +189,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-02.5 | 仓库、工具绑定 | 🟡 | api/repositories、api/tool_bindings；仓库绑定尚无完整页面，工具绑定已有管理页 |
 | FR-03.1 | 直接 LLM 单轮问答 | ✅ | runtime/graphs/direct_qa（conversation.single_turn）；DeepSeek 实测验收 |
 | FR-03.2 | 多轮追问 | ✅ | runtime/graphs/conversation_qa（conversation.multi_turn）；web 的 Threads 页 |
-| FR-03.3 | 知识问答与引用 | 🟡 | runtime/graphs/qa_v16 保持 partial；knowledge_qa（knowledge.citation_review）校验引用并独立检查支持性；真实模型及业务质量待验收 |
+| FR-03.3 | 知识问答与引用 | 🟡 | knowledge.scoped_excerpt 保持 partial；knowledge.citation_review 校验引用并独立检查支持性；真实模型及业务质量待验收 |
 | FR-04.1 | 告警范围确认与补充区域 | 🟡 | runtime/graphs/rca_synthetic；网页支持登记的区域输入 schema，待真实业务验收 |
 | FR-04.2 | 指标/日志/Trace 基线采集 | 🟡 | runtime/graphs/rca_synthetic；仅合成上游 |
 | FR-04.3 | 根因结论 | ⏳ | M3 验收：无完整根因；合成结果恒为 partial |
@@ -200,7 +200,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-06.3 | Skill 包导入（Git/产物） | 🟡 | api/skills、skill_management/importer；无页面 |
 | FR-06.4 | 按需加载脚本与参考资料 | ⏳ | skill_management/loader 与 conversation_qa 仅加载 SKILL.md |
 | FR-07.1 | 固定仓库快照与文件读取 | 🟡 | execution/snapshots、api/repositories；真实仓库未验收 |
-| FR-07.2 | Runner 脚本执行与产物 | 🟡 | runner/service；M2 验收：真实容器与对象存储未验收 |
+| FR-07.2 | Runner 脚本执行与产物 | 🟡 | Runner 可按配置装配，尚无图调用；真实容器与对象存储未验收 |
 | FR-08.1 | MCP 客户端与工具治理 | ✅ | tools/mcp、tools/policy、tools/permissions、tools/scope_mapping；实验工具对话配置协议支持 legacy knowledge_search 与部署批准的其他只读工具 |
 | FR-08.2 | MCP Server 只读工具 | 🟡 | apps/mcp-server（四类只读工具）；仅合成上游 |
 | FR-08.3 | 工具连接管理页 | ✅ | admin 查看授权连接、后台发现、保存/探测/发布只读绑定 |
@@ -211,7 +211,7 @@ FR 级别没有"整体已实现"的项：完整 DoD P0 要求至少接通一套�
 | FR-10.2 | 事件流与断点回放（后端） | ✅ | api/events；M1 验收 AT-15 |
 | FR-10.3 | 取消、补充输入、确认（网页） | 🟡 | 详情页支持取消、区域输入及 Run 级审批；待手工验收 |
 | FR-10.4 | 崩溃与租约接管恢复 | ✅ | jobs/leases、jobs/reconciler；M1 验收 AT-12–14 |
-| FR-10.5 | 网页流式展示 | 🟡 | 详情页接入 SSE 和草稿展示；连接失败时回退轮询，待真实浏览器验收 |
+| FR-10.5 | 网页流式展示 | 🟡 | 详情页支持 SSE 事件和草稿展示，连接失败时回退轮询；生产模型调用尚未接入草稿事件，待真实浏览器验收 |
 | FR-11.1 | Incident 记录与关联 | 🟡 | incidents/service、api/incidents；`/incidents` 已重定向人工审核中心，尚未提供 incident 详情页 |
 | FR-11.2 | 动作审批与不确定结果对账 | 🟡 | api/actions、delivery/reconcile；仅本地模拟器回执 |
 | FR-11.3 | 真实 Jira / SeaTalk / DoD 交付 | ⏳ | M3 验收：真实发送器默认关闭；connectors/dod 仅骨架 |
@@ -821,7 +821,7 @@ flowchart LR
 
 | 编号 | 原文声称 | 源码/验收记录实际 | 影响 |
 | --- | --- | --- | --- |
-| C-01 | 第 20.2 节：任务详情"活动任务轮询刷新"，并列出会话页"关联 Run" | 详情页使用 SSE，连接失败后按 3 秒轮询；会话页 2 秒轮询 | 详情页支持草稿流，需完成真实浏览器验收 |
+| C-01 | 第 20.2 节：任务详情"活动任务轮询刷新"，并列出会话页"关联 Run" | 详情页使用 SSE，连接失败后按 3 秒轮询；会话页 2 秒轮询 | 草稿展示有消费端，生产模型调用尚未接入草稿事件；需完成真实浏览器验收 |
 | C-02 | 第 1.2 节 FR-10 含"取消、等待输入/确认、恢复" | 网页已实现取消、输入和 Run 级审批，待手工验收 | FR-10 标为部分 |
 | C-03 | 第 1.2 节 FR-01 含 SeaTalk 与告警 Webhook | 仅有 Synthetic 绑定类型的合成入口，且 M3 验收写明真实 SeaTalk 协议未接入 | 标为部分，勿视作已接入 |
 | C-04 | 旧 QA 校验"成功收集后仍为 partial" | knowledge.scoped_excerpt 仍为 partial；knowledge.citation_review 增加引用与支持检查 | 真实模型和业务质量待验收 |
@@ -883,5 +883,9 @@ flowchart LR
 ### 演进顺序与未完成条件
 
 原分析的 W00–W12 是规划编号，不表示实现状态。W00 内置知识库、部分 W03 自动评测框架、W04 引用问答、反馈/统计、工具管理、审核投影和工具对话已有离线实现；真实 A4 基线、真实 `knowledge_search`、`web_search`、人工浏览器审核旅程及目标部署验收仍未完成。优先把真实来源、人工评审、引用核对、反馈和工具对话串成一个限定业务域的闭环，再用同预算、同数据集实验改善上下文与工具策略。
+
+评测 CLI 对 holdout 的运行、恢复与评分要求发布用途、匹配的本地许可及访问账本；这依赖受信操作者保护许可与账本文件，并非独立的企业审批服务。真实 holdout 执行和业务发布验收尚未完成。
+
+离线评测启用金额预算时，会在创建下一条 Run 前按已知费用与未决预留核算；缺少模型或工具费用上界、价格信息不完整或历史发送状态无法核对时，不继续创建新 Run。上界由受信配置提供，真实供应商价格、工具收费及业务预算仍需目标环境核验。
 
 后续能力按证据引入：主动巡检需要确定性只读检查、时区/启停/历史、去重与冷却及负责人确认；多专家并行需与单专家在同预算下对照并有集中验证；跨会话记忆需来源、人工晋升、过期和回滚；自动优化需独立留出集、受限编辑范围与停止条件。不要用菜单完整度、模型数量或向量库规模代替任务质量。

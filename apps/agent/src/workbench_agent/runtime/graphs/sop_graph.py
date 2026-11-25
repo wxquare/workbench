@@ -54,7 +54,7 @@ async def _load(execution):
 
 async def _business_authority(execution, wf, scope, executor, uow):
     """Resolve every tool through current trusted grants before any dispatch."""
-    from workbench_agent.tools.mcp import MCPAdapter, DOD_MCP_TOOLS, dod_business_identity
+    from workbench_agent.tools.mcp import MCPAdapter, SCOPED_READ_TOOLS, scope_identity
     from workbench_agent.tools.policy import load_published_binding
 
     if not isinstance(executor.transport, MCPAdapter):
@@ -81,7 +81,7 @@ async def _business_authority(execution, wf, scope, executor, uow):
             binding = load_published_binding(data) if digest(data) == ref.content_hash else None
             if binding and binding.alias == item.tool and binding.read_only:
                 matches.append(binding)
-        if len(matches) != 1 or matches[0].tool_name not in DOD_MCP_TOOLS:
+        if len(matches) != 1 or matches[0].tool_name not in SCOPED_READ_TOOLS:
             raise PermissionError('SOP business scope cannot be verified')
         binding = matches[0]
         args = dict(item.arguments)
@@ -100,7 +100,7 @@ async def _business_authority(execution, wf, scope, executor, uow):
                 'query_scope_ref': scope['scope_id'],
             },
         )
-        identities.add(dod_business_identity(mapped, values))
+        identities.add(scope_identity(mapped, values))
     if len(identities) != 1:
         raise PermissionError('SOP business scope mismatch')
     return next(iter(identities))

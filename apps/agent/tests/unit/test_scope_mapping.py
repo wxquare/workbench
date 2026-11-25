@@ -348,8 +348,8 @@ def test_schema_hash_rejects_schema_drift_under_same_mapping():
 def test_legacy_and_declarative_mappings_have_identical_semantics(
     name, args, expected_start, expected_end
 ):
-    from contract.test_dod_mcp_mapping import CONTEXT, GRANT, SCOPE
-    from workbench_agent.tools.mcp import build_dod_arguments
+    from contract.test_scoped_mcp_mapping import CONTEXT, GRANT, SCOPE
+    from workbench_agent.tools.mcp import build_scoped_arguments
     from workbench_agent.tools.scope_mapping import bind_arguments
 
     value = ArgumentMapping(
@@ -400,7 +400,7 @@ def test_legacy_and_declarative_mappings_have_identical_semantics(
         },
         context=CONTEXT,
     )
-    legacy = build_dod_arguments(name, args, SCOPE, GRANT, CONTEXT)
+    legacy = build_scoped_arguments(name, args, SCOPE, GRANT, CONTEXT)
 
     assert declared['scope'] == legacy['scope']
     assert declared['context'] == legacy['context']

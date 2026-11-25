@@ -30,15 +30,6 @@ def executor_for(
     )
 
 
-def test_permission_is_strict_intersection():
-    from workbench_agent.tools.policy import effective_permissions
-
-    assert effective_permissions(
-        {'read', 'write'}, {'read', 'write'}, {'read'}, {'read', 'write'}, {'read'}
-    ) == {'read'}
-    assert effective_permissions({'read'}, {'read'}, {'read'}, set(), {'read'}) == set()
-
-
 def test_tool_input_schema_rejects_identity_override():
     from workbench_agent.domain.tools import ToolBinding
     from workbench_agent.tools.policy import validate_arguments

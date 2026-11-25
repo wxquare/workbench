@@ -41,7 +41,7 @@ async def test_qa_worker_uses_knowledge_authority_and_preserves_evidence(
         TrustedConnection,
         StreamableSessionFactory,
     )
-    from contract.test_dod_mcp_mapping import GRANT
+    from contract.test_scoped_mcp_mapping import GRANT
     from support.mcp import mcp_server_source
 
     server_src = mcp_server_source()
@@ -157,7 +157,7 @@ async def test_qa_worker_uses_knowledge_authority_and_preserves_evidence(
     await platform.profiles.publish(
         platform.auth, platform.agent_id, draft['revision'], key='knowledge-profile'
     )
-    from contract.test_dod_mcp_mapping import SCOPE
+    from contract.test_scoped_mcp_mapping import SCOPE
     from workbench_agent.application.runs import RunService
     from workbench_agent.domain.runs import CreateRun
 

@@ -6,7 +6,8 @@ from support.jobs import claim, row
 from workbench_agent.persistence import schema as s
 from workbench_agent.jobs.worker import Execution
 from test_storage_boundary_migration import upgrade_historical, seed_historical_run, snapshot
-from workbench_agent.application.review_facts import run_eligibility, run_review_facts
+from workbench_agent.application.review_facts import run_review_facts
+from workbench_agent.application.review_eligibility import review_eligibility
 
 
 @pytest.mark.asyncio
@@ -47,7 +48,7 @@ async def test_review_projection_matches_live_run_input_eligibility(platform):
         facts = await run_review_facts(
             platform.backend, uow, platform.auth, run_row, interrupt, checkpoint
         )
-    result = run_eligibility(run_row, interrupt, checkpoint, facts)
+    result = review_eligibility('run_input', facts=facts, now_ms=facts['now_ms'])
     assert result.visible is True and result.expired is False
     assert result.operations == ('resume',)
 
@@ -71,7 +72,7 @@ async def test_review_projection_hides_input_from_a_different_operator(platform)
         interrupt = await platform.backend.runs.waiting(uow, platform.auth.team_id, run.run_id)
         checkpoint = await platform.backend.runs.checkpoint(uow, platform.auth.team_id, run.run_id)
         facts = await run_review_facts(platform.backend, uow, other, run_row, interrupt, checkpoint)
-    result = run_eligibility(run_row, interrupt, checkpoint, facts)
+    result = review_eligibility('run_input', facts=facts, now_ms=facts['now_ms'])
     assert result.visible is False and result.operations == ()
 
 

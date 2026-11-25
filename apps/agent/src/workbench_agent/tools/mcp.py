@@ -90,7 +90,7 @@ def permits_knowledge_evidence(
                 continue
             for grant in rule.scope_grants:
                 try:
-                    mapped = build_dod_arguments(
+                    mapped = build_scoped_arguments(
                         'knowledge_search', {}, query_scope, grant, correlation
                     )
                 except PermissionError:
@@ -196,11 +196,11 @@ def build_business_arguments(name, args, scope, grant):
     return result
 
 
-DOD_MCP_TOOLS = frozenset({'knowledge_search', 'metrics_query', 'logs_search', 'trace_get'})
-BUSINESS_TOOLS = BUSINESS_TOOLS | DOD_MCP_TOOLS
+SCOPED_READ_TOOLS = frozenset({'knowledge_search', 'metrics_query', 'logs_search', 'trace_get'})
+BUSINESS_TOOLS = BUSINESS_TOOLS | SCOPED_READ_TOOLS
 
 
-def build_dod_arguments(name, args, scope, grant, correlation):
+def build_scoped_arguments(name, args, scope, grant, correlation):
     """Map only deployment-authorized values into the scoped DoD MCP contract."""
     from datetime import datetime
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -290,7 +290,7 @@ def build_dod_arguments(name, args, scope, grant, correlation):
         raise PermissionError('MCP_SCOPE_DENIED') from None
 
 
-def dod_business_identity(bound_args, query_scope=None):
+def scope_identity(bound_args, query_scope=None):
     """Comparable authoritative resource scope; source_id intentionally excluded."""
     from datetime import datetime, timezone
 
@@ -433,8 +433,8 @@ class MCPAdapter:
             ) and tool_name in rule.read_tools:
                 for grant in rule.scope_grants:
                     try:
-                        if tool_name in DOD_MCP_TOOLS:
-                            return build_dod_arguments(
+                        if tool_name in SCOPED_READ_TOOLS:
+                            return build_scoped_arguments(
                                 tool_name, args, query_scope, grant, correlation
                             )
                         return build_business_arguments(tool_name, args, query_scope, grant)
@@ -491,9 +491,9 @@ class MCPAdapter:
             and prepared.get('scope') != expected_knowledge_scope
         ):
             raise ScopeMappingChanged('MCP_SCOPE_CHANGED')
-        if expected_business_scope is not None and dod_business_identity(
-            prepared, query_scope
-        ) != tuple(expected_business_scope):
+        if expected_business_scope is not None and scope_identity(prepared, query_scope) != tuple(
+            expected_business_scope
+        ):
             raise ScopeMappingChanged('MCP_SCOPE_CHANGED')
         self.policy.require(team_id, agent_id, connection_ref, credential_scope, tool_name)
         mismatch = False

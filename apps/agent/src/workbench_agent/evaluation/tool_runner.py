@@ -10,6 +10,9 @@ from workbench_agent.evaluation.collector import (
     read_rows,
     write_rows,
 )
+from workbench_agent.evaluation.budget import ExperimentBudget
+from workbench_agent.evaluation.contracts import make_run_key
+from workbench_agent.evaluation.runner import _config_hash
 from workbench_agent.evaluation.tool_conversation_eval import (
     tool_dataset_fingerprint,
 )
@@ -39,9 +42,12 @@ async def run_tool_experiment(
     expected_hash = tool_dataset_fingerprint(dataset)
     if manifest.get('dataset_hash') != expected_hash:
         raise ValueError('tool dataset does not match manifest')
+    if manifest.get('config_hash') != _config_hash(config):
+        raise ValueError('config does not match manifest')
     if any(case['review_status'] != 'reviewed' for case in dataset['cases']):
         raise ValueError('tool dataset must be human reviewed')
     cases = _selected(dataset, split)
+    budget = ExperimentBudget(config, journal)
     output = Path(journal.path).with_name('results.jsonl')
     rows = {(row.get('case_id'), row.get('repeat')): row for row in read_rows(output)}
     for event in journal.events():
@@ -51,12 +57,31 @@ async def run_tool_experiment(
     for case in cases:
         repeat = 0
         recovered = rows.get((case['id'], repeat))
+        if recovered:
+            budget.observe(recovered)
+            if await budget.refresh_terminal(recovered, api):
+                write_rows(output, list(rows.values()))
         if (
             recovered
             and recovered.get('run_id')
             and recovered.get('run_status')
             in {'succeeded', 'partial', 'failed', 'cancelled', 'timed_out', 'expired'}
         ):
+            continue
+        if recovered and recovered.get('transport_status') == 'rejected':
+            continue
+        key = make_run_key(
+            manifest['experiment_id'],
+            manifest['dataset_hash'],
+            manifest['config_hash'],
+            case['id'],
+            repeat,
+        )
+        already_sent = recovered and (
+            recovered.get('run_id')
+            or recovered.get('transport_status') in ('submitted', 'needs_reconciliation')
+        )
+        if not already_sent and not budget.reserve(case['id'], repeat, key):
             continue
         existing = rows.get((case['id'], repeat))
         if (
@@ -89,6 +114,7 @@ async def run_tool_experiment(
                 deadline=time.monotonic() + deadline_seconds,
             )
         rows[(case['id'], repeat)] = row
+        budget.observe(row)
         write_rows(output, list(rows.values()))
     values = list(rows.values())
     return {

@@ -300,64 +300,6 @@ async def collect_case(
         )
         return row
 
-    usage = None
-    try:
-        usage = await api.usage(run_id)
-        row['usage'] = usage
-        budget = config.get('experiment_budget_micros')
-        amount = usage.get('amount_micros')
-        prices = config.get('pricing') or {}
-        if (
-            budget is not None
-            and prices.get('currency') is not None
-            and usage.get('currency') not in (None, prices['currency'])
-        ):
-            raise ValueError('experiment currency does not match usage currency')
-        if budget is not None and type(amount) is int and amount > budget:
-            row.update(
-                transport_status='needs_reconciliation',
-                error_code='EXPERIMENT_BUDGET_EXCEEDED',
-            )
-            journal.append(
-                {
-                    'event': 'budget_stop',
-                    'case_id': case['id'],
-                    'repeat': repeat,
-                    'request_key': request_key,
-                    'amount_micros': amount,
-                    'budget_micros': budget,
-                    'row': row,
-                }
-            )
-            return row
-    except ValueError as error:
-        row.update(
-            transport_status='needs_reconciliation',
-            error_code='COST_CURRENCY_MISMATCH',
-        )
-        journal.append(
-            {
-                'event': 'budget_stop',
-                'case_id': case['id'],
-                'repeat': repeat,
-                'request_key': request_key,
-                'error_code': str(error),
-                'row': row,
-            }
-        )
-        return row
-    except APIError as error:
-        row['error_code'] = 'USAGE_UNAVAILABLE'
-        journal.append(
-            {
-                'event': 'usage_error',
-                'case_id': case['id'],
-                'repeat': repeat,
-                'request_key': request_key,
-                'error_code': error.code,
-            }
-        )
-
     start = time.monotonic()
     while time.monotonic() < deadline:
         try:
@@ -438,11 +380,11 @@ async def collect_case(
                 break
             raise
         row['evidence'].append({'evidence_id': ref, 'content': evidence})
-    if usage is None:
-        try:
-            row['usage'] = await api.usage(run_id)
-        except APIError:
-            row['error_code'] = 'USAGE_UNAVAILABLE'
+    try:
+        row['usage'] = await api.usage(run_id)
+    except (APIError, httpx.TransportError, TimeoutError):
+        row['usage'] = None
+        row['error_code'] = 'USAGE_UNAVAILABLE'
     journal.append(
         {
             'event': 'case_result',

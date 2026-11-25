@@ -11,7 +11,7 @@ from langgraph.runtime import Runtime
 STATE_SCHEMA_VERSION = 'dod-state-v16'
 
 
-class DoDState(TypedDict, total=False):
+class KnowledgeExcerptState(TypedDict, total=False):
     run_id: str
     input_text: str
     mode: str
@@ -25,7 +25,7 @@ class DoDState(TypedDict, total=False):
     diagnosis_done: bool
 
 
-def build_dod(saver):
+def build_knowledge_excerpt(saver):
     async def prepare_context(state, config, runtime: Runtime):
         await runtime.context.check_operation()
         if state['run_id'] != config['configurable']['thread_id']:
@@ -92,11 +92,14 @@ def build_dod(saver):
                                 and binding.read_only
                                 and binding.tool_name == 'knowledge_search'
                             ):
-                                from workbench_agent.tools.mcp import BUSINESS_TOOLS, DOD_MCP_TOOLS
+                                from workbench_agent.tools.mcp import (
+                                    BUSINESS_TOOLS,
+                                    SCOPED_READ_TOOLS,
+                                )
 
                                 if (
                                     binding.tool_name not in BUSINESS_TOOLS
-                                    or binding.tool_name in DOD_MCP_TOOLS
+                                    or binding.tool_name in SCOPED_READ_TOOLS
                                     or binding.tool_name in ('SRE-Log-Query', 'Common-DoD-GetInfo')
                                 ):
                                     bindings.append((ref, binding))
@@ -217,7 +220,7 @@ def build_dod(saver):
         await runtime.context.check_operation()
         return {'phase': 'finalize'}
 
-    graph = StateGraph(DoDState)
+    graph = StateGraph(KnowledgeExcerptState)
     nodes = (
         prepare_context,
         route,

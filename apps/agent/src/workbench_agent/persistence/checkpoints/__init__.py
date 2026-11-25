@@ -1,1 +1,1 @@
-"""DoD portable runtime foundation package."""
+"""Workbench portable runtime foundation package."""

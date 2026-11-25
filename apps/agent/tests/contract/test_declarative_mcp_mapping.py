@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from test_dod_mcp_mapping import CONTEXT, GRANT, SCOPE
+from test_scoped_mcp_mapping import CONTEXT, GRANT, SCOPE
 from workbench_agent.tools.mcp import ConnectionPolicy, MCPAdapter, TrustedConnection
 from workbench_agent.tools.scope_mapping import (
     ArgumentMapping,

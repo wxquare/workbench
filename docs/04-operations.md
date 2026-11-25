@@ -1,7 +1,7 @@
 ---
 title: 运维手册
 status: stable
-verified_commit: 44b29b3
+verified_commit: 99df50d
 ---
 
 # 运维手册
@@ -555,6 +555,12 @@ uv run workbench kb rebuild-index --config "$WORKBENCH_ROOT/config/local/agent.y
 ### 评测采集与夜间比较
 
 真实 A4 前在隔离本机配置中确认 API/MCP、模型密钥引用、实际价格与币种、总预算、知识来源与团队授权。先用 1–3 条独立冒烟核对版本片段、证据页面、费用和范围，再采集至少 30 条 dev 业务题并组织逐题人工评审；至少 12 条 holdout 独立保管。合成数据只能用于 engineering/dev，不能改名为 business；缺评审时业务质量为 unavailable，不能显示通过。未知计费显示待确认，多币种不直接合并。
+
+运行、恢复或评分 holdout 时，向 `workbench eval run` 或 `workbench eval score` 提供 `--purpose release --release-id <发布标识> --holdout-permit <许可文件> --holdout-ledger <账本文件>`。许可文件为受信操作者维护的 JSON 对象，包含匹配的 `release_id` 和 `"active": true`；恢复时重新读取。账本按发布标识和数据集指纹去重，不记录题目、答案或凭据；账本损坏或不可写时拒绝操作。操作方必须保护许可文件和账本的访问与完整性：本地文件许可不是独立审批、身份认证或不可篡改审计。工具对话评测仍仅允许 dev。
+
+评分时必须提供实验目录中原有的 `manifest.json` 或历史 `experiment.json`，数据集指纹和 split 须与之匹配；缺失实验记录的历史结果不能直接评分，应先核对原始记录，不能自行推测并伪造。新实验不能复用已有数据的目录，恢复已有实验使用 `--resume`。
+
+启用 `experiment_budget_micros` 时，`pricing` 必须包含币种、价格版本、所有可能使用的模型中最高的输入和输出单价，以及 `tool_call_micros` 和 `scope: all_run_models_and_tools`；工具单次上界只有确认所有授权工具免费时才能填 0。预留按 Run 总 token 上限及最大工具调用数计算，不把未知费用当作零。价格是受信操作者提供的保守上界，实际供应商账单仍需核对；实际费用超出预留会停止后续新 Run。旧实验若已有发送记录但没有可核对的预留，不得修改冻结配置强行恢复，应先对账或新建实验。
 
 夜间采集默认关闭；当前工作流仅执行预检与已有实验的比较，尚未采集运行或下载实验产物。目标方案是仅由采集机读取经批准的资料并持有模型/知识凭据，CI 仅接收脱敏白名单摘要；当前令牌检查尚未接入实际获取流程。首次手动运行时检查制品中没有问题、答案、证据、完整 URL 查询、评审正文、密钥或内部路径；核对来源 workflow、仓库、分支、成功状态、新鲜度与 checksum 后，才启用定时。连续三个调度日要产生不同 candidate ID 和实际运行数，并验证一次缺候选路径；未满足前不写“nightly 已验收”。停止方式为关闭采集调度与 CI 开关；预算耗尽时保留实验 journal，核对后以同一 experiment ID 恢复，不能自动创建无限新实验。更换基线须记录数据/模型/工具指纹和评审依据。
 

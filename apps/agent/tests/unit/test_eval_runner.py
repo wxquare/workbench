@@ -11,7 +11,6 @@ from workbench_agent.evaluation.journal import Journal, atomic_json
 from workbench_agent.evaluation.runner import (
     ExperimentDirectory,
     ExperimentLocked,
-    recover_case,
     run_experiment,
 )
 
@@ -211,15 +210,6 @@ async def test_recover_existing_run_never_posts_again(tmp_path):
     assert polls >= 1
     assert 'Question?' not in post_case_ids
     await client.aclose()
-
-
-def test_recover_case_reads_last_event():
-    events = [
-        {'case_id': 'a', 'repeat': 0, 'row': {'run_id': 'one'}},
-        {'case_id': 'a', 'repeat': 0, 'row': {'run_id': 'two'}},
-    ]
-    assert recover_case(events, 'a', 0)['run_id'] == 'two'
-    assert recover_case(events, 'b', 0)['transport_status'] == 'not_started'
 
 
 def test_single_writer_lock(tmp_path):

@@ -19,7 +19,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
-_context = ContextVar('dod_log_context', default={})
+_context = ContextVar('workbench_log_context', default={})
 _LOG_FIELDS = frozenset(
     {
         'request_id',
